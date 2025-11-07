@@ -664,7 +664,7 @@ const MapScreen = () => {
 
         {/* 전체 사진 목록 화면 */}
         {showPhotoList && (
-          <div className="absolute inset-0 z-30 bg-white dark:bg-zinc-900 flex flex-col">
+          <div className="absolute left-0 right-0 bottom-20 top-0 z-30 bg-white dark:bg-zinc-900 flex flex-col">
             {/* 헤더 */}
             <div className="flex items-center justify-between p-4 border-b border-zinc-200 dark:border-zinc-800">
               <h2 className="text-lg font-bold">📍 주변 장소 ({visiblePins.length}개)</h2>
