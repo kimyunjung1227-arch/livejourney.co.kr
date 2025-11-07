@@ -50,15 +50,8 @@ const MapScreen = () => {
     
     const init = () => {
       // Kakao Map API 확인
-      if (!window.kakao) {
-        console.log('⏳ Kakao 객체 로딩 대기 중...');
-        setTimeout(init, 100);
-        return;
-      }
-
-      // Maps 객체 확인
-      if (!window.kakao.maps) {
-        console.log('⏳ Kakao Maps 로딩 대기 중...');
+      if (!window.kakao || !window.kakao.maps) {
+        console.log('⏳ Kakao Map API 로딩 대기 중...');
         setTimeout(init, 100);
         return;
       }
@@ -70,36 +63,35 @@ const MapScreen = () => {
         return;
       }
 
-      // 지도 로드
-      window.kakao.maps.load(() => {
-        console.log('🎨 지도 생성 중...');
+      // 지도 생성 (window.kakao.maps.load 호출 불필요 - main.jsx에서 이미 로드됨)
+      console.log('🎨 지도 생성 중...');
+      
+      try {
+        const map = new window.kakao.maps.Map(mapRef.current, {
+          center: new window.kakao.maps.LatLng(37.5665, 126.9780),
+          level: 4
+        });
         
-        try {
-          const map = new window.kakao.maps.Map(mapRef.current, {
-            center: new window.kakao.maps.LatLng(37.5665, 126.9780),
-            level: 4
-          });
-          
-          mapInstance.current = map;
-          
-          console.log('✅ 지도 생성 완료!');
-          
-          // 데이터 로드 - 직접 실행
-          const posts = JSON.parse(localStorage.getItem('uploadedPosts') || '[]');
-          
-          // Mock 데이터가 없으면 즉시 생성!
-          if (posts.length === 0) {
-            console.log('⚠️ Mock 데이터가 없습니다! 즉시 생성...');
-            seedMockData(1000);
-          }
-          
-          // 다시 로드
-          loadAllData();
-        } catch (error) {
-          console.error('❌ 지도 생성 실패:', error);
-          setTimeout(init, 500); // 실패 시 재시도
+        mapInstance.current = map;
+        
+        console.log('✅ 지도 생성 완료!');
+        
+        // 데이터 로드 - 직접 실행
+        const posts = JSON.parse(localStorage.getItem('uploadedPosts') || '[]');
+        
+        // Mock 데이터가 없으면 즉시 생성!
+        if (posts.length === 0) {
+          console.log('⚠️ Mock 데이터가 없습니다! 즉시 생성...');
+          seedMockData(1000);
         }
-      });
+        
+        // 다시 로드
+        loadAllData();
+      } catch (error) {
+        console.error('❌ 지도 생성 실패:', error);
+        console.error('에러 상세:', error.message, error.stack);
+        setTimeout(init, 500); // 실패 시 재시도
+      }
     };
 
     init();
@@ -929,6 +921,7 @@ const MapScreen = () => {
 };
 
 export default MapScreen;
+
 
 
 
