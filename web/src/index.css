@@ -1,0 +1,299 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  height: 100vh;
+  overflow: hidden;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 10px 10px;
+  padding-top: 5px;
+}
+
+#root {
+  width: 100%;
+  max-width: 360px;
+  height: 780px;
+  margin: 0 auto;
+}
+
+/* 핸드폰 프레임 스타일 - Galaxy S25 */
+.app-container {
+  width: 100%;
+  max-width: 360px;
+  height: 780px;
+  margin: 0 auto;
+  background-color: #ffffff;
+  position: relative;
+  border-radius: 35px;
+  overflow: hidden;
+  box-shadow: 
+    0 0 0 11px #1a1a1a,
+    0 0 0 13px #2d2d2d,
+    0 12px 45px rgba(0, 0, 0, 0.6),
+    inset 0 0 8px rgba(255, 255, 255, 0.15);
+  display: flex;
+  flex-direction: column;
+}
+
+/* 노치 제거 - 상태바로 대체 */
+
+/* 페이지 래퍼 - 스크롤 영역 (StatusBar 아래에만 표시) */
+.page-wrapper {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  height: 100%;
+  position: relative;
+  /* StatusBar 아래 영역만 사용 */
+  max-height: calc(100% - 44px);
+}
+
+/* 모든 페이지의 안전 영역 확보 */
+.safe-area-top {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* StatusBar 영역 침범 방지 */
+.page-wrapper > * {
+  /* 페이지 내부 요소가 StatusBar를 침범하지 않도록 */
+  position: relative;
+}
+
+/* fixed, absolute 요소도 StatusBar 아래에만 표시 */
+.page-wrapper .fixed,
+.page-wrapper .absolute {
+  top: 0 !important;
+}
+
+/* full height 페이지도 StatusBar 영역 제외 */
+.page-wrapper .h-full,
+.page-wrapper .min-h-screen {
+  max-height: 100% !important;
+}
+
+/* 페이지 래퍼 내부 스크롤바 완전히 숨기기 */
+.page-wrapper::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.page-wrapper {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+/* 반응형: 모바일 실제 기기에서는 프레임 제거 */
+@media (max-width: 768px) {
+  body {
+    background: #ffffff;
+    padding: 0;
+    /* 모바일 앱에서 안전 영역 확보 */
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  
+  #root {
+    height: 100vh;
+    max-width: none;
+  }
+  
+  .app-container {
+    border-radius: 0;
+    box-shadow: none;
+    height: 100vh;
+    max-width: none;
+    /* 시스템 UI 영역 침범 방지 */
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+}
+
+/* 버튼 기본 스타일 */
+button {
+  cursor: pointer;
+  border: none;
+  outline: none;
+  font-family: inherit;
+}
+
+button:active {
+  opacity: 0.7;
+}
+
+/* 입력 필드 기본 스타일 */
+input, textarea {
+  font-family: inherit;
+  outline: none;
+}
+
+/* 링크 스타일 */
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+/* 모든 스크롤바 완전히 숨기기 */
+* {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+*::-webkit-scrollbar {
+  display: none;  /* Chrome, Safari, Opera */
+  width: 0;
+  height: 0;
+}
+
+/* 부드러운 스크롤 */
+* {
+  scroll-behavior: smooth;
+}
+
+/* 스크롤 스냅 부드럽게 */
+.scroll-smooth {
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* 드래그 스크롤 영역 */
+.snap-x {
+  scroll-snap-type: x mandatory;
+  scroll-padding: 1rem;
+}
+
+.snap-start {
+  scroll-snap-align: start;
+  scroll-snap-stop: normal;
+}
+
+/* 선택 방지 (드래그 시) */
+.select-none {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+/* 이미지 기본 스타일 */
+img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* 슬라이드 업 애니메이션 */
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-up {
+  animation: slideUp 0.3s ease-out;
+}
+
+/* 페이드 인 애니메이션 */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* 스케일 업 애니메이션 */
+@keyframes scaleUp {
+  from {
+    transform: scale(0.9);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.animate-scale-up {
+  animation: scaleUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* 프로그레스 바 애니메이션 */
+@keyframes progress {
+  from {
+    width: 0%;
+  }
+  to {
+    width: 100%;
+  }
+}
+
+.animate-progress {
+  animation: progress 2s linear;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

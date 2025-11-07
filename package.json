@@ -1,0 +1,21 @@
+{
+  "name": "livejourney-mvp",
+  "version": "1.0.0",
+  "description": "여행지 실시간 정보 SNS - LiveJourney MVP",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "web"
+  ],
+  "scripts": {
+    "backend": "cd backend && npm start",
+    "web": "cd web && npm run dev",
+    "install-all": "npm install && cd backend && npm install && cd ../web && npm install",
+    "dev": "concurrently \"npm run backend\" \"npm run web\"",
+    "build": "cd web && npm run build",
+    "start": "npm run dev"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

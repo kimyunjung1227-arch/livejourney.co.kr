@@ -1,0 +1,282 @@
+.points-screen {
+  min-height: 100vh;
+  background: #f5f5f5;
+}
+
+.points-header {
+  background: white;
+  padding: 15px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.points-header h2 {
+  font-size: 18px;
+  flex: 1;
+  text-align: center;
+}
+
+.back-btn {
+  background: none;
+  border: none;
+  font-size: 20px;
+  color: #333;
+  padding: 5px;
+}
+
+.points-balance {
+  background: linear-gradient(135deg, #FFD700, #FFA500);
+  padding: 40px 20px;
+  text-align: center;
+  color: white;
+}
+
+.balance-icon {
+  margin-bottom: 15px;
+}
+
+.points-balance h3 {
+  font-size: 16px;
+  font-weight: 400;
+  margin-bottom: 10px;
+  opacity: 0.9;
+}
+
+.balance-amount {
+  font-size: 48px;
+  font-weight: bold;
+  margin-bottom: 20px;
+}
+
+.balance-stats {
+  display: flex;
+  justify-content: center;
+  gap: 40px;
+}
+
+.balance-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.stat-label {
+  font-size: 13px;
+  opacity: 0.9;
+}
+
+.stat-value {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.points-tabs {
+  background: white;
+  display: flex;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.points-tab {
+  flex: 1;
+  padding: 15px;
+  background: none;
+  border: none;
+  font-size: 15px;
+  font-weight: 600;
+  color: #999;
+  border-bottom: 3px solid transparent;
+  transition: all 0.3s ease;
+}
+
+.points-tab.active {
+  color: #667eea;
+  border-bottom-color: #667eea;
+}
+
+.points-content {
+  padding: 20px 15px;
+}
+
+.filter-buttons {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.filter-btn {
+  padding: 8px 20px;
+  background: white;
+  border: 2px solid #e0e0e0;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #666;
+  transition: all 0.3s ease;
+}
+
+.filter-btn.active {
+  background: #667eea;
+  border-color: #667eea;
+  color: white;
+}
+
+.history-list {
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.empty-history,
+.empty-rewards {
+  text-align: center;
+  padding: 60px 20px;
+  color: #999;
+}
+
+.history-item {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  padding: 15px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.history-item:last-child {
+  border-bottom: none;
+}
+
+.history-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #f5f5f5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+}
+
+.history-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.history-reason {
+  font-size: 15px;
+  font-weight: 600;
+  color: #333;
+}
+
+.history-date {
+  font-size: 12px;
+  color: #999;
+}
+
+.history-amount {
+  font-size: 18px;
+  font-weight: bold;
+}
+
+.history-amount.earn {
+  color: #4CAF50;
+}
+
+.history-amount.spend {
+  color: #F44336;
+}
+
+.rewards-list {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.reward-card {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  gap: 15px;
+  align-items: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.reward-image {
+  width: 60px;
+  height: 60px;
+  background: #f5f5f5;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #667eea;
+  flex-shrink: 0;
+}
+
+.reward-info {
+  flex: 1;
+}
+
+.reward-info h4 {
+  font-size: 16px;
+  margin-bottom: 5px;
+  color: #333;
+}
+
+.reward-info p {
+  font-size: 13px;
+  color: #666;
+  margin-bottom: 8px;
+}
+
+.reward-cost {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  background: #FFF9E6;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #FFA500;
+}
+
+.exchange-btn {
+  padding: 10px 20px;
+  background: #667eea;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.exchange-btn:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

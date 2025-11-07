@@ -1,0 +1,219 @@
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
+import BottomNavigation from '../components/BottomNavigation';
+
+const PersonalInfoEditScreen = () => {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+
+  const [formData, setFormData] = useState({
+    name: user?.name || '김나우',
+    email: user?.email || 'nowtrip@email.com',
+    phone: user?.phone || '010-1234-5678',
+    gender: user?.gender || 'female',
+    birthdate: user?.birthdate || '1995-08-15'
+  });
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleGenderSelect = (gender) => {
+    setFormData(prev => ({
+      ...prev,
+      gender: gender
+    }));
+  };
+
+  const handleVerifyPhone = () => {
+    alert('휴대폰 인증 기능은 추후 구현 예정입니다.\n\nSMS 인증 코드를 발송합니다.');
+  };
+
+  const handleSave = async () => {
+    try {
+      // TODO: API 호출하여 개인 정보 저장
+      alert('개인 정보가 저장되었습니다!');
+      navigate('/settings');
+    } catch (error) {
+      console.error('저장 실패:', error);
+      alert('저장에 실패했습니다.');
+    }
+  };
+
+  return (
+    <div className="flex h-full w-full flex-col bg-background-light dark:bg-background-dark">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden">
+        {/* 헤더 */}
+        <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-border-light bg-surface-light/80 dark:border-border-dark dark:bg-surface-dark/80 backdrop-blur-sm px-4">
+        <button 
+          onClick={() => navigate('/settings')}
+          className="flex size-12 shrink-0 items-center justify-start cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+        >
+          <span className="material-symbols-outlined text-content-light dark:text-content-dark">
+            arrow_back
+          </span>
+        </button>
+        <h1 className="text-lg font-bold leading-tight tracking-[-0.015em] text-content-light dark:text-content-dark">
+          개인 정보 수정
+        </h1>
+        <button 
+          onClick={handleSave}
+          className="flex size-12 shrink-0 items-center justify-end text-base font-bold text-primary hover:text-primary/80 transition-colors"
+        >
+          저장
+        </button>
+      </header>
+
+        {/* 메인 콘텐츠 */}
+        <main className="flex-grow pb-4">
+        {/* 기본 정보 섹션 */}
+        <div className="flex flex-col gap-4 p-4">
+          {/* 이름 */}
+          <div className="flex flex-col gap-2">
+            <label 
+              className="text-sm font-medium text-content-light dark:text-content-dark" 
+              htmlFor="name"
+            >
+              이름
+            </label>
+            <input 
+              className="w-full rounded-lg border border-border-light bg-surface-light p-3 text-content-light placeholder:text-gray-400 focus:border-primary focus:ring-1 focus:ring-primary dark:border-border-dark dark:bg-surface-dark dark:text-content-dark dark:placeholder:text-gray-500 transition-all" 
+              id="name"
+              name="name"
+              placeholder="이름을 입력하세요" 
+              type="text" 
+              value={formData.name}
+              onChange={handleInputChange}
+            />
+          </div>
+
+          {/* 이메일 */}
+          <div className="flex flex-col gap-2">
+            <label 
+              className="text-sm font-medium text-content-light dark:text-content-dark" 
+              htmlFor="email"
+            >
+              이메일
+            </label>
+            <input 
+              className="w-full rounded-lg border border-border-light bg-surface-light p-3 text-content-light placeholder:text-gray-400 focus:border-primary focus:ring-1 focus:ring-primary dark:border-border-dark dark:bg-surface-dark dark:text-content-dark dark:placeholder:text-gray-500 transition-all" 
+              id="email"
+              name="email"
+              placeholder="이메일을 입력하세요" 
+              type="email" 
+              value={formData.email}
+              onChange={handleInputChange}
+            />
+            <p className="text-xs text-subtle-light dark:text-subtle-dark">
+              이메일 변경 시, 재인증이 필요합니다.
+            </p>
+          </div>
+
+          {/* 휴대폰 번호 */}
+          <div className="flex flex-col gap-2">
+            <label 
+              className="text-sm font-medium text-content-light dark:text-content-dark" 
+              htmlFor="phone"
+            >
+              휴대폰 번호
+            </label>
+            <div className="flex items-center gap-2">
+              <input 
+                className="w-full flex-grow rounded-lg border border-border-light bg-surface-light p-3 text-content-light placeholder:text-gray-400 focus:border-primary focus:ring-1 focus:ring-primary dark:border-border-dark dark:bg-surface-dark dark:text-content-dark dark:placeholder:text-gray-500 transition-all" 
+                id="phone"
+                name="phone"
+                placeholder="휴대폰 번호를 입력하세요" 
+                type="tel" 
+                value={formData.phone}
+                onChange={handleInputChange}
+              />
+              <button 
+                onClick={handleVerifyPhone}
+                className="flex-shrink-0 rounded-lg bg-surface-subtle-light px-4 py-3 text-sm font-medium text-content-light dark:bg-surface-subtle-dark dark:text-content-dark hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+              >
+                인증
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* 구분선 */}
+        <div className="h-2 bg-background-light dark:bg-background-dark"></div>
+
+        {/* 추가 정보 섹션 */}
+        <div className="flex flex-col gap-4 p-4">
+          <h2 className="text-sm font-medium text-subtle-light dark:text-subtle-dark">
+            기본 정보
+          </h2>
+
+          {/* 성별 */}
+          <div className="flex flex-col gap-2">
+            <label 
+              className="text-sm font-medium text-content-light dark:text-content-dark"
+            >
+              성별
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <button 
+                onClick={() => handleGenderSelect('male')}
+                className={`rounded-lg border py-3 text-center font-medium transition-all ${
+                  formData.gender === 'male'
+                    ? 'border-primary bg-primary/10 text-primary font-bold dark:bg-primary/20'
+                    : 'border-border-light bg-surface-light text-content-light dark:border-border-dark dark:bg-surface-dark dark:text-content-dark'
+                }`}
+              >
+                남성
+              </button>
+              <button 
+                onClick={() => handleGenderSelect('female')}
+                className={`rounded-lg border py-3 text-center font-medium transition-all ${
+                  formData.gender === 'female'
+                    ? 'border-primary bg-primary/10 text-primary font-bold dark:bg-primary/20'
+                    : 'border-border-light bg-surface-light text-content-light dark:border-border-dark dark:bg-surface-dark dark:text-content-dark'
+                }`}
+              >
+                여성
+              </button>
+            </div>
+          </div>
+
+          {/* 생년월일 */}
+          <div className="flex flex-col gap-2">
+            <label 
+              className="text-sm font-medium text-content-light dark:text-content-dark" 
+              htmlFor="birthdate"
+            >
+              생년월일
+            </label>
+            <div className="relative">
+              <input 
+                className="w-full rounded-lg border border-border-light bg-surface-light p-3 pr-10 text-content-light placeholder:text-gray-400 focus:border-primary focus:ring-1 focus:ring-primary dark:border-border-dark dark:bg-surface-dark dark:text-content-dark dark:placeholder:text-gray-500 transition-all" 
+                id="birthdate"
+                name="birthdate"
+                type="text" 
+                value={formData.birthdate}
+                onChange={handleInputChange}
+              />
+              <span className="material-symbols-outlined pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-subtle-light dark:text-subtle-dark">
+                calendar_today
+              </span>
+            </div>
+          </div>
+        </div>
+        </main>
+      </div>
+
+      <BottomNavigation />
+    </div>
+  );
+};
+
+export default PersonalInfoEditScreen;
+
+
+
