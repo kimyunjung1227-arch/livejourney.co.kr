@@ -10,7 +10,7 @@ const MainScreen = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('자연');
   const [uploadedPosts, setUploadedPosts] = useState([]);
-  
+
   const [realtimeData, setRealtimeData] = useState([]);
   const [crowdedData, setCrowdedData] = useState([]);
   const [recommendedData, setRecommendedData] = useState([]);
@@ -325,9 +325,9 @@ const MainScreen = () => {
     if (currentScrollRef.current) {
       // requestAnimationFrame으로 부드러운 스크롤
       requestAnimationFrame(() => {
-        if (currentScrollRef.current) {
-          currentScrollRef.current.scrollLeft = scrollLeft - walk;
-        }
+    if (currentScrollRef.current) {
+      currentScrollRef.current.scrollLeft = scrollLeft - walk;
+    }
       });
     }
   }, [isDragging, currentScrollRef, startX, scrollLeft]);
@@ -413,10 +413,10 @@ const MainScreen = () => {
           >
             <span className="material-symbols-outlined text-text-light dark:text-text-dark" style={{ fontSize: '26px' }}>notifications</span>
             {unreadNotificationCount > 0 && (
-              <span className="absolute top-1.5 right-1.5 flex h-2.5 w-2.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-primary"></span>
-              </span>
+            <span className="absolute top-1.5 right-1.5 flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-primary"></span>
+            </span>
             )}
           </button>
         </div>
@@ -452,30 +452,30 @@ const MainScreen = () => {
         )}
 
         <main className="pb-4">
-          {/* 실시간 정보 섹션 */}
-          <section className="pt-5">
-            <div className="flex items-center justify-between px-4 pb-3">
-              <h2 className="text-text-light dark:text-text-dark text-[22px] font-bold leading-tight tracking-[-0.015em]">
-                실시간 정보
-              </h2>
-              <button 
-                onClick={() => navigate('/detail?filter=realtime')}
-                className="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-transparent text-text-subtle-light dark:text-text-subtle-dark text-sm font-bold leading-normal tracking-[0.015em] hover:text-primary transition-colors"
-              >
-                <span className="truncate">더보기</span>
-              </button>
-            </div>
-
-            <div 
-              ref={realtimeScrollRef}
-              onMouseDown={(e) => handleMouseDown(e, realtimeScrollRef)}
-              onMouseMove={handleMouseMove}
-              onMouseUp={handleMouseUp}
-              onMouseLeave={handleMouseLeave}
-              className="flex overflow-x-scroll overflow-y-hidden [-ms-scrollbar-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden snap-x snap-mandatory scroll-smooth"
-              style={{ scrollBehavior: 'smooth', WebkitOverflowScrolling: 'touch' }}
+        {/* 실시간 정보 섹션 */}
+        <section className="pt-5">
+          <div className="flex items-center justify-between px-4 pb-3">
+            <h2 className="text-text-light dark:text-text-dark text-[22px] font-bold leading-tight tracking-[-0.015em]">
+              실시간 정보
+            </h2>
+            <button 
+              onClick={() => navigate('/detail?filter=realtime')}
+              className="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-transparent text-text-subtle-light dark:text-text-subtle-dark text-sm font-bold leading-normal tracking-[0.015em] hover:text-primary transition-colors"
             >
-              <div className="flex items-stretch px-4 gap-3 pb-2">
+              <span className="truncate">더보기</span>
+            </button>
+          </div>
+
+          <div 
+            ref={realtimeScrollRef}
+            onMouseDown={(e) => handleMouseDown(e, realtimeScrollRef)}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseLeave}
+            className="flex overflow-x-scroll overflow-y-hidden [-ms-scrollbar-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden snap-x snap-mandatory scroll-smooth"
+              style={{ scrollBehavior: 'smooth', WebkitOverflowScrolling: 'touch' }}
+          >
+            <div className="flex items-stretch px-4 gap-3 pb-2">
                 {uploadedPosts.length === 0 && realtimeData.length === 0 && (
                   <div className="flex flex-col items-center justify-center w-full py-12 px-4">
                     <span className="material-symbols-outlined text-6xl text-gray-300 dark:text-gray-600 mb-4">
@@ -496,99 +496,13 @@ const MainScreen = () => {
                   </div>
                 )}
                 
-                {uploadedPosts.map((item) => (
-                  <div 
-                    key={item.id} 
+              {uploadedPosts.map((item) => (
+                <div 
+                  key={item.id} 
                     className="flex h-full flex-col gap-2 w-[180px] flex-shrink-0 cursor-pointer snap-start select-none"
-                    onClick={() => handleItemClickWithDragCheck(item)}
-                  >
-                    <div 
-                      className="relative w-full bg-center bg-no-repeat aspect-[1/1.2] bg-cover rounded-lg overflow-hidden hover:opacity-90 transition-opacity shadow-md"
-                      style={{ backgroundImage: `url("${item.image}")` }}
-                    >
-                      {/* 그라데이션 오버레이 - 위아래 모두 */}
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-black/30"></div>
-                      
-                      {/* 주황색 테두리 (NEW) */}
-                      <div className="absolute inset-0 rounded-lg border-3 border-primary pointer-events-none"></div>
-                      
-                      {/* 우측상단: NEW 배지 */}
-                      <div className="absolute top-2.5 right-2.5 rounded-md bg-primary px-2.5 py-1 text-xs font-bold text-white shadow-lg">
-                        NEW
-                      </div>
-                      
-                      {/* 좌측상단: 카테고리 아이콘만 */}
-                      {item.categoryName && (
-                        <div style={{ position: 'absolute', top: '10px', left: '10px', zIndex: 20 }}>
-                          <span style={{ 
-                            display: 'flex', 
-                            alignItems: 'center', 
-                            justifyContent: 'center',
-                            width: '40px', 
-                            height: '40px', 
-                            borderRadius: '50%', 
-                            backgroundColor: 'rgba(255,255,255,0.95)', 
-                            fontSize: '20px',
-                            fontWeight: 'bold',
-                            boxShadow: '0 4px 6px rgba(0,0,0,0.3)'
-                          }}>
-                            {item.categoryName === '개화 상황' && '🌸'}
-                            {item.categoryName === '추천 장소' && '🏞️'}
-                            {item.categoryName === '맛집 정보' && '🍜'}
-                            {item.categoryName === '가볼만한곳' && '🗺️'}
-                            {!['개화 상황', '추천 장소', '맛집 정보', '가볼만한곳'].includes(item.categoryName) && '📷'}
-                          </span>
-                        </div>
-                      )}
-                      
-                      {/* 좌측하단: 위치정보 + 업로드시간 - 완전히 분리 */}
-                      <div style={{ 
-                        position: 'absolute', 
-                        left: 0, 
-                        bottom: 0, 
-                        right: 0, 
-                        padding: '12px', 
-                        background: 'linear-gradient(to top, rgba(0,0,0,0.7), transparent)',
-                        zIndex: 10
-                      }}>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                          {item.title && (
-                            <p style={{ 
-                              color: 'white', 
-                              fontSize: '14px', 
-                              fontWeight: 'bold', 
-                              lineHeight: '1.2',
-                              textShadow: '0 2px 8px rgba(0,0,0,0.8)',
-                              margin: 0
-                            }}>
-                              📍 {item.title}
-                            </p>
-                          )}
-                          {item.time && (
-                            <p style={{ 
-                              color: 'rgba(255,255,255,0.9)', 
-                              fontSize: '12px', 
-                              fontWeight: '600', 
-                              lineHeight: '1.2',
-                              textShadow: '0 2px 8px rgba(0,0,0,0.8)',
-                              margin: 0
-                            }}>
-                              ⏰ {item.time}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                
-                {realtimeData.map((item) => (
+                  onClick={() => handleItemClickWithDragCheck(item)}
+                >
                   <div 
-                    key={item.id} 
-                    className="flex h-full flex-col gap-2 rounded-lg w-[180px] flex-shrink-0 cursor-pointer snap-start select-none"
-                    onClick={() => handleItemClickWithDragCheck(item)}
-                  >
-                    <div 
                       className="relative w-full bg-center bg-no-repeat aspect-[1/1.2] bg-cover rounded-lg overflow-hidden hover:opacity-90 transition-opacity shadow-md"
                       style={{ backgroundImage: `url("${item.image}")` }}
                     >
@@ -655,38 +569,116 @@ const MainScreen = () => {
                             </p>
                           )}
                         </div>
-                      </div>
                     </div>
                   </div>
-                ))}
-              </div>
+                </div>
+              ))}
+                
+              {realtimeData.map((item) => (
+                <div 
+                  key={item.id} 
+                  className="flex h-full flex-col gap-2 rounded-lg w-[180px] flex-shrink-0 cursor-pointer snap-start select-none"
+                  onClick={() => handleItemClickWithDragCheck(item)}
+                >
+                  <div 
+                      className="relative w-full bg-center bg-no-repeat aspect-[1/1.2] bg-cover rounded-lg overflow-hidden hover:opacity-90 transition-opacity shadow-md"
+                      style={{ backgroundImage: `url("${item.image}")` }}
+                    >
+                      {/* 그라데이션 오버레이 */}
+                      <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.8), rgba(0,0,0,0.1) 50%, rgba(0,0,0,0.3))' }}></div>
+                      
+                      {/* 좌측상단: 카테고리 아이콘만 */}
+                      {item.categoryName && (
+                        <div style={{ position: 'absolute', top: '10px', left: '10px', zIndex: 20 }}>
+                          <span style={{ 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            justifyContent: 'center',
+                            width: '40px', 
+                            height: '40px', 
+                            borderRadius: '50%', 
+                            backgroundColor: 'rgba(255,255,255,0.95)', 
+                            fontSize: '20px',
+                            fontWeight: 'bold',
+                            boxShadow: '0 4px 6px rgba(0,0,0,0.3)'
+                          }}>
+                            {item.categoryName === '개화 상황' && '🌸'}
+                            {item.categoryName === '추천 장소' && '🏞️'}
+                            {item.categoryName === '맛집 정보' && '🍜'}
+                            {item.categoryName === '가볼만한곳' && '🗺️'}
+                            {!['개화 상황', '추천 장소', '맛집 정보', '가볼만한곳'].includes(item.categoryName) && '📷'}
+                          </span>
+                        </div>
+                      )}
+                      
+                      {/* 좌측하단: 위치정보 + 업로드시간 */}
+                      <div style={{ 
+                        position: 'absolute', 
+                        left: 0, 
+                        bottom: 0, 
+                        right: 0, 
+                        padding: '12px', 
+                        background: 'linear-gradient(to top, rgba(0,0,0,0.7), transparent)',
+                        zIndex: 10
+                      }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                          {item.title && (
+                            <p style={{ 
+                              color: 'white', 
+                              fontSize: '14px', 
+                              fontWeight: 'bold', 
+                              lineHeight: '1.2',
+                              textShadow: '0 2px 8px rgba(0,0,0,0.8)',
+                              margin: 0
+                            }}>
+                              📍 {item.title}
+                            </p>
+                          )}
+                          {item.time && (
+                            <p style={{ 
+                              color: 'rgba(255,255,255,0.9)', 
+                              fontSize: '12px', 
+                              fontWeight: '600', 
+                              lineHeight: '1.2',
+                              textShadow: '0 2px 8px rgba(0,0,0,0.8)',
+                              margin: 0
+                            }}>
+                              ⏰ {item.time}
+                            </p>
+                          )}
+                        </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
-          </section>
+          </div>
+        </section>
 
-          {/* 실시간 밀집 지역 섹션 */}
-          <section className="pt-8">
-            <div className="flex items-center justify-between px-4 pb-3">
-              <h2 className="text-text-light dark:text-text-dark text-[22px] font-bold leading-tight tracking-[-0.015em]">
-                실시간 밀집 지역
-              </h2>
-              <button 
-                onClick={() => navigate('/detail?filter=crowded')}
-                className="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-transparent text-text-subtle-light dark:text-text-subtle-dark text-sm font-bold leading-normal tracking-[0.015em] hover:text-primary transition-colors"
-              >
-                <span className="truncate">더보기</span>
-              </button>
-            </div>
-
-            <div 
-              ref={crowdedScrollRef}
-              onMouseDown={(e) => handleMouseDown(e, crowdedScrollRef)}
-              onMouseMove={handleMouseMove}
-              onMouseUp={handleMouseUp}
-              onMouseLeave={handleMouseLeave}
-              className="flex overflow-x-scroll overflow-y-hidden [-ms-scrollbar-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden snap-x snap-mandatory scroll-smooth"
-              style={{ scrollBehavior: 'smooth', WebkitOverflowScrolling: 'touch' }}
+        {/* 실시간 밀집 지역 섹션 */}
+        <section className="pt-8">
+          <div className="flex items-center justify-between px-4 pb-3">
+            <h2 className="text-text-light dark:text-text-dark text-[22px] font-bold leading-tight tracking-[-0.015em]">
+              실시간 밀집 지역
+            </h2>
+            <button 
+              onClick={() => navigate('/detail?filter=crowded')}
+              className="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-transparent text-text-subtle-light dark:text-text-subtle-dark text-sm font-bold leading-normal tracking-[0.015em] hover:text-primary transition-colors"
             >
-              <div className="flex items-stretch px-4 gap-3 pb-2">
+              <span className="truncate">더보기</span>
+            </button>
+          </div>
+
+          <div 
+            ref={crowdedScrollRef}
+            onMouseDown={(e) => handleMouseDown(e, crowdedScrollRef)}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseLeave}
+            className="flex overflow-x-scroll overflow-y-hidden [-ms-scrollbar-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden snap-x snap-mandatory scroll-smooth"
+              style={{ scrollBehavior: 'smooth', WebkitOverflowScrolling: 'touch' }}
+          >
+            <div className="flex items-stretch px-4 gap-3 pb-2">
                 {crowdedData.length === 0 && (
                   <div className="flex flex-col items-center justify-center w-full py-12 px-4">
                     <span className="material-symbols-outlined text-6xl text-gray-300 dark:text-gray-600 mb-4">
@@ -701,13 +693,13 @@ const MainScreen = () => {
                   </div>
                 )}
                 
-                {crowdedData.map((item) => (
+              {crowdedData.map((item) => (
+                <div 
+                  key={item.id} 
+                  className="flex h-full flex-col gap-2 rounded-lg w-[180px] flex-shrink-0 cursor-pointer snap-start select-none"
+                  onClick={() => handleItemClickWithDragCheck(item)}
+                >
                   <div 
-                    key={item.id} 
-                    className="flex h-full flex-col gap-2 rounded-lg w-[180px] flex-shrink-0 cursor-pointer snap-start select-none"
-                    onClick={() => handleItemClickWithDragCheck(item)}
-                  >
-                    <div 
                       className="relative w-full bg-center bg-no-repeat aspect-[1/1.2] bg-cover rounded-lg overflow-hidden hover:opacity-90 transition-opacity shadow-md"
                       style={{ backgroundImage: `url("${item.image}")` }}
                     >
@@ -774,27 +766,27 @@ const MainScreen = () => {
                             </p>
                           )}
                         </div>
-                      </div>
                     </div>
                   </div>
-                ))}
-              </div>
+                </div>
+              ))}
             </div>
-          </section>
+          </div>
+        </section>
 
-          {/* 추천 장소 섹션 */}
-          <section className="pt-8">
-            <div className="flex items-center justify-between px-4 pb-3">
-              <h2 className="text-text-light dark:text-text-dark text-[22px] font-bold leading-tight tracking-[-0.015em]">
-                추천 장소
-              </h2>
-              <button 
-                onClick={() => navigate('/detail?filter=recommended')}
-                className="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-transparent text-text-subtle-light dark:text-text-subtle-dark text-sm font-bold leading-normal tracking-[0.015em] hover:text-primary transition-colors"
-              >
-                <span className="truncate">더보기</span>
-              </button>
-            </div>
+        {/* 추천 장소 섹션 */}
+        <section className="pt-8">
+          <div className="flex items-center justify-between px-4 pb-3">
+            <h2 className="text-text-light dark:text-text-dark text-[22px] font-bold leading-tight tracking-[-0.015em]">
+              추천 장소
+            </h2>
+            <button 
+              onClick={() => navigate('/detail?filter=recommended')}
+              className="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-transparent text-text-subtle-light dark:text-text-subtle-dark text-sm font-bold leading-normal tracking-[0.015em] hover:text-primary transition-colors"
+            >
+              <span className="truncate">더보기</span>
+            </button>
+          </div>
 
             <div 
               ref={categoryScrollRef}
@@ -814,31 +806,31 @@ const MainScreen = () => {
               className="flex gap-2 px-4 pb-4 overflow-x-auto overflow-y-hidden [-ms-scrollbar-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden scroll-smooth cursor-grab active:cursor-grabbing"
               style={{ scrollBehavior: 'smooth', WebkitOverflowScrolling: 'touch', userSelect: 'none' }}
             >
-              {categories.map((category) => (
-                <button
-                  key={category}
+            {categories.map((category) => (
+              <button
+                key={category}
                   onClick={() => !hasMoved && setSelectedCategory(category)}
                   className={`flex-shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition-all duration-300 select-none ${
-                    selectedCategory === category
-                      ? 'bg-primary/20 text-primary scale-105 shadow-md'
-                      : 'bg-card-light dark:bg-card-dark text-text-subtle-light dark:text-text-subtle-dark hover:bg-primary/10 hover:scale-105'
-                  }`}
-                >
-                  #{category}
-                </button>
-              ))}
-            </div>
+                  selectedCategory === category
+                    ? 'bg-primary/20 text-primary scale-105 shadow-md'
+                    : 'bg-card-light dark:bg-card-dark text-text-subtle-light dark:text-text-subtle-dark hover:bg-primary/10 hover:scale-105'
+                }`}
+              >
+                #{category}
+              </button>
+            ))}
+          </div>
 
-            <div 
-              ref={recommendedScrollRef}
-              onMouseDown={(e) => handleMouseDown(e, recommendedScrollRef)}
-              onMouseMove={handleMouseMove}
-              onMouseUp={handleMouseUp}
-              onMouseLeave={handleMouseLeave}
-              className="flex overflow-x-scroll overflow-y-hidden [-ms-scrollbar-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden snap-x snap-mandatory scroll-smooth"
+          <div 
+            ref={recommendedScrollRef}
+            onMouseDown={(e) => handleMouseDown(e, recommendedScrollRef)}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseLeave}
+            className="flex overflow-x-scroll overflow-y-hidden [-ms-scrollbar-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden snap-x snap-mandatory scroll-smooth"
               style={{ scrollBehavior: 'smooth', WebkitOverflowScrolling: 'touch' }}
-            >
-              <div className="flex items-stretch px-4 gap-3 pb-2">
+          >
+            <div className="flex items-stretch px-4 gap-3 pb-2">
                 {recommendedData.length === 0 && (
                   <div className="flex flex-col items-center justify-center w-full py-12 px-4">
                     <span className="material-symbols-outlined text-6xl text-gray-300 dark:text-gray-600 mb-4">
@@ -854,12 +846,12 @@ const MainScreen = () => {
                 )}
                 
                 {(filteredRecommendedData.length > 0 ? filteredRecommendedData : recommendedData.filter(item => item.category === selectedCategory)).map((item) => (
+                <div 
+                  key={item.id} 
+                  className="flex h-full flex-col gap-2 rounded-lg w-[180px] flex-shrink-0 cursor-pointer snap-start select-none"
+                  onClick={() => handleItemClickWithDragCheck(item)}
+                >
                   <div 
-                    key={item.id} 
-                    className="flex h-full flex-col gap-2 rounded-lg w-[180px] flex-shrink-0 cursor-pointer snap-start select-none"
-                    onClick={() => handleItemClickWithDragCheck(item)}
-                  >
-                    <div 
                       className="relative w-full bg-center bg-no-repeat aspect-[1/1.2] bg-cover rounded-lg overflow-hidden hover:opacity-90 transition-opacity shadow-md"
                       style={{ backgroundImage: `url("${item.image}")` }}
                     >
@@ -926,14 +918,14 @@ const MainScreen = () => {
                             </p>
                           )}
                         </div>
-                      </div>
                     </div>
                   </div>
-                ))}
-              </div>
+                </div>
+              ))}
             </div>
-          </section>
-        </main>
+          </div>
+        </section>
+      </main>
       </div>
 
       <BottomNavigation />
@@ -942,6 +934,7 @@ const MainScreen = () => {
 };
 
 export default MainScreen;
+
 
 
 
