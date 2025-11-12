@@ -14,41 +14,27 @@ const MapPhotoGridScreen = () => {
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
-    // 전달받은 visiblePins 데이터
     const pins = location.state?.visiblePins || [];
     setPhotos(pins);
-    
-    // 부드러운 등장 애니메이션
     setTimeout(() => setIsVisible(true), 10);
   }, [location.state]);
 
-  // 드래그 시작
   const handleDragStart = (e) => {
     setIsDragging(true);
     setStartY(e.type === 'mousedown' ? e.clientY : e.touches[0].clientY);
     setCurrentY(0);
   };
 
-  // 드래그 중
   const handleDragMove = (e) => {
     if (!isDragging) return;
-    
     const clientY = e.type === 'mousemove' ? e.clientY : e.touches[0].clientY;
     const deltaY = clientY - startY;
-    
-    // 아래로만 드래그 가능
-    if (deltaY > 0) {
-      setCurrentY(deltaY);
-    }
+    if (deltaY > 0) setCurrentY(deltaY);
   };
 
-  // 드래그 종료
   const handleDragEnd = () => {
     if (!isDragging) return;
-    
     setIsDragging(false);
-    
-    // 100px 이상 드래그하면 닫기
     if (currentY > 100) {
       handleClose();
     } else {
@@ -56,12 +42,9 @@ const MapPhotoGridScreen = () => {
     }
   };
 
-  // 부드럽게 닫기
   const handleClose = () => {
     setIsVisible(false);
-    setTimeout(() => {
-      navigate(-1);
-    }, 300);
+    setTimeout(() => navigate(-1), 300);
   };
 
   useEffect(() => {
@@ -113,7 +96,6 @@ const MapPhotoGridScreen = () => {
           boxShadow: '0 -4px 20px rgba(0,0,0,0.15)'
         }}
       >
-        {/* 드래그 핸들 */}
         <div
           ref={dragHandleRef}
           onMouseDown={handleDragStart}
@@ -134,7 +116,6 @@ const MapPhotoGridScreen = () => {
           }} />
         </div>
 
-        {/* 헤더 */}
         <div style={{
           padding: '8px 16px 12px',
           borderBottom: '1px solid #f4f4f5'
@@ -146,7 +127,6 @@ const MapPhotoGridScreen = () => {
           }}>주변 장소</h1>
         </div>
 
-        {/* 바디 */}
         <div style={{ 
           flex: 1,
           overflowY: 'auto',
@@ -161,7 +141,6 @@ const MapPhotoGridScreen = () => {
             총 {photos.length}개의 장소
           </div>
 
-          {/* 3x3 그리드 */}
           <div style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(3, 1fr)',
@@ -171,19 +150,16 @@ const MapPhotoGridScreen = () => {
             {photos.map((pin, index) => (
               <div
                 key={pin.id || index}
-                onClick={() => {
-                  // 지도 화면으로 돌아가면서 선택된 핀 위치로 이동
-                  navigate('/map', { 
-                    state: { 
-                      selectedPin: {
-                        id: pin.id,
-                        lat: pin.lat,
-                        lng: pin.lng,
-                        title: pin.title
-                      }
-                    } 
-                  });
-                }}
+                onClick={() => navigate('/map', { 
+                  state: { 
+                    selectedPin: {
+                      id: pin.id,
+                      lat: pin.lat,
+                      lng: pin.lng,
+                      title: pin.title
+                    }
+                  } 
+                })}
                 style={{
                   aspectRatio: '1',
                   borderRadius: '12px',
@@ -202,7 +178,6 @@ const MapPhotoGridScreen = () => {
                     objectFit: 'cover'
                   }}
                 />
-                {/* 그라데이션 오버레이 */}
                 <div style={{
                   position: 'absolute',
                   inset: 0,
@@ -228,7 +203,6 @@ const MapPhotoGridScreen = () => {
             ))}
           </div>
 
-          {/* 마지막 안내 문구 */}
           <div style={{
             textAlign: 'center',
             padding: '40px 20px',
@@ -253,7 +227,6 @@ const MapPhotoGridScreen = () => {
             </p>
           </div>
 
-          {/* 업로드 유도 */}
           {photos.length < 3 && (
             <div style={{
               textAlign: 'center',
@@ -289,7 +262,6 @@ const MapPhotoGridScreen = () => {
             </div>
           )}
 
-          {/* 지도보기 버튼 */}
           <div style={{
             position: 'sticky',
             bottom: 0,
@@ -329,7 +301,6 @@ const MapPhotoGridScreen = () => {
         </div>
       </div>
 
-      {/* 하단 네비게이션 바 (고정) */}
       <div style={{
         position: 'absolute',
         bottom: 0,

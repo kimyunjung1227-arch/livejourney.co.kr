@@ -49,49 +49,33 @@ const MapScreen = () => {
       try {
         // 현재 위치 가져오기
         if (navigator.geolocation) {
-          console.log('📍 현재 위치 가져오는 중...');
           navigator.geolocation.getCurrentPosition(
             (position) => {
               const { latitude, longitude } = position.coords;
-              console.log(`✅ 현재 위치: (${latitude}, ${longitude})`);
-              
-              // 현재 위치로 지도 생성
               const map = new window.kakao.maps.Map(mapRef.current, {
                 center: new window.kakao.maps.LatLng(latitude, longitude),
                 level: 4
               });
-              
               mapInstance.current = map;
               setMapLoading(false);
               loadAllData();
             },
-            (error) => {
-              console.log('⚠️ 위치 가져오기 실패, 기본 위치(서울) 사용');
-              
-              // 위치 가져오기 실패 시 기본 위치(서울시청)
+            () => {
               const map = new window.kakao.maps.Map(mapRef.current, {
                 center: new window.kakao.maps.LatLng(37.5665, 126.9780),
                 level: 4
               });
-              
               mapInstance.current = map;
               setMapLoading(false);
               loadAllData();
             },
-            {
-              enableHighAccuracy: true,
-              timeout: 5000,
-              maximumAge: 0
-            }
+            { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
           );
         } else {
-          // geolocation 지원 안 하면 기본 위치
-          console.log('⚠️ Geolocation 미지원, 기본 위치(서울) 사용');
           const map = new window.kakao.maps.Map(mapRef.current, {
             center: new window.kakao.maps.LatLng(37.5665, 126.9780),
             level: 4
           });
-          
           mapInstance.current = map;
           setMapLoading(false);
           loadAllData();
@@ -120,15 +104,13 @@ const MapScreen = () => {
       p.lng >= sw.getLng() && p.lng <= ne.getLng()
     );
 
-    console.log(`👀 보이는 핀: ${visible.length}개 / 전체 ${allPins.length}개`);
     setVisiblePins(visible);
   }, [allPins]);
 
-  // 2. 핀 생성 (두 번째!)
+  // 2. 핀 생성
   const createPins = useCallback((pins) => {
     if (!mapInstance.current) return;
     
-    // 기존 핀 모두 제거
     pinsRef.current.forEach(({ overlay }) => {
       if (overlay && overlay.setMap) {
         overlay.setMap(null);
@@ -136,14 +118,10 @@ const MapScreen = () => {
     });
     pinsRef.current = [];
 
-    console.log(`📍 ${pins.length}개 핀 생성 시작...`);
-
     window.handleMapPinClick = (pinId) => {
       const pin = pins.find(p => p.id === pinId);
       if (pin) {
-        console.log(`📌 핀 클릭: ${pin.title}`);
         setSelectedPinId(pinId);
-        
         if (mapInstance.current) {
           mapInstance.current.setCenter(new window.kakao.maps.LatLng(pin.lat, pin.lng));
           mapInstance.current.setLevel(2);
@@ -152,7 +130,6 @@ const MapScreen = () => {
             setShowSheet(true);
           }, 300);
         }
-        
         setTimeout(() => {
           navigate(`/post/${pin.id}`, { state: { post: pin.post } });
         }, 500);
@@ -184,36 +161,17 @@ const MapScreen = () => {
       pinsRef.current.push({ id: pin.id, overlay, element: el.firstChild });
     });
 
-    console.log(`✅ ${pins.length}개 핀 추가됨!`);
   }, [navigate, updateVisiblePins]);
 
-  // 3. 데이터 로드 (세 번째!)
+  // 3. 데이터 로드
   const loadAllData = useCallback(() => {
     let posts = JSON.parse(localStorage.getItem('uploadedPosts') || '[]');
-    
-    // 2일 이상 된 게시물 필터링 ⭐
     posts = filterRecentPosts(posts, 2);
-    console.log(`📊 지도화면 - 2일 이내 게시물: ${posts.length}개`);
-
-    console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-    console.log(`📍 지도 핀 생성 시작... (총 ${posts.length}개 게시물)`);
     
     const pins = posts
-      .map((p, index) => {
-        // 우선순위: 업로드 시 저장된 GPS 좌표 > 지역명으로 찾은 좌표
+      .map((p) => {
         const coords = p.coordinates || getCoordinatesByLocation(p.detailedLocation || p.location);
-        
-        if (!coords) {
-          console.log(`❌ [${index + 1}] 좌표 없음: "${p.location}"`);
-          return null;
-        }
-        
-        if (!p.images?.[0]) {
-          console.log(`❌ [${index + 1}] 이미지 없음: "${p.location}"`);
-          return null;
-        }
-        
-        console.log(`✅ [${index + 1}] "${p.location}" → (${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}) ${p.coordinates ? '[GPS]' : '[변환]'}`);
+        if (!coords || !p.images?.[0]) return null;
         
         return {
           id: p.id,
@@ -227,19 +185,10 @@ const MapScreen = () => {
       })
       .filter(Boolean);
 
-    console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-    console.log(`✅ 핀 생성 완료: ${pins.length}개`);
-    console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
     setAllPins(pins);
-    
     if (pins.length > 0 && mapInstance.current) {
       createPins(pins);
-      // 핀 생성 후 보이는 핀 업데이트
-      setTimeout(() => {
-        updateVisiblePins();
-      }, 100);
-    } else if (pins.length === 0) {
-      console.log('📭 표시할 핀이 없습니다 (2일 이내 게시물 없음)');
+      setTimeout(() => updateVisiblePins(), 100);
     }
   }, [createPins, updateVisiblePins]);
 
@@ -281,22 +230,17 @@ const MapScreen = () => {
     if (q.trim()) {
       // searchRegions가 이미 초성 검색 지원
       const results = searchRegions(q);
-      console.log(`🔍 "${q}" 검색 결과: ${results.length}개`, results);
-      setSearchResults(results.slice(0, 10)); // 최대 10개
+      setSearchResults(results.slice(0, 10));
     } else {
       setSearchResults([]);
     }
   };
 
   const selectRegion = useCallback((region) => {
-    console.log(`📍 지역 선택: ${region}`);
     const coords = getCoordinatesByLocation(region);
     if (coords && mapInstance.current) {
       mapInstance.current.setCenter(new window.kakao.maps.LatLng(coords.lat, coords.lng));
       mapInstance.current.setLevel(4);
-      console.log(`✅ 지도 이동: ${region} (${coords.lat}, ${coords.lng})`);
-    } else {
-      console.log(`❌ 좌표를 찾을 수 없음: ${region}`);
     }
     setShowSearch(false);
     setSearchQuery('');
@@ -313,30 +257,13 @@ const MapScreen = () => {
   // 더보기 화면에서 선택된 핀으로 이동
   useEffect(() => {
     if (location.state?.selectedPin && mapInstance.current) {
-      const { lat, lng, id, title } = location.state.selectedPin;
-      
-      console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-      console.log(`📍 선택된 핀으로 이동: ${title}`);
-      console.log(`   좌표: (${lat.toFixed(6)}, ${lng.toFixed(6)})`);
-      
-      // 지도 이동
+      const { lat, lng, id } = location.state.selectedPin;
       const targetPos = new window.kakao.maps.LatLng(lat, lng);
       mapInstance.current.setCenter(targetPos);
       mapInstance.current.setLevel(2);
-      
-      // 선택된 핀 표시
       setSelectedPinId(id);
-      
-      // 시트 표시
       setShowSheet(true);
-      
-      // 주변 핀 업데이트
-      setTimeout(() => {
-        updateVisiblePins();
-        console.log(`✅ 지도 이동 완료!`);
-      }, 300);
-      
-      // state 초기화 (뒤로가기 시 중복 실행 방지)
+      setTimeout(() => updateVisiblePins(), 300);
       window.history.replaceState({}, document.title);
     }
   }, [location.state, updateVisiblePins]);
@@ -558,36 +485,23 @@ const MapScreen = () => {
           </div>
           <button 
             onClick={() => {
-              console.log('📍 내 위치 버튼 클릭');
-              
               if (!navigator.geolocation) {
                 alert('위치 서비스를 사용할 수 없습니다.');
                 return;
               }
               
-              // 로딩 표시 (옵션)
-              console.log('🔍 현재 위치 가져오는 중...');
-              
               navigator.geolocation.getCurrentPosition(
                 (position) => {
-                  const { latitude, longitude, accuracy } = position.coords;
-                  console.log(`✅ 현재 정확한 위치:`);
-                  console.log(`   위도: ${latitude}`);
-                  console.log(`   경도: ${longitude}`);
-                  console.log(`   정확도: ±${Math.round(accuracy)}m`);
+                  const { latitude, longitude } = position.coords;
                   
                   if (mapInstance.current) {
-                    // 지도 중심을 현재 위치로 이동
                     const currentPos = new window.kakao.maps.LatLng(latitude, longitude);
                     mapInstance.current.setCenter(currentPos);
                     mapInstance.current.setLevel(3);
                     
-                    // 기존 내 위치 마커 제거 (중복 방지)
                     if (window.myLocationMarker) {
                       window.myLocationMarker.setMap(null);
                     }
-                    
-                    // 현재 위치에 커스텀 마커 표시 (계속 유지)
                     const markerContent = document.createElement('div');
                     markerContent.innerHTML = `
                       <div style="
@@ -645,16 +559,10 @@ const MapScreen = () => {
                     // 전역 변수에 저장 (나중에 제거 가능하도록)
                     window.myLocationMarker = customOverlay;
                     
-                    // 정확도 알림 (정확도가 50m 이상이면 경고)
-                    if (accuracy > 50) {
-                      console.log(`⚠️ 위치 정확도가 낮습니다: ±${Math.round(accuracy)}m`);
-                    }
-                    
-                    console.log('✅ 지도 이동 완료! 내 위치 마커 표시 (계속 유지)');
                   }
                 },
                 (error) => {
-                  console.error('❌ 위치 가져오기 실패:', error);
+                  console.error('위치 가져오기 실패:', error);
                   
                   let errorMessage = '위치를 가져올 수 없습니다.';
                   
@@ -901,35 +809,19 @@ const MapScreen = () => {
                   <button 
                     key={pin.id}
                     onClick={(e) => {
-                      // 드래그 중에는 클릭 무시
                       if (isPhotoListDragging) {
                         e.preventDefault();
                         return;
                       }
                       
-                      console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-                      console.log(`📸 사진 클릭: ${pin.title}`);
-                      console.log(`  좌표: (${pin.lat}, ${pin.lng})`);
-                      
                       if (mapInstance.current) {
-                        // 선택된 핀 표시
                         setSelectedPinId(pin.id);
-                        
-                        // 정확한 위치로 지도 이동 & 줌인
                         const targetPos = new window.kakao.maps.LatLng(pin.lat, pin.lng);
                         mapInstance.current.setCenter(targetPos);
                         mapInstance.current.setLevel(2);
-                        
-                        console.log(`✅ 지도 이동 완료!`);
-                        
-                        // 0.3초 후 보이는 핀 업데이트
-                        setTimeout(() => {
-                          updateVisiblePins();
-                          console.log(`🔄 주변 핀 업데이트 완료`);
-                        }, 300);
+                        setTimeout(() => updateVisiblePins(), 300);
                       }
                       
-                      // 게시물 상세 화면으로 이동
                       setTimeout(() => {
                         navigate(`/post/${pin.id}`, { state: { post: pin.post } });
                       }, 400);
