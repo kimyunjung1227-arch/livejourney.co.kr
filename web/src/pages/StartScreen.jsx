@@ -47,33 +47,31 @@ const StartScreen = () => {
     setError('');
     
     try {
-      // 소셜 로그인 Mock 구현
-      const socialUser = {
-        id: `${provider.toLowerCase()}_${Date.now()}`,
-        email: `user_${Date.now()}@${provider.toLowerCase()}.com`,
-        username: `${provider} 사용자`,
-        provider: provider,
-        profileImage: null,
-        createdAt: new Date().toISOString()
-      };
+      // 백엔드 API URL 가져오기
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
       
-      // localStorage에 저장
-      localStorage.setItem('token', `${provider.toLowerCase()}_token_${Date.now()}`);
-      localStorage.setItem('user', JSON.stringify(socialUser));
+      // 소셜 로그인 제공자에 따라 엔드포인트 결정
+      const providerLower = provider.toLowerCase();
+      let authEndpoint = '';
       
-      // AuthContext 업데이트
-      const result = await login(socialUser.email, 'social_login_no_password');
+      if (providerLower === 'kakao') {
+        authEndpoint = `${apiUrl}/api/auth/kakao`;
+      } else if (providerLower === 'naver') {
+        authEndpoint = `${apiUrl}/api/auth/naver`;
+      } else if (providerLower === 'google') {
+        authEndpoint = `${apiUrl}/api/auth/google`;
+      } else {
+        throw new Error('지원하지 않는 소셜 로그인 제공자입니다.');
+      }
       
-      // 수동으로 사용자 정보 설정 (소셜 로그인은 비밀번호가 없으므로)
-      localStorage.setItem('user', JSON.stringify(socialUser));
+      // 백엔드로 리다이렉트 (OAuth 인증 시작)
+      window.location.href = authEndpoint;
       
-      console.log(`✅ ${provider} 로그인 성공:`, socialUser);
-      
-      navigate('/main');
+      // 리다이렉트되므로 여기서는 로딩 상태만 유지
+      // 실제 로그인 처리는 AuthCallbackScreen에서 수행됨
     } catch (error) {
       console.error('소셜 로그인 실패:', error);
       setError(`${provider} 로그인에 실패했습니다.`);
-    } finally {
       setLoading(false);
     }
   };

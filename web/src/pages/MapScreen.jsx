@@ -79,6 +79,64 @@ const MapScreen = () => {
               });
               mapInstance.current = map;
               setMapLoading(false);
+              
+              // 내 위치 마커 표시
+              const currentPos = new window.kakao.maps.LatLng(latitude, longitude);
+              const markerContent = document.createElement('div');
+              markerContent.innerHTML = `
+                <div style="
+                  position: relative;
+                  width: 24px;
+                  height: 24px;
+                ">
+                  <!-- 펄스 링 -->
+                  <div style="
+                    position: absolute;
+                    top: -8px;
+                    left: -8px;
+                    width: 40px;
+                    height: 40px;
+                    background: rgba(255, 107, 53, 0.3);
+                    border-radius: 50%;
+                    animation: ping 1s cubic-bezier(0, 0, 0.2, 1) infinite;
+                  "></div>
+                  <!-- 메인 핀 -->
+                  <div style="
+                    position: absolute;
+                    width: 24px;
+                    height: 24px;
+                    background: linear-gradient(135deg, #ff6b35, #f7931e);
+                    border: 3px solid white;
+                    border-radius: 50%;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+                  "></div>
+                </div>
+              `;
+              
+              // CSS 애니메이션 추가 (한 번만)
+              if (!document.getElementById('myLocationPingStyle')) {
+                const style = document.createElement('style');
+                style.id = 'myLocationPingStyle';
+                style.textContent = `
+                  @keyframes ping {
+                    75%, 100% {
+                      transform: scale(2);
+                      opacity: 0;
+                    }
+                  }
+                `;
+                document.head.appendChild(style);
+              }
+              
+              const customOverlay = new window.kakao.maps.CustomOverlay({
+                position: currentPos,
+                content: markerContent,
+                yAnchor: 0.5
+              });
+              
+              customOverlay.setMap(map);
+              window.myLocationMarker = customOverlay;
+              
               loadAllData();
             },
             () => {
@@ -108,6 +166,75 @@ const MapScreen = () => {
     };
 
     init();
+  }, []);
+
+  // 내 위치 마커 표시 함수
+  const showMyLocationMarker = useCallback((latitude, longitude) => {
+    if (!mapInstance.current) return;
+    
+    // 기존 마커 제거
+    if (window.myLocationMarker) {
+      window.myLocationMarker.setMap(null);
+    }
+    
+    const currentPos = new window.kakao.maps.LatLng(latitude, longitude);
+    
+    const markerContent = document.createElement('div');
+    markerContent.innerHTML = `
+      <div style="
+        position: relative;
+        width: 24px;
+        height: 24px;
+      ">
+        <!-- 펄스 링 -->
+        <div style="
+          position: absolute;
+          top: -8px;
+          left: -8px;
+          width: 40px;
+          height: 40px;
+          background: rgba(255, 107, 53, 0.3);
+          border-radius: 50%;
+          animation: ping 1s cubic-bezier(0, 0, 0.2, 1) infinite;
+        "></div>
+        <!-- 메인 핀 -->
+        <div style="
+          position: absolute;
+          width: 24px;
+          height: 24px;
+          background: linear-gradient(135deg, #ff6b35, #f7931e);
+          border: 3px solid white;
+          border-radius: 50%;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+        "></div>
+      </div>
+    `;
+    
+    // CSS 애니메이션 추가 (한 번만)
+    if (!document.getElementById('myLocationPingStyle')) {
+      const style = document.createElement('style');
+      style.id = 'myLocationPingStyle';
+      style.textContent = `
+        @keyframes ping {
+          75%, 100% {
+            transform: scale(2);
+            opacity: 0;
+          }
+        }
+      `;
+      document.head.appendChild(style);
+    }
+    
+    const customOverlay = new window.kakao.maps.CustomOverlay({
+      position: currentPos,
+      content: markerContent,
+      yAnchor: 0.5
+    });
+    
+    customOverlay.setMap(mapInstance.current);
+    
+    // 전역 변수에 저장 (나중에 제거 가능하도록)
+    window.myLocationMarker = customOverlay;
   }, []);
 
   // 1. 보이는 핀 업데이트 (제일 먼저!)
@@ -577,66 +704,8 @@ const MapScreen = () => {
                     mapInstance.current.setCenter(currentPos);
                     mapInstance.current.setLevel(3);
                     
-                    if (window.myLocationMarker) {
-                      window.myLocationMarker.setMap(null);
-                    }
-                    const markerContent = document.createElement('div');
-                    markerContent.innerHTML = `
-                      <div style="
-                        position: relative;
-                        width: 24px;
-                        height: 24px;
-                      ">
-                        <!-- 펄스 링 -->
-                        <div style="
-                          position: absolute;
-                          top: -8px;
-                          left: -8px;
-                          width: 40px;
-                          height: 40px;
-                          background: rgba(255, 107, 53, 0.3);
-                          border-radius: 50%;
-                          animation: ping 1s cubic-bezier(0, 0, 0.2, 1) infinite;
-                        "></div>
-                        <!-- 메인 핀 -->
-                        <div style="
-                          position: absolute;
-                          width: 24px;
-                          height: 24px;
-                          background: linear-gradient(135deg, #ff6b35, #f7931e);
-                          border: 3px solid white;
-                          border-radius: 50%;
-                          box-shadow: 0 4px 12px rgba(0,0,0,0.4);
-                        "></div>
-                      </div>
-                    `;
-                    
-                    // CSS 애니메이션 추가 (한 번만)
-                    if (!document.getElementById('myLocationPingStyle')) {
-                      const style = document.createElement('style');
-                      style.id = 'myLocationPingStyle';
-                      style.textContent = `
-                        @keyframes ping {
-                          75%, 100% {
-                            transform: scale(2);
-                            opacity: 0;
-                          }
-                        }
-                      `;
-                      document.head.appendChild(style);
-                    }
-                    
-                    const customOverlay = new window.kakao.maps.CustomOverlay({
-                      position: currentPos,
-                      content: markerContent,
-                      yAnchor: 0.5
-                    });
-                    
-                    customOverlay.setMap(mapInstance.current);
-                    
-                    // 전역 변수에 저장 (나중에 제거 가능하도록)
-                    window.myLocationMarker = customOverlay;
-                    
+                    // 내 위치 마커 표시
+                    showMyLocationMarker(latitude, longitude);
                   }
                 },
                 (error) => {

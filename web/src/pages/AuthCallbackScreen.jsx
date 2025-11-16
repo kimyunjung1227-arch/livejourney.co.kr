@@ -26,24 +26,32 @@ const AuthCallbackScreen = () => {
         }
 
         if (token && userJson) {
-          const user = JSON.parse(decodeURIComponent(userJson));
-          
-          // 로컬 스토리지에 저장
-          localStorage.setItem('token', token);
-          localStorage.setItem('user', JSON.stringify(user));
-          
-          // Auth Context 업데이트
-          if (setUser) {
-            setUser(user);
+          try {
+            const user = JSON.parse(decodeURIComponent(userJson));
+            
+            // 로컬 스토리지에 저장
+            localStorage.setItem('token', token);
+            localStorage.setItem('user', JSON.stringify(user));
+            
+            // Auth Context 업데이트
+            if (setUser) {
+              setUser(user);
+            }
+            
+            // 사용자 정보 업데이트 이벤트 발생
+            window.dispatchEvent(new Event('userUpdated'));
+            
+            console.log('✅ 소셜 로그인 성공:', user);
+            
+            // 메인 화면으로 이동
+            navigate('/main', { replace: true });
+          } catch (parseError) {
+            console.error('사용자 정보 파싱 오류:', parseError);
+            setError('사용자 정보를 처리할 수 없습니다.');
+            setTimeout(() => {
+              navigate('/start', { replace: true });
+            }, 3000);
           }
-          
-          // 사용자 정보 업데이트 이벤트 발생
-          window.dispatchEvent(new Event('userUpdated'));
-          
-          console.log('✅ 소셜 로그인 성공:', user);
-          
-          // 메인 화면으로 이동
-          navigate('/main', { replace: true });
         } else {
           console.error('토큰 또는 사용자 정보가 없습니다');
           setError('로그인 정보를 가져올 수 없습니다.');

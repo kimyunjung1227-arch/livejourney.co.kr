@@ -13,7 +13,6 @@ const SearchScreen = () => {
   const [filteredRegions, setFilteredRegions] = useState([]);
   const [recentSearches, setRecentSearches] = useState([]);
   const [regionRepresentativePhotos, setRegionRepresentativePhotos] = useState({});
-  const [showAllRegions, setShowAllRegions] = useState(false);
 
   const recommendedScrollRef = useRef(null);
   const recentScrollRef = useRef(null);
@@ -23,20 +22,6 @@ const SearchScreen = () => {
   const [scrollLeft, setScrollLeft] = useState(0);
   const [currentScrollRef, setCurrentScrollRef] = useState(null);
   const [hasMoved, setHasMoved] = useState(false);
-
-  // 추천 지역 계산 (사진이 많은 순으로 상위 6개)
-  const topRegions = useMemo(() => {
-    const regionsWithPhotos = Object.entries(regionRepresentativePhotos)
-      .filter(([_, photo]) => photo.hasUploadedPhoto && photo.count > 0)
-      .sort((a, b) => b[1].count - a[1].count)
-      .slice(0, showAllRegions ? undefined : 6)
-      .map(([regionName, photo]) => ({
-        name: regionName,
-        ...photo
-      }));
-    
-    return regionsWithPhotos;
-  }, [regionRepresentativePhotos, showAllRegions]);
 
   // 추천 지역 데이터 (메모이제이션) - 기본 이미지는 getRegionDefaultImage 사용
   const recommendedRegions = useMemo(() => [
@@ -109,6 +94,20 @@ const SearchScreen = () => {
     { id: 67, name: '제주', image: getRegionDefaultImage('제주'), keywords: ['섬', '바다', '한라산', '오름', '돌하르방', '흑돼지', '감귤', '휴양', '힐링'] },
     { id: 68, name: '서귀포', image: getRegionDefaultImage('서귀포'), keywords: ['바다', '섬', '폭포', '정방폭포', '천지연', '감귤', '자연'] }
   ], []);
+
+  // 추천 지역 계산 (사진이 많은 순으로 정렬)
+  const topRegions = useMemo(() => {
+    // 사진이 있는 지역들 (사진 개수 순으로 정렬)
+    const regionsWithPhotos = Object.entries(regionRepresentativePhotos)
+      .filter(([_, photo]) => photo.hasUploadedPhoto && photo.count > 0)
+      .sort((a, b) => b[1].count - a[1].count)
+      .map(([regionName, photo]) => ({
+        name: regionName,
+        ...photo
+      }));
+    
+    return regionsWithPhotos;
+  }, [regionRepresentativePhotos]);
 
   // 한글 초성 추출 함수 (useCallback)
   const getChosung = useCallback((str) => {
@@ -557,19 +556,6 @@ const SearchScreen = () => {
                 );
               })}
             </div>
-          </div>
-        )}
-
-        {/* 전체 지역 보기 버튼 */}
-        {topRegions.length >= 6 && !showAllRegions && (
-          <div className="px-4 pt-2 pb-6">
-            <button
-              onClick={() => setShowAllRegions(true)}
-              className="w-full py-3 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-xl font-semibold hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors flex items-center justify-center gap-2"
-            >
-              <span className="material-symbols-outlined">expand_more</span>
-              <span>더 많은 지역 보기</span>
-            </button>
           </div>
         )}
 

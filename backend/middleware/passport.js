@@ -32,30 +32,45 @@ if (process.env.KAKAO_CLIENT_ID && process.env.KAKAO_CLIENT_SECRET) {
       },
       async (accessToken, refreshToken, profile, done) => {
         try {
+          // 카카오 프로필 정보 추출
+          const kakaoAccount = profile._json?.kakao_account || {};
+          const properties = profile._json?.properties || {};
+          
           // 기존 사용자 찾기
           let user = await User.findOne({
-            socialId: profile.id,
+            socialId: profile.id.toString(),
             socialProvider: 'kakao'
           });
 
           if (!user) {
             // 새 사용자 생성
             user = new User({
-              socialId: profile.id,
+              socialId: profile.id.toString(),
               socialProvider: 'kakao',
-              username: profile.username || profile.displayName || `kakao_${profile.id}`,
-              email: profile._json?.kakao_account?.email,
-              profileImage: profile._json?.properties?.profile_image,
+              username: properties.nickname || kakaoAccount.profile?.nickname || profile.displayName || profile.username || `kakao_${profile.id}`,
+              email: kakaoAccount.email,
+              profileImage: properties.profile_image || kakaoAccount.profile?.profile_image_url,
             });
             await user.save();
           } else {
             // 마지막 로그인 시간 업데이트
             user.lastLogin = new Date();
+            // 프로필 정보 업데이트 (변경된 경우)
+            const newUsername = properties.nickname || kakaoAccount.profile?.nickname || profile.displayName;
+            const newProfileImage = properties.profile_image || kakaoAccount.profile?.profile_image_url;
+            
+            if (newUsername && user.username !== newUsername) {
+              user.username = newUsername;
+            }
+            if (newProfileImage && user.profileImage !== newProfileImage) {
+              user.profileImage = newProfileImage;
+            }
             await user.save();
           }
 
           return done(null, user);
         } catch (error) {
+          console.error('카카오 로그인 오류:', error);
           return done(error, null);
         }
       }
@@ -76,25 +91,35 @@ if (process.env.NAVER_CLIENT_ID && process.env.NAVER_CLIENT_SECRET) {
       },
       async (accessToken, refreshToken, profile, done) => {
         try {
+          // 네이버 프로필 정보 추출
+          const naverProfile = profile._json?.response || profile;
+          
           // 기존 사용자 찾기
           let user = await User.findOne({
-            socialId: profile.id,
+            socialId: naverProfile.id || profile.id,
             socialProvider: 'naver'
           });
 
           if (!user) {
             // 새 사용자 생성
             user = new User({
-              socialId: profile.id,
+              socialId: naverProfile.id || profile.id,
               socialProvider: 'naver',
-              username: profile.name || profile.nickname || `naver_${profile.id}`,
-              email: profile.email,
-              profileImage: profile.profile_image,
+              username: naverProfile.name || naverProfile.nickname || profile.displayName || `naver_${naverProfile.id || profile.id}`,
+              email: naverProfile.email || profile.email,
+              profileImage: naverProfile.profile_image || profile.photos?.[0]?.value,
             });
             await user.save();
           } else {
             // 마지막 로그인 시간 업데이트
             user.lastLogin = new Date();
+            // 프로필 정보 업데이트 (변경된 경우)
+            if (naverProfile.name && user.username !== naverProfile.name) {
+              user.username = naverProfile.name;
+            }
+            if (naverProfile.profile_image && user.profileImage !== naverProfile.profile_image) {
+              user.profileImage = naverProfile.profile_image;
+            }
             await user.save();
           }
 

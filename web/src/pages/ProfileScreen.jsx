@@ -6,6 +6,7 @@ import { getUnreadCount } from '../utils/notifications';
 import { getEarnedBadges } from '../utils/badgeSystem';
 import { getUserLevel } from '../utils/levelSystem';
 import { filterRecentPosts } from '../utils/timeUtils';
+import { getUserDailyTitle } from '../utils/dailyTitleSystem';
 
 const ProfileScreen = () => {
   const navigate = useNavigate();
@@ -20,11 +21,21 @@ const ProfileScreen = () => {
   const [isEditMode, setIsEditMode] = useState(false);
   const [selectedPhotos, setSelectedPhotos] = useState([]);
   const [activeTab, setActiveTab] = useState('my'); // 'my' | 'map' | 'timeline'
+  const [dailyTitle, setDailyTitle] = useState(null);
 
   useEffect(() => {
     // localStorage에서 사용자 정보 로드
     const savedUser = JSON.parse(localStorage.getItem('user') || '{}');
     setUser(savedUser);
+
+    // 24시간 타이틀 로드
+    if (savedUser?.id) {
+      const title = getUserDailyTitle(savedUser.id);
+      if (title) {
+        console.log('👑 오늘의 타이틀:', title.name);
+      }
+      setDailyTitle(title);
+    }
 
     // 획득한 뱃지 로드
     const badges = getEarnedBadges();
@@ -363,20 +374,6 @@ const ProfileScreen = () => {
           )}
         </div>
 
-        {/* 쿠폰함 */}
-        <div className="bg-white dark:bg-gray-900 px-6 py-4 border-t border-gray-100 dark:border-gray-800">
-          <button
-            onClick={() => navigate('/coupons')}
-            className="w-full flex items-center justify-between"
-          >
-            <div className="flex items-center gap-2">
-              <span className="material-symbols-outlined text-primary text-xl">confirmation_number</span>
-              <span className="text-text-primary-light dark:text-text-primary-dark font-medium">내 쿠폰함</span>
-            </div>
-            <span className="text-text-primary-light dark:text-text-primary-dark text-sm">확인하기</span>
-          </button>
-        </div>
-
         {/* 여행 기록 탭 */}
         <div className="bg-white dark:bg-gray-900 px-6 py-6 border-t border-gray-100 dark:border-gray-800">
           {/* 탭 전환 */}
@@ -547,8 +544,36 @@ const ProfileScreen = () => {
                       <div className="text-center">
                         <span className="material-symbols-outlined text-5xl mb-2 block">location_on</span>
                         <p className="text-sm">지도를 불러오는 중...</p>
-                      </div>
+            </div>
                     </div>
+
+          {/* 오늘의 타이틀 영역 */}
+          <div className="mt-4">
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-sm font-semibold text-text-primary-light dark:text-text-primary-dark">
+                오늘의 타이틀
+              </h2>
+            </div>
+            {dailyTitle ? (
+              <div className="flex items-center gap-3 px-3 py-3 rounded-2xl bg-gradient-to-r from-amber-100 to-orange-100 dark:from-amber-900/40 dark:to-orange-900/40 border border-amber-300 dark:border-amber-600 shadow-sm">
+                <div className="flex items-center justify-center w-10 h-10 rounded-full bg-white dark:bg-gray-900 shadow-md">
+                  <span className="text-xl">{dailyTitle.icon || '👑'}</span>
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-sm font-bold text-amber-900 dark:text-amber-200">
+                    {dailyTitle.name}
+                  </span>
+                  <span className="text-xs text-amber-800/80 dark:text-amber-200/80">
+                    {dailyTitle.description || '오늘 하루 동안 유지되는 명예 타이틀입니다.'}
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div className="px-3 py-3 rounded-2xl bg-gray-50 dark:bg-gray-800/60 border border-dashed border-gray-300 dark:border-gray-600 text-xs text-gray-500 dark:text-gray-400">
+                아직 획득한 오늘의 타이틀이 없습니다. 오늘 현장 정보를 공유하면 특별한 타이틀을 받을 수 있어요.
+              </div>
+            )}
+          </div>
                   </div>
 
                   {/* 지역별 사진 수 */}
