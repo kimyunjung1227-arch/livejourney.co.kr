@@ -20,6 +20,8 @@ const UploadScreen = () => {
   const [formData, setFormData] = useState({
     images: [],
     imageFiles: [],
+    videos: [],
+    videoFiles: [],
     location: '',
     tags: [],
     note: '',
@@ -166,32 +168,47 @@ const UploadScreen = () => {
     if (files.length === 0) return;
 
     const MAX_SIZE = 50 * 1024 * 1024;
-    const validFiles = files.filter(file => {
-      if (file.size > MAX_SIZE) {
-        alert(`${file.name}은(는) 50MB를 초과합니다`);
-        return false;
+    const MAX_VIDEO_SIZE = 100 * 1024 * 1024; // 동영상은 100MB까지
+    
+    const imageFiles = [];
+    const videoFiles = [];
+    
+    files.forEach(file => {
+      const isVideo = file.type.startsWith('video/');
+      const maxSize = isVideo ? MAX_VIDEO_SIZE : MAX_SIZE;
+      
+      if (file.size > maxSize) {
+        alert(`${file.name}은(는) ${isVideo ? '100MB' : '50MB'}를 초과합니다`);
+        return;
       }
-      return true;
+      
+      if (isVideo) {
+        videoFiles.push(file);
+      } else {
+        imageFiles.push(file);
+      }
     });
 
-    if (validFiles.length === 0) return;
-
-    const imageUrls = validFiles.map(file => URL.createObjectURL(file));
-    const isFirstImage = formData.images.length === 0;
+    const imageUrls = imageFiles.map(file => URL.createObjectURL(file));
+    const videoUrls = videoFiles.map(file => URL.createObjectURL(file));
+    const isFirstMedia = formData.images.length === 0 && formData.videos.length === 0;
     
     setFormData(prev => ({
       ...prev,
       images: [...prev.images, ...imageUrls],
-      imageFiles: [...prev.imageFiles, ...validFiles]
+      imageFiles: [...prev.imageFiles, ...imageFiles],
+      videos: [...prev.videos, ...videoUrls],
+      videoFiles: [...prev.videoFiles, ...videoFiles]
     }));
 
-    if (isFirstImage) {
+    if (isFirstMedia && (imageFiles.length > 0 || videoFiles.length > 0)) {
       getCurrentLocation();
-      if (validFiles[0]) {
-        analyzeImageAndGenerateTags(validFiles[0], formData.location, formData.note);
+      const firstFile = imageFiles[0] || videoFiles[0];
+      if (firstFile && !firstFile.type.startsWith('video/')) {
+        analyzeImageAndGenerateTags(firstFile, formData.location, formData.note);
       }
     }
-  }, [formData.images.length, formData.location, formData.note, getCurrentLocation, analyzeImageAndGenerateTags]);
+  }, [formData.images.length, formData.videos.length, formData.location, formData.note, getCurrentLocation, analyzeImageAndGenerateTags]);
 
 
   useEffect(() => {
@@ -219,7 +236,7 @@ const UploadScreen = () => {
     
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = 'image/*';
+    input.accept = 'image/*,video/*';
     input.multiple = true;
     
     if (option === 'camera') {
@@ -306,8 +323,8 @@ const UploadScreen = () => {
     console.log('Image count:', formData.images.length);
     console.log('Location:', formData.location);
     
-    if (formData.images.length === 0) {
-      alert('사진을 추가해주세요');
+    if (formData.images.length === 0 && formData.videos.length === 0) {
+      alert('사진 또는 동영상을 추가해주세요');
       return;
     }
 
@@ -324,6 +341,7 @@ const UploadScreen = () => {
       console.log('Upload state set');
       
       const uploadedImageUrls = [];
+      const uploadedVideoUrls = [];
       
       const aiCategory = formData.aiCategory || 'scenic';
       const aiCategoryName = formData.aiCategoryName || '추천 장소';
@@ -331,10 +349,15 @@ const UploadScreen = () => {
       
       console.log('AI category:', aiCategoryName);
       
+      const totalFiles = formData.imageFiles.length + formData.videoFiles.length;
+      let uploadedCount = 0;
+      
+      // 이미지 업로드
       if (formData.imageFiles.length > 0) {
         for (let i = 0; i < formData.imageFiles.length; i++) {
           const file = formData.imageFiles[i];
-          setUploadProgress(20 + (i * 40 / formData.imageFiles.length));
+          uploadedCount++;
+          setUploadProgress(20 + (uploadedCount * 40 / totalFiles));
           
           try {
             const uploadResult = await uploadImage(file);
@@ -349,10 +372,31 @@ const UploadScreen = () => {
         uploadedImageUrls.push(...formData.images);
       }
       
+      // 동영상 업로드 (동일한 uploadImage 함수 사용, 백엔드에서 처리)
+      if (formData.videoFiles.length > 0) {
+        for (let i = 0; i < formData.videoFiles.length; i++) {
+          const file = formData.videoFiles[i];
+          uploadedCount++;
+          setUploadProgress(20 + (uploadedCount * 40 / totalFiles));
+          
+          try {
+            const uploadResult = await uploadImage(file);
+            if (uploadResult.success && uploadResult.url) {
+              uploadedVideoUrls.push(uploadResult.url);
+            }
+          } catch (uploadError) {
+            uploadedVideoUrls.push(formData.videos[i]);
+          }
+        }
+      } else {
+        uploadedVideoUrls.push(...formData.videos);
+      }
+      
       setUploadProgress(60);
       
       const postData = {
         images: uploadedImageUrls.length > 0 ? uploadedImageUrls : formData.images,
+        videos: uploadedVideoUrls.length > 0 ? uploadedVideoUrls : formData.videos,
         content: formData.note || `${formData.location}에서의 여행 기록`,
         location: {
           name: formData.location,
@@ -403,6 +447,7 @@ const UploadScreen = () => {
           id: `local-${Date.now()}`,
           userId: user?.id || 'test_user_001',
           images: uploadedImageUrls.length > 0 ? uploadedImageUrls : formData.images,
+          videos: uploadedVideoUrls.length > 0 ? uploadedVideoUrls : formData.videos,
           location: formData.location,
           tags: formData.tags,
           note: formData.note,

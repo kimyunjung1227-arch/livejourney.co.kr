@@ -65,61 +65,85 @@ const RegionDetailScreen = () => {
       .filter(post => post.category === 'bloom')
       .map(post => ({ // slice 제거 - 모든 사진 표시!
         id: post.id,
-        image: post.images?.[0] || post.image,
+        images: post.images || [],
+        videos: post.videos || [],
+        image: post.images?.[0] || post.videos?.[0] || post.image,
         time: post.timeLabel || '방금',
         category: post.categoryName,
         categoryName: post.categoryName,
         labels: post.aiLabels,
         detailedLocation: post.detailedLocation || post.placeName,
         placeName: post.placeName,
-        address: post.address
+        address: post.address,
+        location: post.location,
+        tags: post.tags || post.aiLabels || [],
+        note: post.note || post.content,
+        likes: post.likes || post.likeCount || 0
       }));
     
     const touristPosts = regionPosts
       .filter(post => post.category === 'landmark' || post.category === 'scenic')
       .map(post => ({ // slice 제거 - 모든 사진 표시!
         id: post.id,
-        image: post.images?.[0] || post.image,
+        images: post.images || [],
+        videos: post.videos || [],
+        image: post.images?.[0] || post.videos?.[0] || post.image,
         time: post.timeLabel || '방금',
         category: post.categoryName,
         categoryName: post.categoryName,
         labels: post.aiLabels,
         detailedLocation: post.detailedLocation || post.placeName,
         placeName: post.placeName,
-        address: post.address
+        address: post.address,
+        location: post.location,
+        tags: post.tags || post.aiLabels || [],
+        note: post.note || post.content,
+        likes: post.likes || post.likeCount || 0
       }));
     
     const foodPosts = regionPosts
       .filter(post => post.category === 'food')
       .map(post => ({ // slice 제거 - 모든 사진 표시!
         id: post.id,
-        image: post.images?.[0] || post.image,
+        images: post.images || [],
+        videos: post.videos || [],
+        image: post.images?.[0] || post.videos?.[0] || post.image,
         time: post.timeLabel || '방금',
         category: post.categoryName,
         categoryName: post.categoryName,
         labels: post.aiLabels,
         detailedLocation: post.detailedLocation || post.placeName,
         placeName: post.placeName,
-        address: post.address
+        address: post.address,
+        location: post.location,
+        tags: post.tags || post.aiLabels || [],
+        note: post.note || post.content,
+        likes: post.likes || post.likeCount || 0
       }));
     
     const realtimePosts = regionPosts
       .map(post => ({ // slice 제거 - 모든 사진 표시!
         id: post.id,
-        image: post.images?.[0] || post.image,
+        images: post.images || [],
+        videos: post.videos || [],
+        image: post.images?.[0] || post.videos?.[0] || post.image,
         time: post.timeLabel || '방금',
         category: post.categoryName || '일반',
         categoryName: post.categoryName,
         labels: post.aiLabels,
         detailedLocation: post.detailedLocation || post.placeName,
         placeName: post.placeName,
-        address: post.address
+        address: post.address,
+        location: post.location,
+        tags: post.tags || post.aiLabels || [],
+        note: post.note || post.content,
+        likes: post.likes || post.likeCount || 0
       }));
     
-    setBloomPhotos(bloomPosts);
-    setTouristSpots(touristPosts);
-    setFoodPhotos(foodPosts);
-    setRealtimePhotos(realtimePosts);
+    setBloomPhotos(bloomPosts.slice(0, 6));
+    setTouristSpots(touristPosts.slice(0, 6));
+    setFoodPhotos(foodPosts.slice(0, 6));
+    setRealtimePhotos(realtimePosts.slice(0, 6));
     
     console.log('📊 AI 카테고리별 사진 분류:', {
       bloom: bloomPosts.length,
@@ -250,81 +274,102 @@ const RegionDetailScreen = () => {
                 </button>
               </div>
             ) : (
-          <div className="grid grid-cols-2 gap-3 px-4">
-            {realtimePhotos.map((photo) => (
-              <div 
-                key={photo.id} 
-                    className="relative overflow-hidden rounded-xl bg-gray-200 cursor-pointer group shadow-lg hover:shadow-xl transition-all"
-                onClick={() => navigate(`/post/${photo.id}`, { state: { post: photo } })}
-              >
-                <img
-                      className="h-full w-full object-cover aspect-[1/1] group-hover:scale-105 transition-transform duration-300"
-                  src={photo.image}
-                  alt={`${region.name} 실시간 정보`}
-                />
-                    {/* 그라데이션 오버레이 */}
-                    <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.8), rgba(0,0,0,0.1) 50%, rgba(0,0,0,0.3))' }}></div>
-                    
-                    {/* 좌측상단: 카테고리 아이콘만 */}
-                    {photo.categoryName && (
-                      <div style={{ position: 'absolute', top: '10px', left: '10px', zIndex: 1 }}>
-                        <span style={{ 
-                          display: 'flex', 
-                          alignItems: 'center', 
-                          justifyContent: 'center',
-                          width: '40px', 
-                          height: '40px', 
-                          borderRadius: '50%', 
-                          fontSize: '24px',
-                          fontWeight: 'bold',
-                          filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.8))'
-                        }}>
-                          {photo.categoryName === '개화 상황' && '🌸'}
-                          {photo.categoryName === '맛집 정보' && '🍜'}
-                          {(!photo.categoryName || !['개화 상황', '맛집 정보'].includes(photo.categoryName)) && '🏞️'}
+          <div className="grid grid-cols-2 gap-4 px-4">
+            {realtimePhotos.map((photo) => {
+              const likedPosts = JSON.parse(localStorage.getItem('likedPosts') || '{}');
+              const isLiked = likedPosts[photo.id] || false;
+              const likeCount = photo.likes || photo.likeCount || 0;
+              
+              return (
+                <div 
+                  key={photo.id} 
+                  className="cursor-pointer group"
+                  onClick={() => navigate(`/post/${photo.id}`, { state: { post: photo } })}
+                >
+                  <div>
+                    {/* 이미지 */}
+                    <div className="relative w-full aspect-[4/5] overflow-hidden rounded-lg mb-3">
+                      {photo.videos && photo.videos.length > 0 ? (
+                        <video
+                          src={photo.videos[0]}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                          autoPlay
+                          loop
+                          muted
+                          playsInline
+                        />
+                      ) : (
+                        <img
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                          src={photo.image}
+                          alt={`${region.name} 실시간 정보`}
+                        />
+                      )}
+                      
+                      {/* 좌측 상단 카테고리 아이콘 */}
+                      {photo.categoryName && (
+                        <div className="absolute top-3 left-3 flex items-center justify-center w-10 h-10 rounded-full bg-white/90 backdrop-blur-sm shadow-md">
+                          <span className="text-2xl">
+                            {photo.categoryName === '개화 상황' && '🌸'}
+                            {photo.categoryName === '맛집 정보' && '🍜'}
+                            {(!photo.categoryName || !['개화 상황', '맛집 정보'].includes(photo.categoryName)) && '🏞️'}
+                          </span>
+                        </div>
+                      )}
+                      
+                      {/* 우측 하단 하트 아이콘 */}
+                      <div className="absolute bottom-3 right-3 flex items-center gap-1 bg-white/90 backdrop-blur-sm rounded-full px-3 py-1.5 shadow-md">
+                        <span className={`material-symbols-outlined text-base ${isLiked ? 'text-red-500 fill' : 'text-gray-600'}`}>
+                          favorite
                         </span>
+                        <span className="text-sm font-semibold text-gray-700">{likeCount}</span>
                       </div>
-                    )}
+                    </div>
                     
-                    {/* 좌측하단: 위치정보 + 업로드시간 */}
-                    <div style={{ 
-                      position: 'absolute', 
-                      left: 0, 
-                      bottom: 0, 
-                      right: 0, 
-                      padding: '12px', 
-                      background: 'linear-gradient(to top, rgba(0,0,0,0.7), transparent)',
-                      zIndex: 10
-                    }}>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        {photo.detailedLocation && (
-                          <p style={{ 
-                            color: 'white', 
-                            fontSize: '14px', 
-                            fontWeight: 'bold', 
-                            lineHeight: '1.2',
-                            textShadow: '0 2px 8px rgba(0,0,0,0.8)',
-                            margin: 0
-                          }}>
-                            {photo.detailedLocation}
+                    {/* 이미지 밖 하단 텍스트 */}
+                    <div className="space-y-2">
+                      {/* 지역 상세 정보 */}
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-base font-bold text-text-primary-light dark:text-text-primary-dark">
+                            {photo.detailedLocation || photo.placeName || photo.location || region.name}
                           </p>
-                        )}
-                        {photo.time && (
-                          <p style={{ 
-                            color: 'rgba(255,255,255,0.9)', 
-                            fontSize: '12px', 
-                            fontWeight: '600', 
-                            lineHeight: '1.2',
-                            textShadow: '0 2px 8px rgba(0,0,0,0.8)',
-                            margin: 0
-                          }}>
-                            {photo.time}
+                          {/* 업로드 시간 - 지역 옆에 */}
+                          {photo.time && (
+                            <p className="text-xs text-text-secondary-light dark:text-text-secondary-dark">
+                              {photo.time}
+                            </p>
+                          )}
+                        </div>
+                        {photo.detailedLocation && photo.detailedLocation !== photo.location && (
+                          <p className="text-sm text-text-secondary-light dark:text-text-secondary-dark mt-0.5">
+                            {photo.location}
                           </p>
                         )}
                       </div>
+                      
+                      {/* 해시태그 - 지역 이름 밑에 (줄 바꿈 없이) */}
+                      {photo.tags && photo.tags.length > 0 && (
+                        <div className="flex gap-1.5 overflow-x-auto [-ms-scrollbar-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                          {photo.tags.slice(0, 5).map((tag, tagIndex) => (
+                            <span key={tagIndex} className="text-xs font-medium text-primary bg-primary/10 px-2.5 py-1 rounded-full whitespace-nowrap flex-shrink-0">
+                              #{typeof tag === 'string' ? tag.replace('#', '') : tag}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      
+                      {/* 메모/내용 */}
+                      {photo.note && (
+                        <p className="text-sm text-text-secondary-light dark:text-text-secondary-dark line-clamp-2">
+                          {photo.note}
+                        </p>
+                      )}
+                    </div>
                   </div>
-              </div>
-            ))}
+                </div>
+              );
+            })}
           </div>
             )}
         </div>
@@ -364,42 +409,96 @@ const RegionDetailScreen = () => {
                 </button>
               </div>
             ) : (
-          <div className="grid grid-cols-2 gap-3 px-4">
-                {touristSpots.map((spot) => (
-              <div 
-                key={spot.id} 
-                    className="relative overflow-hidden rounded-xl bg-gray-200 cursor-pointer group shadow-lg hover:shadow-xl transition-all"
-                onClick={() => navigate(`/post/${spot.id}`, { state: { post: spot } })}
-              >
-                <img
-                      className="h-full w-full object-cover aspect-[1/1] group-hover:scale-105 transition-transform duration-300"
-                  src={spot.image}
-                  alt={`${region.name} 추천 장소`}
-                />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent"></div>
-                    
-                    {/* 좌측상단: 카테고리 아이콘만 */}
-                    <div className="absolute top-0 left-0 p-2">
-                      <span className="text-lg font-bold bg-white/90 dark:bg-white/80 rounded-full w-9 h-9 flex items-center justify-center shadow-md backdrop-blur-sm">
-                        🏞️
-                      </span>
+          <div className="grid grid-cols-2 gap-4 px-4">
+                {touristSpots.map((spot) => {
+                  const likedPosts = JSON.parse(localStorage.getItem('likedPosts') || '{}');
+                  const isLiked = likedPosts[spot.id] || false;
+                  const likeCount = spot.likes || spot.likeCount || 0;
+                  
+                  return (
+                    <div 
+                      key={spot.id} 
+                      className="cursor-pointer group"
+                      onClick={() => navigate(`/post/${spot.id}`, { state: { post: spot } })}
+                    >
+                      <div>
+                        {/* 이미지 */}
+                        <div className="relative w-full aspect-[4/5] overflow-hidden rounded-lg mb-3">
+                          {spot.videos && spot.videos.length > 0 ? (
+                            <video
+                              src={spot.videos[0]}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                              autoPlay
+                              loop
+                              muted
+                              playsInline
+                            />
+                          ) : (
+                            <img
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                              src={spot.image}
+                              alt={`${region.name} 추천 장소`}
+                            />
+                          )}
+                          
+                          {/* 좌측 상단 카테고리 아이콘 */}
+                          <div className="absolute top-3 left-3 flex items-center justify-center w-10 h-10 rounded-full bg-white/90 backdrop-blur-sm shadow-md">
+                            <span className="text-2xl">🏞️</span>
+                          </div>
+                          
+                          {/* 우측 하단 하트 아이콘 */}
+                          <div className="absolute bottom-3 right-3 flex items-center gap-1 bg-white/90 backdrop-blur-sm rounded-full px-3 py-1.5 shadow-md">
+                            <span className={`material-symbols-outlined text-base ${isLiked ? 'text-red-500 fill' : 'text-gray-600'}`}>
+                              favorite
+                            </span>
+                            <span className="text-sm font-semibold text-gray-700">{likeCount}</span>
+                          </div>
+                        </div>
+                        
+                        {/* 이미지 밖 하단 텍스트 */}
+                        <div className="space-y-2">
+                          {/* 지역 상세 정보 */}
+                          <div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="text-base font-bold text-text-primary-light dark:text-text-primary-dark">
+                                {spot.detailedLocation || spot.placeName || spot.location || region.name}
+                              </p>
+                              {/* 업로드 시간 - 지역 옆에 */}
+                              {spot.time && (
+                                <p className="text-xs text-text-secondary-light dark:text-text-secondary-dark">
+                                  {spot.time}
+                                </p>
+                              )}
+                            </div>
+                            {spot.detailedLocation && spot.detailedLocation !== spot.location && (
+                              <p className="text-sm text-text-secondary-light dark:text-text-secondary-dark mt-0.5">
+                                {spot.location}
+                              </p>
+                            )}
+                          </div>
+                          
+                          {/* 해시태그 - 지역 이름 밑에 (줄 바꿈 없이) */}
+                          {spot.tags && spot.tags.length > 0 && (
+                            <div className="flex gap-1.5 overflow-x-auto [-ms-scrollbar-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                              {spot.tags.slice(0, 5).map((tag, tagIndex) => (
+                                <span key={tagIndex} className="text-xs font-medium text-primary bg-primary/10 px-2.5 py-1 rounded-full whitespace-nowrap flex-shrink-0">
+                                  #{typeof tag === 'string' ? tag.replace('#', '') : tag}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                          
+                          {/* 메모/내용 */}
+                          {spot.note && (
+                            <p className="text-sm text-text-secondary-light dark:text-text-secondary-dark line-clamp-2">
+                              {spot.note}
+                            </p>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                    
-                    {/* 하단: 지역정보 + 시간 */}
-                    <div className="absolute inset-x-0 bottom-0 p-2.5 flex flex-col gap-1">
-                      {spot.detailedLocation && (
-                        <p className="text-white text-sm font-bold truncate drop-shadow-lg">
-                          {spot.detailedLocation}
-                        </p>
-                      )}
-                      {spot.time && (
-                        <p className="text-white/90 text-xs font-medium drop-shadow-md">
-                          {spot.time}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -439,42 +538,96 @@ const RegionDetailScreen = () => {
                 </button>
               </div>
             ) : (
-          <div className="grid grid-cols-2 gap-3 px-4">
-                {bloomPhotos.map((photo) => (
-                  <div 
-                    key={photo.id} 
-                    className="relative overflow-hidden rounded-xl bg-gray-200 cursor-pointer group shadow-lg hover:shadow-xl transition-all"
-                    onClick={() => navigate(`/post/${photo.id}`, { state: { post: photo } })}
-              >
-                <img
-                      className="h-full w-full object-cover aspect-[1/1] group-hover:scale-105 transition-transform duration-300"
-                      src={photo.image}
-                  alt={`${region.name} 개화 상황`}
-                />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent"></div>
-                    
-                    {/* 좌측상단: 카테고리 아이콘만 */}
-                    <div className="absolute top-0 left-0 p-2">
-                      <span className="text-lg font-bold bg-white/90 dark:bg-white/80 rounded-full w-9 h-9 flex items-center justify-center shadow-md backdrop-blur-sm">
-                        🌸
-                      </span>
+          <div className="grid grid-cols-2 gap-4 px-4">
+                {bloomPhotos.map((photo) => {
+                  const likedPosts = JSON.parse(localStorage.getItem('likedPosts') || '{}');
+                  const isLiked = likedPosts[photo.id] || false;
+                  const likeCount = photo.likes || photo.likeCount || 0;
+                  
+                  return (
+                    <div 
+                      key={photo.id} 
+                      className="cursor-pointer group"
+                      onClick={() => navigate(`/post/${photo.id}`, { state: { post: photo } })}
+                    >
+                      <div>
+                        {/* 이미지 */}
+                        <div className="relative w-full aspect-[4/5] overflow-hidden rounded-lg mb-3">
+                          {photo.videos && photo.videos.length > 0 ? (
+                            <video
+                              src={photo.videos[0]}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                              autoPlay
+                              loop
+                              muted
+                              playsInline
+                            />
+                          ) : (
+                            <img
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                              src={photo.image}
+                              alt={`${region.name} 개화 상황`}
+                            />
+                          )}
+                          
+                          {/* 좌측 상단 카테고리 아이콘 */}
+                          <div className="absolute top-3 left-3 flex items-center justify-center w-10 h-10 rounded-full bg-white/90 backdrop-blur-sm shadow-md">
+                            <span className="text-2xl">🌸</span>
+                          </div>
+                          
+                          {/* 우측 하단 하트 아이콘 */}
+                          <div className="absolute bottom-3 right-3 flex items-center gap-1 bg-white/90 backdrop-blur-sm rounded-full px-3 py-1.5 shadow-md">
+                            <span className={`material-symbols-outlined text-base ${isLiked ? 'text-red-500 fill' : 'text-gray-600'}`}>
+                              favorite
+                            </span>
+                            <span className="text-sm font-semibold text-gray-700">{likeCount}</span>
+                          </div>
+                        </div>
+                        
+                        {/* 이미지 밖 하단 텍스트 */}
+                        <div className="space-y-2">
+                          {/* 지역 상세 정보 */}
+                          <div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="text-base font-bold text-text-primary-light dark:text-text-primary-dark">
+                                {photo.detailedLocation || photo.placeName || photo.location || region.name}
+                              </p>
+                              {/* 업로드 시간 - 지역 옆에 */}
+                              {photo.time && (
+                                <p className="text-xs text-text-secondary-light dark:text-text-secondary-dark">
+                                  {photo.time}
+                                </p>
+                              )}
+                            </div>
+                            {photo.detailedLocation && photo.detailedLocation !== photo.location && (
+                              <p className="text-sm text-text-secondary-light dark:text-text-secondary-dark mt-0.5">
+                                {photo.location}
+                              </p>
+                            )}
+                          </div>
+                          
+                          {/* 해시태그 - 지역 이름 밑에 (줄 바꿈 없이) */}
+                          {photo.tags && photo.tags.length > 0 && (
+                            <div className="flex gap-1.5 overflow-x-auto [-ms-scrollbar-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                              {photo.tags.slice(0, 5).map((tag, tagIndex) => (
+                                <span key={tagIndex} className="text-xs font-medium text-primary bg-primary/10 px-2.5 py-1 rounded-full whitespace-nowrap flex-shrink-0">
+                                  #{typeof tag === 'string' ? tag.replace('#', '') : tag}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                          
+                          {/* 메모/내용 */}
+                          {photo.note && (
+                            <p className="text-sm text-text-secondary-light dark:text-text-secondary-dark line-clamp-2">
+                              {photo.note}
+                            </p>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                    
-                    {/* 하단: 지역정보 + 시간 */}
-                    <div className="absolute inset-x-0 bottom-0 p-2.5 flex flex-col gap-1">
-                      {photo.detailedLocation && (
-                        <p className="text-white text-sm font-bold truncate drop-shadow-lg">
-                          {photo.detailedLocation}
-                        </p>
-                      )}
-                      {photo.time && (
-                        <p className="text-white/90 text-xs font-medium drop-shadow-md">
-                          {photo.time}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
         </div>
@@ -506,42 +659,96 @@ const RegionDetailScreen = () => {
                 <p className="text-sm text-gray-500 dark:text-gray-400 text-center">맛집 정보가 아직 없어요</p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-3 px-4">
-                {foodPhotos.map((food) => (
-                  <div 
-                    key={food.id} 
-                    className="relative overflow-hidden rounded-xl bg-gray-200 cursor-pointer group shadow-lg hover:shadow-xl transition-all"
-                    onClick={() => navigate(`/post/${food.id}`, { state: { post: food } })}
-                  >
-                    <img
-                      className="h-full w-full object-cover aspect-[1/1] group-hover:scale-105 transition-transform duration-300"
-                      src={food.image}
-                      alt={`${region.name} 맛집`}
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent"></div>
-                    
-                    {/* 좌측상단: 카테고리 아이콘만 */}
-                    <div className="absolute top-0 left-0 p-2">
-                      <span className="text-lg font-bold bg-white/90 dark:bg-white/80 rounded-full w-9 h-9 flex items-center justify-center shadow-md backdrop-blur-sm">
-                        🍜
-                      </span>
+              <div className="grid grid-cols-2 gap-4 px-4">
+                {foodPhotos.map((food) => {
+                  const likedPosts = JSON.parse(localStorage.getItem('likedPosts') || '{}');
+                  const isLiked = likedPosts[food.id] || false;
+                  const likeCount = food.likes || food.likeCount || 0;
+                  
+                  return (
+                    <div 
+                      key={food.id} 
+                      className="cursor-pointer group"
+                      onClick={() => navigate(`/post/${food.id}`, { state: { post: food } })}
+                    >
+                      <div>
+                        {/* 이미지 */}
+                        <div className="relative w-full aspect-[4/5] overflow-hidden rounded-lg mb-3">
+                          {food.videos && food.videos.length > 0 ? (
+                            <video
+                              src={food.videos[0]}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                              autoPlay
+                              loop
+                              muted
+                              playsInline
+                            />
+                          ) : (
+                            <img
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                              src={food.image}
+                              alt={`${region.name} 맛집`}
+                            />
+                          )}
+                          
+                          {/* 좌측 상단 카테고리 아이콘 */}
+                          <div className="absolute top-3 left-3 flex items-center justify-center w-10 h-10 rounded-full bg-white/90 backdrop-blur-sm shadow-md">
+                            <span className="text-2xl">🍜</span>
+                          </div>
+                          
+                          {/* 우측 하단 하트 아이콘 */}
+                          <div className="absolute bottom-3 right-3 flex items-center gap-1 bg-white/90 backdrop-blur-sm rounded-full px-3 py-1.5 shadow-md">
+                            <span className={`material-symbols-outlined text-base ${isLiked ? 'text-red-500 fill' : 'text-gray-600'}`}>
+                              favorite
+                            </span>
+                            <span className="text-sm font-semibold text-gray-700">{likeCount}</span>
+                          </div>
+                        </div>
+                        
+                        {/* 이미지 밖 하단 텍스트 */}
+                        <div className="space-y-2">
+                          {/* 지역 상세 정보 */}
+                          <div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="text-base font-bold text-text-primary-light dark:text-text-primary-dark">
+                                {food.detailedLocation || food.placeName || food.location || region.name}
+                              </p>
+                              {/* 업로드 시간 - 지역 옆에 */}
+                              {food.time && (
+                                <p className="text-xs text-text-secondary-light dark:text-text-secondary-dark">
+                                  {food.time}
+                                </p>
+                              )}
+                            </div>
+                            {food.detailedLocation && food.detailedLocation !== food.location && (
+                              <p className="text-sm text-text-secondary-light dark:text-text-secondary-dark mt-0.5">
+                                {food.location}
+                              </p>
+                            )}
+                          </div>
+                          
+                          {/* 해시태그 - 지역 이름 밑에 (줄 바꿈 없이) */}
+                          {food.tags && food.tags.length > 0 && (
+                            <div className="flex gap-1.5 overflow-x-auto [-ms-scrollbar-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                              {food.tags.slice(0, 5).map((tag, tagIndex) => (
+                                <span key={tagIndex} className="text-xs font-medium text-primary bg-primary/10 px-2.5 py-1 rounded-full whitespace-nowrap flex-shrink-0">
+                                  #{typeof tag === 'string' ? tag.replace('#', '') : tag}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                          
+                          {/* 메모/내용 */}
+                          {food.note && (
+                            <p className="text-sm text-text-secondary-light dark:text-text-secondary-dark line-clamp-2">
+                              {food.note}
+                            </p>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                    
-                    {/* 하단: 지역정보 + 시간 */}
-                    <div className="absolute inset-x-0 bottom-0 p-2.5 flex flex-col gap-1">
-                      {food.detailedLocation && (
-                        <p className="text-white text-sm font-bold truncate drop-shadow-lg">
-                          {food.detailedLocation}
-                        </p>
-                      )}
-                      {food.time && (
-                        <p className="text-white/90 text-xs font-medium drop-shadow-md">
-                          {food.time}
-                        </p>
-                      )}
-                </div>
-              </div>
-            ))}
+                  );
+                })}
               </div>
             )}
         </div>

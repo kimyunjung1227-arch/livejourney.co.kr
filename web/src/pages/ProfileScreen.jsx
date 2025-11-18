@@ -410,6 +410,26 @@ const ProfileScreen = () => {
             </button>
           </div>
 
+          {/* 도움 받은 사람 수 표시 */}
+          {myPosts.length > 0 && (() => {
+            const totalLikes = myPosts.reduce((sum, post) => sum + (post.likes || post.likeCount || 0), 0);
+            return (
+              <div className="mb-4 px-4 py-4 bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/30 dark:to-pink-900/30 rounded-2xl border-2 border-purple-200 dark:border-purple-700 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <div className="flex-shrink-0 w-12 h-12 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center shadow-lg">
+                    <span className="material-symbols-outlined text-white text-2xl">favorite</span>
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">현재 내 사진이</p>
+                    <p className="text-xl font-bold text-purple-700 dark:text-purple-300">
+                      <span className="text-2xl">{totalLikes.toLocaleString()}</span>명에게 도움이 되었습니다
+                    </p>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
           {/* 여행 통계 */}
           {myPosts.length > 0 && (
             <div className="grid grid-cols-3 gap-3 mb-6">
@@ -475,49 +495,94 @@ const ProfileScreen = () => {
           )}
 
           {activeTab === 'my' && myPosts.length > 0 && (
-            <div className="grid grid-cols-2 gap-3">
-              {myPosts.map((post, index) => (
-                <div
-                  key={post.id || index}
-                  onClick={() => {
-                    if (isEditMode) {
-                      togglePhotoSelection(post.id);
-                    } else {
-                      navigate(`/post/${post.id}`);
-                    }
-                  }}
-                  className="cursor-pointer relative"
-                >
-                  <div className="aspect-square relative overflow-hidden rounded-lg mb-2">
-                    <img
-                      src={post.imageUrl || post.images?.[0]}
-                      alt={post.location}
-                      className={`w-full h-full object-cover transition-all duration-300 ${
-                        isEditMode ? 'hover:opacity-70' : 'hover:scale-110'
-                      }`}
-                    />
-                    {isEditMode && (
-                      <div className="absolute top-2 right-2">
-                        <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
-                          selectedPhotos.includes(post.id)
-                            ? 'bg-primary border-primary'
-                            : 'bg-white border-gray-300'
-                        }`}>
-                          {selectedPhotos.includes(post.id) && (
-                            <span className="material-symbols-outlined text-white text-sm">check</span>
-                          )}
+            <div className="grid grid-cols-2 gap-4">
+              {myPosts.map((post, index) => {
+                const likedPosts = JSON.parse(localStorage.getItem('likedPosts') || '{}');
+                const isLiked = likedPosts[post.id] || false;
+                const likeCount = post.likes || post.likeCount || 0;
+                
+                return (
+                  <div
+                    key={post.id || index}
+                    onClick={(e) => {
+                      if (isEditMode) {
+                        togglePhotoSelection(post.id);
+                      } else {
+                        navigate(`/post/${post.id}`, {
+                          state: {
+                            post: post,
+                            allPosts: myPosts,
+                            currentPostIndex: index
+                          }
+                        });
+                      }
+                    }}
+                    className="cursor-pointer"
+                  >
+                    {/* 이미지 */}
+                    <div className="aspect-square relative overflow-hidden rounded-lg mb-2">
+                      {post.videos && post.videos.length > 0 ? (
+                        <video
+                          src={post.videos[0]}
+                          className="w-full h-full object-cover"
+                          muted
+                          loop
+                          playsInline
+                        />
+                      ) : (
+                        <img
+                          src={post.imageUrl || post.images?.[0] || post.image}
+                          alt={post.location}
+                          className={`w-full h-full object-cover transition-all duration-300 ${
+                            isEditMode ? 'hover:opacity-70' : 'hover:scale-110'
+                          }`}
+                        />
+                      )}
+                      
+                      {/* 우측 하단 하트 아이콘 */}
+                      {!isEditMode && (
+                        <div className="absolute bottom-2 right-2 flex items-center gap-1 bg-white/80 backdrop-blur-sm rounded-full px-2 py-1">
+                          <span className={`material-symbols-outlined text-sm ${isLiked ? 'text-red-500 fill' : 'text-gray-600'}`}>
+                            favorite
+                          </span>
+                          <span className="text-xs font-semibold text-gray-700">{likeCount}</span>
                         </div>
-                      </div>
-                    )}
+                      )}
+                      
+                      {/* 편집 모드 체크박스 */}
+                      {isEditMode && (
+                        <div className="absolute top-2 right-2">
+                          <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
+                            selectedPhotos.includes(post.id)
+                              ? 'bg-primary border-primary'
+                              : 'bg-white border-gray-300'
+                          }`}>
+                            {selectedPhotos.includes(post.id) && (
+                              <span className="material-symbols-outlined text-white text-sm">check</span>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* 이미지 밖 하단 텍스트 */}
+                    <div className="space-y-1">
+                      <p className="text-sm font-semibold text-text-primary-light dark:text-text-primary-dark line-clamp-2">
+                        {post.note || post.location || '여행 기록'}
+                      </p>
+                      {post.tags && post.tags.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {post.tags.slice(0, 3).map((tag, tagIndex) => (
+                            <span key={tagIndex} className="text-xs text-text-secondary-light dark:text-text-secondary-dark">
+                              #{typeof tag === 'string' ? tag.replace('#', '') : tag}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1">
-                    <span className="material-symbols-outlined text-text-secondary-light dark:text-text-secondary-dark text-sm">location_on</span>
-                    <p className="text-text-secondary-light dark:text-text-secondary-dark text-xs truncate">
-                      {post.location || '서울'}
-                    </p>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
 

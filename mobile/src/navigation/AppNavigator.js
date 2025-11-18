@@ -17,6 +17,9 @@ import ProfileScreen from '../screens/ProfileScreen';
 import PostDetailScreen from '../screens/PostDetailScreen';
 import RegionDetailScreen from '../screens/RegionDetailScreen';
 import SettingsScreen from '../screens/SettingsScreen';
+import UserProfileScreen from '../screens/UserProfileScreen';
+import DetailScreen from '../screens/DetailScreen';
+import RegionCategoryScreen from '../screens/RegionCategoryScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -135,6 +138,26 @@ export default function AppNavigator() {
             <Stack.Screen 
               name="Settings" 
               component={SettingsScreen}
+            />
+            <Stack.Screen 
+              name="UserProfile" 
+              component={UserProfileScreen}
+            />
+            <Stack.Screen 
+              name="Detail" 
+              component={DetailScreen}
+            />
+            <Stack.Screen 
+              name="RegionCategory" 
+              component={RegionCategoryScreen}
+            />
+            <Stack.Screen 
+              name="Search" 
+              component={SearchScreen}
+            />
+            <Stack.Screen 
+              name="Upload" 
+              component={UploadScreen}
             />
           </>
         )}

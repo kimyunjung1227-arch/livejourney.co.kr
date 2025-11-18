@@ -10,7 +10,9 @@
   "scripts": {
     "backend": "cd backend && npm start",
     "web": "cd web && npm run dev",
-    "install-all": "npm install && cd backend && npm install && cd ../web && npm install",
+    "mobile": "cd mobile && npm start",
+    "mobile:tunnel": "cd mobile && npm run tunnel",
+    "install-all": "npm install && cd backend && npm install && cd ../web && npm install && cd ../mobile && npm install",
     "dev": "concurrently \"npm run backend\" \"npm run web\"",
     "build": "cd web && npm run build",
     "start": "npm run dev"

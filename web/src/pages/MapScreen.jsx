@@ -3,6 +3,30 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import BottomNavigation from '../components/BottomNavigation';
 import { getCoordinatesByLocation, searchRegions } from '../utils/regionLocationMapping';
 import { filterRecentPosts } from '../utils/timeUtils';
+import { toggleLike, isPostLiked } from '../utils/socialInteractions';
+import { getTimeAgo } from '../utils/timeUtils';
+
+// 영어 태그를 한국어로 번역
+const tagTranslations = {
+  'nature': '자연', 'landscape': '풍경', 'mountain': '산', 'beach': '해변', 'forest': '숲',
+  'river': '강', 'lake': '호수', 'sunset': '일몰', 'sunrise': '일출', 'sky': '하늘',
+  'cloud': '구름', 'tree': '나무', 'flower': '꽃', 'cherry blossom': '벚꽃',
+  'autumn': '가을', 'spring': '봄', 'summer': '여름', 'winter': '겨울', 'snow': '눈', 'rain': '비',
+  'food': '음식', 'restaurant': '맛집', 'cafe': '카페', 'coffee': '커피', 'dessert': '디저트',
+  'korean food': '한식', 'japanese food': '일식', 'chinese food': '중식', 'western food': '양식',
+  'street food': '길거리음식', 'seafood': '해산물', 'meat': '고기', 'vegetable': '채소',
+  'building': '건물', 'architecture': '건축', 'temple': '사찰', 'palace': '궁궐', 'castle': '성',
+  'tower': '타워', 'bridge': '다리', 'park': '공원', 'garden': '정원', 'street': '거리',
+  'alley': '골목', 'market': '시장', 'shop': '상점', 'mall': '쇼핑몰',
+  'travel': '여행', 'trip': '여행', 'hiking': '등산', 'camping': '캠핑', 'picnic': '피크닉',
+  'festival': '축제', 'event': '이벤트', 'concert': '공연', 'exhibition': '전시',
+  'shopping': '쇼핑', 'walking': '산책', 'animal': '동물', 'dog': '강아지', 'cat': '고양이',
+  'bird': '새', 'fish': '물고기', 'photo': '사진', 'photography': '사진', 'art': '예술',
+  'culture': '문화', 'history': '역사', 'traditional': '전통', 'modern': '현대',
+  'vintage': '빈티지', 'night': '밤', 'day': '낮', 'morning': '아침', 'evening': '저녁',
+  'beautiful': '아름다운', 'pretty': '예쁜', 'cute': '귀여운', 'cool': '멋진',
+  'amazing': '놀라운', 'scenic': '경치좋은'
+};
 
 const MapScreen = () => {
   const navigate = useNavigate();
@@ -15,6 +39,30 @@ const MapScreen = () => {
   const [visiblePins, setVisiblePins] = useState([]);
   const [mapLoading, setMapLoading] = useState(true);
   const [selectedPinId, setSelectedPinId] = useState(null);
+  
+  // 게시물 팝업
+  const [showPostPopup, setShowPostPopup] = useState(false);
+  const [selectedPost, setSelectedPost] = useState(null);
+  
+  // 팝업 상태를 ref로도 저장 (전역 함수에서 접근하기 위해)
+  const popupStateRef = useRef({
+    setShowPostPopup,
+    setSelectedPost,
+    setSelectedPinId,
+    pinsRef,
+    allPins: []
+  });
+  
+  // ref 업데이트
+  useEffect(() => {
+    popupStateRef.current = {
+      setShowPostPopup,
+      setSelectedPost,
+      setSelectedPinId,
+      pinsRef,
+      allPins: allPins
+    };
+  }, [allPins]);
   
   // 검색
   const [searchQuery, setSearchQuery] = useState('');
@@ -32,6 +80,8 @@ const MapScreen = () => {
   const [isPhotoListDragging, setIsPhotoListDragging] = useState(false);
   const [photoListStartX, setPhotoListStartX] = useState(0);
   const [photoListScrollLeft, setPhotoListScrollLeft] = useState(0);
+  const [photoListDragDistance, setPhotoListDragDistance] = useState(0);
+  const [isPhotoListMouseDown, setIsPhotoListMouseDown] = useState(false);
   
   // 초기화
   useEffect(() => {
@@ -266,50 +316,48 @@ const MapScreen = () => {
     });
     pinsRef.current = [];
 
+    // 전역 핸들러 설정 (ref를 통해 최신 상태 접근)
     window.handleMapPinClick = (pinId) => {
-      const pin = pins.find(p => p.id === pinId);
-      if (pin && mapInstance.current) {
+      const state = popupStateRef.current;
+      
+      // allPins에서 핀 찾기 (ref를 통해 최신 데이터 접근)
+      const pin = state.allPins.find(p => p.id === pinId);
+      
+      if (pin && mapInstance.current && state.setShowPostPopup && state.setSelectedPost) {
         // 선택된 핀 강조
-        setSelectedPinId(pinId);
+        state.setSelectedPinId(pinId);
         
-        // 모든 핀의 스타일 업데이트
-        pinsRef.current.forEach(({ id, element }) => {
-          if (element) {
-            if (id === pinId) {
-              // 선택된 핀: 크기 증가 + 주황색 테두리
-              element.style.transform = 'scale(1.3)';
-              element.style.borderWidth = '4px';
-              element.style.borderColor = '#ff6b35';
-              element.style.zIndex = '9999';
-            } else {
-              // 다른 핀: 기본 스타일
-              element.style.transform = 'scale(1)';
-              element.style.borderWidth = '3px';
-              element.style.borderColor = 'white';
-              element.style.zIndex = '1';
+        // 모든 핀의 스타일 업데이트 (안전하게 처리)
+        if (state.pinsRef && state.pinsRef.current && Array.isArray(state.pinsRef.current)) {
+          state.pinsRef.current.forEach((pinRef) => {
+            if (!pinRef || !pinRef.element) return;
+            
+            const { id, element } = pinRef;
+            if (!element || !element.style) return;
+            
+            try {
+              if (id === pinId) {
+                // 선택된 핀: 크기 증가 + 주황색 테두리
+                element.style.transform = 'scale(1.3)';
+                element.style.borderWidth = '4px';
+                element.style.borderColor = '#ff6b35';
+                element.style.zIndex = '9999';
+              } else {
+                // 다른 핀: 기본 스타일
+                element.style.transform = 'scale(1)';
+                element.style.borderWidth = '3px';
+                element.style.borderColor = 'white';
+                element.style.zIndex = '1';
+              }
+            } catch (error) {
+              console.warn('핀 스타일 업데이트 실패:', error);
             }
-          }
-        });
+          });
+        }
         
-        // 현재 지도 상태 저장
-        const currentCenter = mapInstance.current.getCenter();
-        const currentLevel = mapInstance.current.getLevel();
-        
-        // 지도 상태와 시트 상태, 선택된 핀 ID를 포함하여 바로 상세 화면으로 이동
-        navigate(`/post/${pin.id}`, { 
-          state: { 
-            post: pin.post,
-            fromMap: true,
-            selectedPinId: pinId,
-            allPins: pins,
-            mapState: {
-              lat: currentCenter.getLat(),
-              lng: currentCenter.getLng(),
-              level: currentLevel,
-              showSheet: showSheet
-            }
-          } 
-        });
+        // 팝업에 게시물 정보 표시
+        state.setSelectedPost(pin.post);
+        state.setShowPostPopup(true);
       }
     };
 
@@ -476,24 +524,38 @@ const MapScreen = () => {
   // 사진 리스트 마우스 드래그 시작
   const handlePhotoListMouseDown = (e) => {
     if (!photoListRef.current) return;
-    setIsPhotoListDragging(true);
+    setIsPhotoListMouseDown(true);
+    setIsPhotoListDragging(false);
+    setPhotoListDragDistance(0);
     setPhotoListStartX(e.pageX - photoListRef.current.offsetLeft);
     setPhotoListScrollLeft(photoListRef.current.scrollLeft);
-    photoListRef.current.style.cursor = 'grabbing';
+    photoListRef.current.style.cursor = 'grab';
   };
 
   // 사진 리스트 마우스 드래그 이동
   const handlePhotoListMouseMove = (e) => {
-    if (!isPhotoListDragging || !photoListRef.current) return;
-    e.preventDefault();
+    // 마우스 다운 상태가 아니면 무시
+    if (!isPhotoListMouseDown || !photoListRef.current) return;
+    
     const x = e.pageX - photoListRef.current.offsetLeft;
-    const walk = (x - photoListStartX) * 2; // 스크롤 속도
-    photoListRef.current.scrollLeft = photoListScrollLeft - walk;
+    const distance = Math.abs(x - photoListStartX);
+    setPhotoListDragDistance(distance);
+    
+    if (distance > 5) {
+      // 5px 이상 움직이면 드래그로 간주
+      setIsPhotoListDragging(true);
+      e.preventDefault();
+      const walk = (x - photoListStartX) * 2; // 스크롤 속도
+      photoListRef.current.scrollLeft = photoListScrollLeft - walk;
+      photoListRef.current.style.cursor = 'grabbing';
+    }
   };
 
   // 사진 리스트 마우스 드래그 종료
   const handlePhotoListMouseUp = () => {
+    setIsPhotoListMouseDown(false);
     setIsPhotoListDragging(false);
+    setPhotoListDragDistance(0);
     if (photoListRef.current) {
       photoListRef.current.style.cursor = 'grab';
     }
@@ -896,42 +958,89 @@ const MapScreen = () => {
                   <button 
                     key={pin.id}
                     onClick={(e) => {
-                      if (isPhotoListDragging) {
+                      // 드래그가 아닌 경우에만 클릭 처리
+                      if (photoListDragDistance > 5 || isPhotoListDragging) {
                         e.preventDefault();
+                        e.stopPropagation();
                         return;
                       }
                       
-                      if (mapInstance.current) {
-                        // 1. 선택된 핀 강조
-                        setSelectedPinId(pin.id);
+                      e.preventDefault();
+                      e.stopPropagation();
+                      
+                      // 선택된 핀 강조만 수행 (지도 이동 없음)
+                      setSelectedPinId(pin.id);
+                      
+                      // 지도에 있는 핀 강조 표시
+                      const highlightPin = () => {
+                        if (!pinsRef.current || !Array.isArray(pinsRef.current)) {
+                          console.warn('pinsRef.current가 없거나 배열이 아님');
+                          return;
+                        }
                         
-                        // 2. 해당 핀 위치로 지도 이동
-                        const targetPos = new window.kakao.maps.LatLng(pin.lat, pin.lng);
-                        mapInstance.current.setCenter(targetPos);
-                        mapInstance.current.setLevel(3); // 약간 확대
+                        console.log('🔵 핀 강조 시작, 총 핀 개수:', pinsRef.current.length);
+                        console.log('🔵 찾을 핀 ID:', pin.id);
                         
-                        // 3. 모든 핀의 스타일 업데이트 (지도에서 강조 표시)
-                        setTimeout(() => {
-                          pinsRef.current.forEach(({ id, element }) => {
-                            if (element) {
-                              if (id === pin.id) {
-                                // 선택된 핀: 크기 증가 + 주황색 테두리
-                                element.style.transform = 'scale(1.5)';
-                                element.style.borderWidth = '4px';
-                                element.style.borderColor = '#ff6b35';
-                                element.style.zIndex = '9999';
-                                element.style.transition = 'all 0.3s ease';
-                              } else {
-                                // 다른 핀: 기본 스타일
-                                element.style.transform = 'scale(1)';
-                                element.style.borderWidth = '3px';
-                                element.style.borderColor = 'white';
-                                element.style.zIndex = '1';
+                        let found = false;
+                        pinsRef.current.forEach((pinRef, index) => {
+                          if (!pinRef) {
+                            console.warn(`핀 ${index}: pinRef가 null`);
+                            return;
+                          }
+                          
+                          const { id, element } = pinRef;
+                          console.log(`핀 ${index}: id=${id}, element=`, element);
+                          
+                          if (!element) {
+                            console.warn(`핀 ${index}: element가 없음`);
+                            return;
+                          }
+                          
+                          if (!element.style) {
+                            console.warn(`핀 ${index}: element.style가 없음`);
+                            return;
+                          }
+                          
+                          try {
+                            if (id === pin.id) {
+                              found = true;
+                              console.log('🔵 핀 찾음! 강조 적용:', id);
+                              
+                              // 선택된 핀: 크기 증가 + 주황색 테두리 강조
+                              element.style.transform = 'scale(1.5)';
+                              element.style.borderWidth = '4px';
+                              element.style.borderColor = '#ff6b35';
+                              element.style.zIndex = '9999';
+                              element.style.transition = 'all 0.3s ease';
+                              element.style.boxShadow = '0 0 0 4px rgba(255, 107, 53, 0.3), 0 4px 12px rgba(255, 107, 53, 0.4)';
+                              
+                              // 버튼 내부 이미지도 확인
+                              const img = element.querySelector('img');
+                              if (img) {
+                                img.style.transition = 'all 0.3s ease';
                               }
+                            } else {
+                              // 다른 핀: 기본 스타일
+                              element.style.transform = 'scale(1)';
+                              element.style.borderWidth = '3px';
+                              element.style.borderColor = 'white';
+                              element.style.zIndex = '1';
+                              element.style.boxShadow = 'none';
                             }
-                          });
-                        }, 300);
-                      }
+                          } catch (error) {
+                            console.error(`핀 ${index} 스타일 업데이트 실패:`, error);
+                          }
+                        });
+                        
+                        if (!found) {
+                          console.warn('🔴 핀을 찾을 수 없음:', pin.id);
+                        }
+                      };
+                      
+                      // 즉시 실행하고, 약간의 지연 후에도 다시 시도
+                      highlightPin();
+                      setTimeout(highlightPin, 100);
+                      setTimeout(highlightPin, 300);
                     }}
                     style={{
                       flexShrink: 0,
@@ -1142,6 +1251,365 @@ const MapScreen = () => {
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 게시물 상세 팝업 - 모바일 프레임 안에서만 표시 */}
+      {showPostPopup && selectedPost && (
+        <div 
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.7)',
+            zIndex: 1000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '16px'
+          }}
+          onClick={() => {
+            setShowPostPopup(false);
+            setSelectedPost(null);
+          }}
+        >
+          <div 
+            style={{
+              backgroundColor: 'white',
+              borderRadius: '20px',
+              width: '100%',
+              maxWidth: '500px',
+              maxHeight: `calc(100% - env(safe-area-inset-top, 0px) - 80px)`,
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
+              boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* 헤더 */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '16px',
+              borderBottom: '1px solid #e4e4e7'
+            }}>
+              <h3 style={{
+                fontSize: '18px',
+                fontWeight: 'bold',
+                margin: 0
+              }}>사진 정보</h3>
+              <button
+                onClick={() => {
+                  setShowPostPopup(false);
+                  setSelectedPost(null);
+                }}
+                style={{
+                  width: '32px',
+                  height: '32px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderRadius: '50%',
+                  backgroundColor: '#f4f4f5',
+                  border: 'none',
+                  cursor: 'pointer'
+                }}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>close</span>
+              </button>
+            </div>
+
+            {/* 스크롤 가능한 컨텐츠 */}
+            <div style={{
+              overflowY: 'auto',
+              flex: 1,
+              padding: '16px'
+            }}>
+              {/* 이미지/동영상 */}
+              <div style={{
+                width: '100%',
+                aspectRatio: '4/3',
+                borderRadius: '12px',
+                overflow: 'hidden',
+                marginBottom: '16px',
+                backgroundColor: '#f4f4f5'
+              }}>
+                {selectedPost.videos && selectedPost.videos.length > 0 ? (
+                  <video
+                    src={selectedPost.videos[0]}
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'cover'
+                    }}
+                    autoPlay
+                    loop
+                    muted
+                    playsInline
+                    controls
+                  />
+                ) : (
+                  <img
+                    src={selectedPost.images?.[0] || selectedPost.image}
+                    alt={selectedPost.location}
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'cover'
+                    }}
+                  />
+                )}
+              </div>
+
+              {/* 작성자 정보 */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                marginBottom: '16px'
+              }}>
+                <div style={{
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: '50%',
+                  backgroundColor: '#e4e4e7',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: '24px', color: '#71717a' }}>person</span>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <p style={{
+                    fontSize: '16px',
+                    fontWeight: 'bold',
+                    margin: 0,
+                    marginBottom: '4px'
+                  }}>
+                    {selectedPost.user || selectedPost.userId || '여행자'}
+                  </p>
+                  {selectedPost.categoryName && (
+                    <p style={{
+                      fontSize: '12px',
+                      color: '#71717a',
+                      margin: 0
+                    }}>
+                      {selectedPost.categoryName}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* 위치 정보 */}
+              <div style={{
+                marginBottom: '16px',
+                padding: '12px',
+                backgroundColor: '#f4f4f5',
+                borderRadius: '12px'
+              }}>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  marginBottom: '8px'
+                }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: '20px', color: '#ff6b35' }}>location_on</span>
+                  <p style={{
+                    fontSize: '16px',
+                    fontWeight: 'bold',
+                    margin: 0
+                  }}>
+                    {selectedPost.detailedLocation || selectedPost.placeName || selectedPost.location || '여행지'}
+                  </p>
+                </div>
+                {selectedPost.detailedLocation && selectedPost.detailedLocation !== selectedPost.location && (
+                  <p style={{
+                    fontSize: '14px',
+                    color: '#71717a',
+                    margin: '4px 0 0 28px'
+                  }}>
+                    {selectedPost.location}
+                  </p>
+                )}
+                {selectedPost.timeLabel && (
+                  <p style={{
+                    fontSize: '12px',
+                    color: '#a1a1aa',
+                    margin: '4px 0 0 28px'
+                  }}>
+                    {selectedPost.timeLabel}
+                  </p>
+                )}
+              </div>
+
+              {/* 태그 */}
+              {(selectedPost.tags && selectedPost.tags.length > 0) || (selectedPost.aiLabels && selectedPost.aiLabels.length > 0) ? (
+                <div style={{ marginBottom: '16px' }}>
+                  <div style={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: '8px'
+                  }}>
+                    {(selectedPost.tags || []).map((tag, index) => {
+                      const tagText = typeof tag === 'string' ? tag.replace('#', '') : tag.name || '태그';
+                      const koreanTag = tagTranslations[tagText.toLowerCase()] || tagText;
+                      return (
+                        <span
+                          key={index}
+                          style={{
+                            fontSize: '12px',
+                            fontWeight: '500',
+                            color: '#ff6b35',
+                            backgroundColor: '#fff5f0',
+                            padding: '6px 12px',
+                            borderRadius: '20px'
+                          }}
+                        >
+                          #{koreanTag}
+                        </span>
+                      );
+                    })}
+                    {(selectedPost.aiLabels || []).map((label, index) => {
+                      // label이 문자열이 아닐 수 있으므로 안전하게 처리
+                      const labelText = typeof label === 'string' ? label : (label?.name || label?.label || String(label || ''));
+                      const koreanLabel = labelText && typeof labelText === 'string' 
+                        ? (tagTranslations[labelText.toLowerCase()] || labelText)
+                        : String(labelText || '');
+                      return (
+                        <span
+                          key={`ai-${index}`}
+                          style={{
+                            fontSize: '12px',
+                            fontWeight: '500',
+                            color: '#ff6b35',
+                            backgroundColor: '#fff5f0',
+                            padding: '6px 12px',
+                            borderRadius: '20px'
+                          }}
+                        >
+                          #{koreanLabel}
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
+
+              {/* 내용 */}
+              {selectedPost.note && (
+                <div style={{
+                  marginBottom: '16px',
+                  padding: '12px',
+                  backgroundColor: '#fafafa',
+                  borderRadius: '12px'
+                }}>
+                  <p style={{
+                    fontSize: '14px',
+                    lineHeight: '1.6',
+                    color: '#18181b',
+                    margin: 0,
+                    whiteSpace: 'pre-wrap'
+                  }}>
+                    {selectedPost.note}
+                  </p>
+                </div>
+              )}
+
+              {/* 좋아요/댓글 */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '24px',
+                padding: '12px 0',
+                borderTop: '1px solid #e4e4e7',
+                borderBottom: '1px solid #e4e4e7'
+              }}>
+                <button
+                  onClick={() => {
+                    if (!selectedPost) return;
+                    const result = toggleLike(selectedPost.id);
+                    setSelectedPost({
+                      ...selectedPost,
+                      likes: result.newCount
+                    });
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    border: 'none',
+                    background: 'none',
+                    cursor: 'pointer',
+                    padding: '4px'
+                  }}
+                >
+                  <span className={`material-symbols-outlined ${isPostLiked(selectedPost.id) ? 'text-red-500 fill' : 'text-gray-600'}`} style={{ fontSize: '24px' }}>
+                    favorite
+                  </span>
+                  <span style={{
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    color: '#18181b'
+                  }}>
+                    {selectedPost.likes || selectedPost.likeCount || 0}
+                  </span>
+                </button>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: '24px', color: '#71717a' }}>comment</span>
+                  <span style={{
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    color: '#18181b'
+                  }}>
+                    {(selectedPost.comments || []).length + (selectedPost.qnaList || []).length}
+                  </span>
+                </div>
+              </div>
+
+              {/* 상세 보기 버튼 */}
+              <button
+                onClick={() => {
+                  setShowPostPopup(false);
+                  navigate(`/post/${selectedPost.id}`, {
+                    state: {
+                      post: selectedPost,
+                      fromMap: true,
+                      selectedPinId: selectedPinId,
+                      allPins: allPins,
+                      mapState: mapInstance.current ? {
+                        lat: mapInstance.current.getCenter().getLat(),
+                        lng: mapInstance.current.getCenter().getLng(),
+                        level: mapInstance.current.getLevel(),
+                        showSheet: showSheet
+                      } : null
+                    }
+                  });
+                }}
+                style={{
+                  width: '100%',
+                  marginTop: '16px',
+                  padding: '14px',
+                  backgroundColor: '#ff6b35',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '12px',
+                  fontSize: '16px',
+                  fontWeight: 'bold',
+                  cursor: 'pointer'
+                }}
+              >
+                상세 보기
+              </button>
             </div>
           </div>
         </div>

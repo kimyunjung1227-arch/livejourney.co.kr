@@ -19,6 +19,7 @@ import UploadScreen from './pages/UploadScreen'
 import MapScreen from './pages/MapScreen'
 import MapPhotoGridScreen from './pages/MapPhotoGridScreen'
 import ProfileScreen from './pages/ProfileScreen'
+import UserProfileScreen from './pages/UserProfileScreen'
 import EditProfileScreen from './pages/EditProfileScreen'
 import PersonalInfoEditScreen from './pages/PersonalInfoEditScreen'
 import PasswordChangeScreen from './pages/PasswordChangeScreen'
@@ -63,6 +64,7 @@ function App() {
               <Route path="/map" element={<ProtectedRoute><MapScreen /></ProtectedRoute>} />
               <Route path="/map/photos" element={<ProtectedRoute><MapPhotoGridScreen /></ProtectedRoute>} />
               <Route path="/profile" element={<ProtectedRoute><ProfileScreen /></ProtectedRoute>} />
+              <Route path="/user/:userId" element={<ProtectedRoute><UserProfileScreen /></ProtectedRoute>} />
               <Route path="/profile/edit" element={<ProtectedRoute><EditProfileScreen /></ProtectedRoute>} />
               <Route path="/personal-info-edit" element={<ProtectedRoute><PersonalInfoEditScreen /></ProtectedRoute>} />
               <Route path="/password-change" element={<ProtectedRoute><PasswordChangeScreen /></ProtectedRoute>} />

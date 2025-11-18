@@ -112,11 +112,12 @@ const PostDetailScreen = () => {
   const location = useLocation();
   const { postId } = useParams();
   const { user } = useAuth();
-  const { post: passedPost, fromMap, selectedPinId, allPins, mapState } = location.state || {};
+  const { post: passedPost, fromMap, selectedPinId, allPins, mapState, allPosts, currentPostIndex } = location.state || {};
 
   const [post, setPost] = useState(passedPost);
   const [loading, setLoading] = useState(!passedPost);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [currentPostIndexState, setCurrentPostIndexState] = useState(currentPostIndex || 0);
   const [liked, setLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(post?.likes || 0);
   const [commentText, setCommentText] = useState('');
@@ -129,15 +130,36 @@ const PostDetailScreen = () => {
     loading: true
   });
   
-  // 터치 스와이프
+  // 터치 스와이프 (좌우)
   const [touchStart, setTouchStart] = useState(0);
   const [touchEnd, setTouchEnd] = useState(0);
+  
+  // 상하 스와이프 (게시물 간 이동) - 인스타그램 스타일
+  const [verticalTouchStart, setVerticalTouchStart] = useState(0);
+  const [verticalTouchEnd, setVerticalTouchEnd] = useState(0);
+  const [isVerticalSwipe, setIsVerticalSwipe] = useState(false);
+  const [isTransitioning, setIsTransitioning] = useState(false);
   
   // 미니 지도
   const miniMapRef = useRef(null);
   const miniMapInstance = useRef(null);
+  
+  // 슬라이드 가능한 게시물 목록
+  const slideablePosts = useMemo(() => {
+    if (allPosts && Array.isArray(allPosts) && allPosts.length > 0) {
+      return allPosts;
+    }
+    return passedPost ? [passedPost] : [];
+  }, [allPosts, passedPost]);
 
-  // 이미지 배열 (useMemo) - handleImageSwipe보다 먼저 정의
+  // 미디어 배열 (이미지 + 동영상) (useMemo) - handleImageSwipe보다 먼저 정의
+  const mediaItems = useMemo(() => {
+    const images = post?.images || (post?.image ? [post.image] : []);
+    const videos = post?.videos || [];
+    // 이미지와 동영상을 합쳐서 하나의 배열로 만들기
+    return [...images.map(img => ({ type: 'image', url: img })), ...videos.map(vid => ({ type: 'video', url: vid }))];
+  }, [post]);
+  
   const images = useMemo(() => 
     post?.images || (post?.image ? [post.image] : [
       'https://lh3.googleusercontent.com/aida-public/AB6AXuAuQD6UVDY8Zj1lLvuh-jXx2a7MWZ7EehcGjjrvuunpEYhg8CUN-UEciHT5HAy9SeWSK1-fE8LhjG8Gzz3xoeckZij4ZVPemMw9-nzvve8C4sDBTLSMmwEH3s4ykQbumGqoOQeXp44POQQOpYUz4_1b9u35CfXGOoxaeMP3x0PbHho7ID3cbvNmrM5S39_rhBtzhOgp-AGY3I-8XBQCtqXWRwq4XXNEAj26oWc5KlUayXQ0ZHm5qBgyCMXQ7IC5l6Q09gsdt2fZ4009'
@@ -254,12 +276,27 @@ const PostDetailScreen = () => {
 
   // 이미지 스와이프 (useCallback)
   const handleImageSwipe = useCallback((direction) => {
-    if (direction === 'left' && currentImageIndex < images.length - 1) {
-      setCurrentImageIndex(currentImageIndex + 1);
-    } else if (direction === 'right' && currentImageIndex > 0) {
-      setCurrentImageIndex(currentImageIndex - 1);
+    const maxIndex = mediaItems.length > 0 ? mediaItems.length : images.length;
+    
+    if (maxIndex <= 1) {
+      // 이미지가 1개 이하면 슬라이드 불가
+      return;
     }
-  }, [currentImageIndex, images.length]);
+    
+    if (direction === 'left') {
+      // 왼쪽 버튼 클릭: 다음 이미지 (마지막이면 첫 번째로)
+      const nextIndex = currentImageIndex < maxIndex - 1 
+        ? currentImageIndex + 1 
+        : 0;
+      setCurrentImageIndex(nextIndex);
+    } else if (direction === 'right') {
+      // 오른쪽 버튼 클릭: 이전 이미지 (첫 번째면 마지막으로)
+      const prevIndex = currentImageIndex > 0 
+        ? currentImageIndex - 1 
+        : maxIndex - 1;
+      setCurrentImageIndex(prevIndex);
+    }
+  }, [currentImageIndex, images.length, mediaItems.length]);
 
   // 댓글 추가 핸들러
   const handleAddComment = useCallback(() => {
@@ -273,32 +310,157 @@ const PostDetailScreen = () => {
     console.log('💬 댓글 추가:', commentText);
   }, [post, commentText, user]);
 
-  // 터치 스와이프 제스처
-  const handleTouchStart = (e) => {
-    setTouchStart(e.targetTouches[0].clientX);
-  };
-
-  const handleTouchMove = (e) => {
-    setTouchEnd(e.targetTouches[0].clientX);
-  };
-
-  const handleTouchEnd = () => {
-    if (!touchStart || !touchEnd) return;
+  // 상하 스와이프로 게시물 변경 (무한 슬라이드) - 인스타그램 스타일
+  const changePost = useCallback((direction) => {
+    if (!slideablePosts || slideablePosts.length === 0 || isTransitioning) return;
     
-    const distance = touchStart - touchEnd;
-    const isLeftSwipe = distance > 50;
-    const isRightSwipe = distance < -50;
-    
-    if (isLeftSwipe && currentImageIndex < images.length - 1) {
-      setCurrentImageIndex(currentImageIndex + 1);
+    let newIndex;
+    if (slideablePosts.length === 1) {
+      // 게시물이 1개면 변경하지 않음
+      return;
     }
     
-    if (isRightSwipe && currentImageIndex > 0) {
-      setCurrentImageIndex(currentImageIndex - 1);
+    setIsTransitioning(true);
+    
+    if (direction === 'up') {
+      // 위로 스와이프: 이전 게시물 (첫 번째면 마지막으로)
+      newIndex = currentPostIndexState > 0 
+        ? currentPostIndexState - 1 
+        : slideablePosts.length - 1;
+    } else {
+      // 아래로 스와이프: 다음 게시물 (마지막이면 첫 번째로)
+      newIndex = currentPostIndexState < slideablePosts.length - 1
+        ? currentPostIndexState + 1
+        : 0;
+    }
+    
+    setCurrentPostIndexState(newIndex);
+    const newPost = slideablePosts[newIndex];
+    setPost(newPost);
+    setCurrentImageIndex(0);
+    setLiked(isPostLiked(newPost.id));
+    setLikeCount(newPost.likes || 0);
+    setComments([...(newPost.comments || []), ...(newPost.qnaList || [])]);
+    
+    // 스크롤을 맨 위로 이동
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    
+    // 전환 애니메이션 완료 후 플래그 해제
+    setTimeout(() => {
+      setIsTransitioning(false);
+    }, 300);
+  }, [slideablePosts, currentPostIndexState, isTransitioning]);
+
+  // 터치/마우스 스와이프 제스처 (좌우 + 상하)
+  const handleStart = (e) => {
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    setTouchStart(clientX);
+    setVerticalTouchStart(clientY);
+    setIsVerticalSwipe(false);
+  };
+
+  const handleMove = (e) => {
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    setTouchEnd(clientX);
+    setVerticalTouchEnd(clientY);
+    
+    // 상하 움직임이 좌우 움직임보다 크면 상하 스와이프로 판단 (인스타그램 스타일)
+    const horizontalDistance = Math.abs(clientX - touchStart);
+    const verticalDistance = Math.abs(clientY - verticalTouchStart);
+    
+    // 상하 움직임이 더 크고, 최소 5px 이상이면 상하 스와이프로 판단
+    if (verticalDistance > horizontalDistance && verticalDistance > 5) {
+      setIsVerticalSwipe(true);
+    }
+  };
+
+  const handleEnd = () => {
+    if (!touchStart || !touchEnd || !verticalTouchStart || !verticalTouchEnd) {
+      setTouchStart(0);
+      setTouchEnd(0);
+      setVerticalTouchStart(0);
+      setVerticalTouchEnd(0);
+      return;
+    }
+    
+    if (isVerticalSwipe) {
+      // 상하 스와이프 - 인스타그램 스타일 (직관적인 방향)
+      // 아래로 스와이프 (아래로 당기기) = 다음 게시물
+      // 위로 스와이프 (위로 올리기) = 이전 게시물
+      const verticalDistance = verticalTouchStart - verticalTouchEnd;
+      const isDownSwipe = verticalDistance > 30; // 아래로 당기기 = 다음 게시물
+      const isUpSwipe = verticalDistance < -30; // 위로 올리기 = 이전 게시물
+      
+      if (isDownSwipe) {
+        changePost('down'); // 다음 게시물
+      } else if (isUpSwipe) {
+        changePost('up'); // 이전 게시물
+      }
+    } else {
+      // 좌우 스와이프 (이미지 간 이동 - 무한 슬라이드)
+      const distance = touchStart - touchEnd;
+      const isLeftSwipe = distance > 50;
+      const isRightSwipe = distance < -50;
+      
+      const maxIndex = mediaItems.length > 0 ? mediaItems.length : images.length;
+      
+      if (maxIndex <= 1) {
+        // 이미지가 1개 이하면 슬라이드 불가
+        return;
+      }
+      
+      if (isLeftSwipe) {
+        // 왼쪽으로 스와이프: 다음 이미지 (마지막이면 첫 번째로)
+        const nextIndex = currentImageIndex < maxIndex - 1 
+          ? currentImageIndex + 1 
+          : 0;
+        setCurrentImageIndex(nextIndex);
+      }
+      
+      if (isRightSwipe) {
+        // 오른쪽으로 스와이프: 이전 이미지 (첫 번째면 마지막으로)
+        const prevIndex = currentImageIndex > 0 
+          ? currentImageIndex - 1 
+          : maxIndex - 1;
+        setCurrentImageIndex(prevIndex);
+      }
     }
     
     setTouchStart(0);
     setTouchEnd(0);
+    setVerticalTouchStart(0);
+    setVerticalTouchEnd(0);
+    setIsVerticalSwipe(false);
+  };
+
+  // 마우스 이벤트 핸들러
+  const handleMouseDown = (e) => {
+    e.preventDefault();
+    handleStart(e);
+    document.addEventListener('mousemove', handleMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
+
+  const handleMouseUp = () => {
+    handleEnd();
+    document.removeEventListener('mousemove', handleMove);
+    document.removeEventListener('mouseup', handleMouseUp);
+  };
+
+  // 터치 이벤트 핸들러
+  const handleTouchStart = (e) => {
+    handleStart(e);
+  };
+
+  const handleTouchMove = (e) => {
+    e.preventDefault();
+    handleMove(e);
+  };
+
+  const handleTouchEnd = () => {
+    handleEnd();
   };
 
   // 초기 데이터 로드
@@ -388,9 +550,16 @@ const PostDetailScreen = () => {
   }
 
   return (
-    <div className="screen-layout bg-background-light dark:bg-background-dark">
+    <div 
+      className="screen-layout bg-background-light dark:bg-background-dark cursor-grab active:cursor-grabbing"
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      onMouseDown={handleMouseDown}
+      style={{ touchAction: 'pan-y' }}
+    >
       <div className="screen-content">
-        <div className="screen-header flex items-center bg-white dark:bg-gray-900 p-4 pb-2 shadow-sm">
+        <div className="screen-header flex items-center bg-white dark:bg-gray-900 p-4 pb-2 shadow-sm relative z-50">
           <button 
             onClick={() => {
               // 지도에서 왔다면 지도 상태를 유지하며 돌아가기
@@ -410,15 +579,34 @@ const PostDetailScreen = () => {
           <div className="w-full gap-1 overflow-hidden bg-white dark:bg-gray-900 aspect-[4/3] flex relative shadow-md">
             <div 
               className="w-full overflow-hidden"
-              onTouchStart={handleTouchStart}
-              onTouchMove={handleTouchMove}
-              onTouchEnd={handleTouchEnd}
             >
               <div 
                 className="flex transition-transform duration-300 ease-in-out"
                 style={{ transform: `translateX(-${currentImageIndex * 100}%)` }}
               >
-                {images.map((image, index) => (
+                {mediaItems.length > 0 ? mediaItems.map((media, index) => (
+                  <div
+                    key={index}
+                    className="w-full flex-shrink-0 aspect-[4/3] relative"
+                  >
+                    {media.type === 'video' ? (
+                      <video
+                        src={media.url}
+                        className="w-full h-full object-cover"
+                        autoPlay
+                        loop
+                        muted
+                        playsInline
+                        controls={false}
+                      />
+                    ) : (
+                      <div
+                        className="w-full h-full bg-center bg-no-repeat bg-cover"
+                        style={{ backgroundImage: `url("${media.url}")` }}
+                      />
+                    )}
+                  </div>
+                )) : images.map((image, index) => (
                   <div
                     key={index}
                     className="w-full flex-shrink-0 bg-center bg-no-repeat bg-cover aspect-[4/3]"
@@ -428,11 +616,11 @@ const PostDetailScreen = () => {
               </div>
             </div>
 
-            {images.length > 1 && (
+            {(mediaItems.length > 1 || images.length > 1) && (
               <>
                 {/* 페이지 인디케이터 - 클릭 가능 */}
                 <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
-                  {images.map((_, index) => (
+                  {(mediaItems.length > 0 ? mediaItems : images).map((_, index) => (
                     <div
                       key={index}
                       onClick={() => setCurrentImageIndex(index)}
@@ -443,23 +631,19 @@ const PostDetailScreen = () => {
                   ))}
                 </div>
 
-                {/* 좌우 화살표 버튼 */}
-                {currentImageIndex > 0 && (
-                  <button
-                    onClick={() => handleImageSwipe('right')}
-                    className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/40 backdrop-blur-sm text-white rounded-full w-12 h-12 flex items-center justify-center hover:bg-black/60 transition-colors z-10"
-                  >
-                    <span className="material-symbols-outlined text-3xl">chevron_left</span>
-                  </button>
-                )}
-                {currentImageIndex < images.length - 1 && (
-                  <button
-                    onClick={() => handleImageSwipe('left')}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/40 backdrop-blur-sm text-white rounded-full w-12 h-12 flex items-center justify-center hover:bg-black/60 transition-colors z-10"
-                  >
-                    <span className="material-symbols-outlined text-3xl">chevron_right</span>
-                  </button>
-                )}
+                {/* 좌우 화살표 버튼 - 무한 슬라이드이므로 항상 표시 */}
+                <button
+                  onClick={() => handleImageSwipe('right')}
+                  className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/40 backdrop-blur-sm text-white rounded-full w-12 h-12 flex items-center justify-center hover:bg-black/60 transition-colors z-10"
+                >
+                  <span className="material-symbols-outlined text-3xl">chevron_left</span>
+                </button>
+                <button
+                  onClick={() => handleImageSwipe('left')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/40 backdrop-blur-sm text-white rounded-full w-12 h-12 flex items-center justify-center hover:bg-black/60 transition-colors z-10"
+                >
+                  <span className="material-symbols-outlined text-3xl">chevron_right</span>
+                </button>
               </>
             )}
           </div>
@@ -469,7 +653,15 @@ const PostDetailScreen = () => {
           {/* 작성자 정보 */}
           <div className="px-4 pt-5 pb-3 bg-white dark:bg-gray-900">
             <div className="flex items-center justify-between">
-              <div className="flex gap-3 items-center cursor-pointer">
+              <div 
+                className="flex gap-3 items-center cursor-pointer hover:opacity-80 transition-opacity"
+                onClick={() => {
+                  const postUserId = post?.userId || post?.user?.id;
+                  if (postUserId) {
+                    navigate(`/user/${postUserId}`);
+                  }
+                }}
+              >
                 <div
                   className="bg-center bg-no-repeat aspect-square bg-cover rounded-full h-12 w-12 ring-2 ring-primary/20"
                   style={{ backgroundImage: 'url("https://lh3.googleusercontent.com/aida-public/AB6AXuBmqhlNyURK2oHutCqs0XjqQdUbYLEIw3Fjyr9GN8AIkmL-_HX4k5P5P4nLUvuxwIg-wP6shqONVg0iiP-s-n6C2-XParwlSyFTZidJV97x3KU1TTOWzd3_pEmNWHkiyjJFzoB24bPKitU6ZzZvEW435KDcEQHZUBOnGlHOVMfvf7QEOkfGRCPywYOZmkeTwUuhfPqmOTfmWZdGrP6TByVTEA9H1q3oZUgp3VRxzCPOQmnOt1kKVUir_711ENBZiDYZtyFXSfsjri-z")' }}

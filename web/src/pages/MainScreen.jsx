@@ -106,8 +106,9 @@ const MainScreen = () => {
       
       return {
         id: post.id,
-        images: post.images,
-        image: post.images[0],
+        images: post.images || [],
+        videos: post.videos || [],
+        image: post.images?.[0] || post.videos?.[0] || '',
         title: post.location,
         location: post.location,
         detailedLocation: post.detailedLocation || post.location,
@@ -145,8 +146,9 @@ const MainScreen = () => {
         
         return {
           id: post.id,
-          images: post.images,
-          image: post.images[0],
+          images: post.images || [],
+          videos: post.videos || [],
+          image: post.images?.[0] || post.videos?.[0] || '',
           title: post.location,
           location: post.location,
           detailedLocation: post.detailedLocation || post.location,
@@ -186,8 +188,9 @@ const MainScreen = () => {
       
       return {
         id: post.id,
-        images: post.images,
-        image: post.images[0],
+        images: post.images || [],
+        videos: post.videos || [],
+        image: post.images?.[0] || post.videos?.[0] || '',
         title: post.location,
         location: post.location,
         detailedLocation: post.detailedLocation || post.location,
@@ -367,11 +370,39 @@ const MainScreen = () => {
     setCurrentScrollRef(null);
   }, [isDragging, currentScrollRef]);
 
-  const handleItemClickWithDragCheck = useCallback((item) => {
+  const handleItemClickWithDragCheck = useCallback((item, sectionType = 'realtime') => {
     if (!hasMoved) {
-      navigate(`/post/${item.id}`, { state: { post: item } });
+      // 섹션별로 모든 게시물 목록 가져오기
+      let allPosts = [];
+      let currentIndex = 0;
+      
+      switch (sectionType) {
+        case 'realtime':
+          allPosts = realtimeData;
+          currentIndex = realtimeData.findIndex(p => p.id === item.id);
+          break;
+        case 'crowded':
+          allPosts = crowdedData;
+          currentIndex = crowdedData.findIndex(p => p.id === item.id);
+          break;
+        case 'recommended':
+          allPosts = filteredRecommendedData;
+          currentIndex = filteredRecommendedData.findIndex(p => p.id === item.id);
+          break;
+        default:
+          allPosts = [item];
+          currentIndex = 0;
+      }
+      
+      navigate(`/post/${item.id}`, { 
+        state: { 
+          post: item,
+          allPosts: allPosts,
+          currentPostIndex: currentIndex >= 0 ? currentIndex : 0
+        } 
+      });
     }
-  }, [hasMoved, navigate]);
+  }, [hasMoved, navigate, realtimeData, crowdedData, filteredRecommendedData]);
 
   // 메인화면 진입 시 한 번 업데이트 후 자동 새로고침
   useEffect(() => {
@@ -530,14 +561,31 @@ const MainScreen = () => {
                       key={item.id} 
                       className="flex h-full flex-col gap-2 rounded-lg w-[180px] flex-shrink-0 cursor-pointer snap-start select-none"
                       style={{ scrollSnapAlign: 'start', scrollSnapStop: 'always' }}
-                      onClick={() => handleItemClickWithDragCheck(item)}
+                      onClick={() => handleItemClickWithDragCheck(item, 'realtime')}
                     >
                       <div 
-                        className={`relative w-full bg-center bg-no-repeat aspect-[1/1.2] bg-cover rounded-lg overflow-hidden hover:opacity-90 transition-opacity ${
+                        className={`relative w-full aspect-[1/1.2] rounded-lg overflow-hidden hover:opacity-90 transition-opacity ${
                           titleEffect ? `${titleEffect.border} ${titleEffect.shadow} ${titleEffect.glow}` : 'shadow-md'
                         }`}
-                        style={{ backgroundImage: `url("${item.image}")` }}
                       >
+                        {/* 동영상이 있으면 동영상 표시, 없으면 이미지 */}
+                        {item.videos && item.videos.length > 0 ? (
+                          <video
+                            src={item.videos[0]}
+                            className="w-full h-full object-cover"
+                            autoPlay
+                            loop
+                            muted
+                            playsInline
+                            onMouseEnter={(e) => e.target.play()}
+                            onMouseLeave={(e) => e.target.pause()}
+                          />
+                        ) : (
+                          <div 
+                            className="w-full h-full bg-center bg-no-repeat bg-cover"
+                            style={{ backgroundImage: `url("${item.image}")` }}
+                          />
+                        )}
                         {/* 그라데이션 오버레이 */}
                         <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.8), rgba(0,0,0,0.1) 50%, rgba(0,0,0,0.3))' }}></div>
                         
@@ -689,12 +737,29 @@ const MainScreen = () => {
                   key={item.id} 
                   className="flex h-full flex-col gap-2 rounded-lg w-[180px] flex-shrink-0 cursor-pointer snap-start select-none"
                   style={{ scrollSnapAlign: 'start', scrollSnapStop: 'always' }}
-                  onClick={() => handleItemClickWithDragCheck(item)}
+                  onClick={() => handleItemClickWithDragCheck(item, 'crowded')}
                 >
                   <div 
-                      className="relative w-full bg-center bg-no-repeat aspect-[1/1.2] bg-cover rounded-lg overflow-hidden hover:opacity-90 transition-opacity shadow-md"
-                      style={{ backgroundImage: `url("${item.image}")` }}
+                      className="relative w-full aspect-[1/1.2] rounded-lg overflow-hidden hover:opacity-90 transition-opacity shadow-md"
                     >
+                      {/* 동영상이 있으면 동영상 표시, 없으면 이미지 */}
+                      {item.videos && item.videos.length > 0 ? (
+                        <video
+                          src={item.videos[0]}
+                          className="w-full h-full object-cover"
+                          autoPlay
+                          loop
+                          muted
+                          playsInline
+                          onMouseEnter={(e) => e.target.play()}
+                          onMouseLeave={(e) => e.target.pause()}
+                        />
+                      ) : (
+                        <div 
+                          className="w-full h-full bg-center bg-no-repeat bg-cover"
+                          style={{ backgroundImage: `url("${item.image}")` }}
+                        />
+                      )}
                       {/* 그라데이션 오버레이 */}
                       <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.8), rgba(0,0,0,0.1) 50%, rgba(0,0,0,0.3))' }}></div>
                       
@@ -739,7 +804,7 @@ const MainScreen = () => {
                               textShadow: '0 2px 8px rgba(0,0,0,0.8)',
                               margin: 0
                             }}>
-                              📍 {item.title}
+                              {item.title}
                             </p>
                           )}
                           {item.time && (
@@ -751,7 +816,7 @@ const MainScreen = () => {
                               textShadow: '0 2px 8px rgba(0,0,0,0.8)',
                               margin: 0
                             }}>
-                              ⏰ {item.time}
+                              {item.time}
                             </p>
                           )}
                         </div>
@@ -851,12 +916,29 @@ const MainScreen = () => {
                   key={item.id} 
                   className="flex h-full flex-col gap-2 rounded-lg w-[180px] flex-shrink-0 cursor-pointer snap-start select-none"
                   style={{ scrollSnapAlign: 'start', scrollSnapStop: 'always' }}
-                  onClick={() => handleItemClickWithDragCheck(item)}
+                  onClick={() => handleItemClickWithDragCheck(item, 'recommended')}
                 >
                   <div 
-                      className="relative w-full bg-center bg-no-repeat aspect-[1/1.2] bg-cover rounded-lg overflow-hidden hover:opacity-90 transition-opacity shadow-md"
-                      style={{ backgroundImage: `url("${item.image}")` }}
+                      className="relative w-full aspect-[1/1.2] rounded-lg overflow-hidden hover:opacity-90 transition-opacity shadow-md"
                     >
+                      {/* 동영상이 있으면 동영상 표시, 없으면 이미지 */}
+                      {item.videos && item.videos.length > 0 ? (
+                        <video
+                          src={item.videos[0]}
+                          className="w-full h-full object-cover"
+                          autoPlay
+                          loop
+                          muted
+                          playsInline
+                          onMouseEnter={(e) => e.target.play()}
+                          onMouseLeave={(e) => e.target.pause()}
+                        />
+                      ) : (
+                        <div 
+                          className="w-full h-full bg-center bg-no-repeat bg-cover"
+                          style={{ backgroundImage: `url("${item.image}")` }}
+                        />
+                      )}
                       {/* 그라데이션 오버레이 */}
                       <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.8), rgba(0,0,0,0.1) 50%, rgba(0,0,0,0.3))' }}></div>
                       
@@ -901,7 +983,7 @@ const MainScreen = () => {
                               textShadow: '0 2px 8px rgba(0,0,0,0.8)',
                               margin: 0
                             }}>
-                              📍 {item.title}
+                              {item.title}
                             </p>
                           )}
                           {item.time && (
@@ -913,7 +995,7 @@ const MainScreen = () => {
                               textShadow: '0 2px 8px rgba(0,0,0,0.8)',
                               margin: 0
                             }}>
-                              ⏰ {item.time}
+                              {item.time}
                             </p>
                           )}
                         </div>
@@ -935,6 +1017,8 @@ const MainScreen = () => {
 };
 
 export default MainScreen;
+
+
 
 
 

@@ -112,8 +112,9 @@ const DetailScreen = () => {
     
     const realtimeFormatted = posts.slice(0, 100).map((post) => ({
       id: `realtime-${post.id}`,
-      images: post.images,
-      image: post.images[0],
+      images: post.images || [],
+      videos: post.videos || [],
+      image: post.images?.[0] || post.videos?.[0] || '',
       title: post.location,
       location: post.location,
       detailedLocation: post.detailedLocation || post.placeName || post.location,
@@ -123,7 +124,10 @@ const DetailScreen = () => {
       weather: '맑음',
       category: post.category,
       categoryName: post.categoryName,
-      aiLabels: post.aiLabels
+      aiLabels: post.aiLabels,
+      tags: post.tags || post.aiLabels || [],
+      note: post.note || post.content,
+      likes: post.likes || post.likeCount || 0
     }));
     
     const crowdedFormatted = posts
@@ -131,8 +135,9 @@ const DetailScreen = () => {
       .slice(0, 80)
       .map((post) => ({
         id: `crowded-${post.id}`,
-        images: post.images,
-        image: post.images[0],
+        images: post.images || [],
+        videos: post.videos || [],
+        image: post.images?.[0] || post.videos?.[0] || '',
         title: post.location,
         location: post.location,
         detailedLocation: post.detailedLocation || post.placeName || post.location,
@@ -142,7 +147,10 @@ const DetailScreen = () => {
         weather: '맑음',
         category: post.category,
         categoryName: post.categoryName,
-        aiLabels: post.aiLabels
+        aiLabels: post.aiLabels,
+        tags: post.tags || post.aiLabels || [],
+        note: post.note || post.content,
+        likes: post.likes || post.likeCount || 0
       }));
     
     const recommendedFormatted = posts.slice(0, 100).map((post, idx) => {
@@ -159,19 +167,22 @@ const DetailScreen = () => {
       
       return {
         id: `recommended-${post.id}`,
-        images: post.images,
-        image: post.images[0],
+        images: post.images || [],
+        videos: post.videos || [],
+        image: post.images?.[0] || post.videos?.[0] || '',
         title: post.location,
         location: post.location,
         detailedLocation: post.detailedLocation || post.placeName || post.location,
         badge: '추천',
         category: assignedCategory,
-        tags: [assignedCategory],
+        tags: post.tags || post.aiLabels || [assignedCategory],
         time: post.timeLabel || '방금',
         user: post.user || '여행자',
         weather: '맑음',
         categoryName: post.categoryName,
-        aiLabels: post.aiLabels
+        aiLabels: post.aiLabels,
+        note: post.note || post.content,
+        likes: post.likes || post.likeCount || 0
       };
     });
     
@@ -369,82 +380,113 @@ const DetailScreen = () => {
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-4 p-4">
-            {displayedItems.map((item) => (
-              <div 
-                key={item.id} 
-                className="flex flex-col gap-2 cursor-pointer group"
-                onClick={() => navigate(`/post/${item.id}`, { state: { post: item } })}
-              >
-                <div className="relative w-full overflow-hidden rounded-xl shadow-lg group-hover:shadow-xl transition-all">
-                  <img
-                    className="h-auto w-full object-cover aspect-square group-hover:scale-105 transition-transform duration-300"
-                    src={item.image}
-                    alt={item.location}
-                  />
-                  {/* 그라데이션 오버레이 */}
-                  <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.8), rgba(0,0,0,0.1) 50%, rgba(0,0,0,0.3))' }}></div>
-                  
-                  {/* 좌측상단: 카테고리 아이콘만 */}
-                  {item.categoryName && (
-                    <div style={{ position: 'absolute', top: '10px', left: '10px', zIndex: 1 }}>
-                      <span style={{ 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        justifyContent: 'center',
-                        width: '40px', 
-                        height: '40px', 
-                        borderRadius: '50%', 
-                        fontSize: '24px',
-                        fontWeight: 'bold',
-                        filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.8))'
-                      }}>
-                        {item.categoryName === '개화 상황' && '🌸'}
-                        {item.categoryName === '맛집 정보' && '🍜'}
-                        {(!item.categoryName || !['개화 상황', '맛집 정보'].includes(item.categoryName)) && '🏞️'}
-                      </span>
-                    </div>
-                  )}
-                  
-                  {/* 좌측하단: 위치정보 + 업로드시간 */}
-                  <div style={{ 
-                    position: 'absolute', 
-                    left: 0, 
-                    bottom: 0, 
-                    right: 0, 
-                    padding: '12px', 
-                    background: 'linear-gradient(to top, rgba(0,0,0,0.7), transparent)',
-                    zIndex: 10
-                  }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                      {item.detailedLocation && (
-                        <p style={{ 
-                          color: 'white', 
-                          fontSize: '14px', 
-                          fontWeight: 'bold', 
-                          lineHeight: '1.2',
-                          textShadow: '0 2px 8px rgba(0,0,0,0.8)',
-                          margin: 0
-                        }}>
-                          {item.detailedLocation}
-                        </p>
+            {displayedItems.map((item) => {
+              const likedPosts = JSON.parse(localStorage.getItem('likedPosts') || '{}');
+              const isLiked = likedPosts[item.id] || false;
+              const likeCount = item.likes || item.likesCount || 0;
+              
+              return (
+                <div 
+                  key={item.id} 
+                  className="cursor-pointer group"
+                  onClick={() => {
+                    const allPosts = getDisplayData();
+                    const currentIndex = allPosts.findIndex(p => p.id === item.id);
+                    navigate(`/post/${item.id}`, { 
+                      state: { 
+                        post: item,
+                        allPosts: allPosts,
+                        currentPostIndex: currentIndex >= 0 ? currentIndex : 0
+                      } 
+                    });
+                  }}
+                >
+                  <div>
+                    {/* 이미지 */}
+                    <div className="relative w-full aspect-[4/5] overflow-hidden rounded-lg mb-3">
+                      {item.videos && item.videos.length > 0 ? (
+                        <video
+                          src={item.videos[0]}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                          autoPlay
+                          loop
+                          muted
+                          playsInline
+                          onMouseEnter={(e) => e.target.play()}
+                          onMouseLeave={(e) => e.target.pause()}
+                        />
+                      ) : (
+                        <img
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                          src={item.image}
+                          alt={item.location}
+                        />
                       )}
-                      {item.time && (
-                        <p style={{ 
-                          color: 'rgba(255,255,255,0.9)', 
-                          fontSize: '12px', 
-                          fontWeight: '600', 
-                          lineHeight: '1.2',
-                          textShadow: '0 2px 8px rgba(0,0,0,0.8)',
-                          margin: 0
-                        }}>
-                          {item.time}
+                      
+                      {/* 좌측 상단 카테고리 아이콘 */}
+                      {item.categoryName && (
+                        <div className="absolute top-3 left-3 flex items-center justify-center w-10 h-10 rounded-full bg-white/90 backdrop-blur-sm shadow-md">
+                          <span className="text-2xl">
+                            {item.categoryName === '개화 상황' && '🌸'}
+                            {item.categoryName === '맛집 정보' && '🍜'}
+                            {(!item.categoryName || !['개화 상황', '맛집 정보'].includes(item.categoryName)) && '🏞️'}
+                          </span>
+                        </div>
+                      )}
+                      
+                      {/* 우측 하단 하트 아이콘 */}
+                      <div className="absolute bottom-3 right-3 flex items-center gap-1 bg-white/90 backdrop-blur-sm rounded-full px-3 py-1.5 shadow-md">
+                        <span className={`material-symbols-outlined text-base ${isLiked ? 'text-red-500 fill' : 'text-gray-600'}`}>
+                          favorite
+                        </span>
+                        <span className="text-sm font-semibold text-gray-700">{likeCount}</span>
+                      </div>
+                    </div>
+                    
+                    {/* 이미지 밖 하단 텍스트 */}
+                    <div className="space-y-2">
+                      {/* 지역 상세 정보 */}
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-base font-bold text-text-primary-light dark:text-text-primary-dark">
+                            {item.detailedLocation || item.placeName || item.location || '여행지'}
+                          </p>
+                          {/* 업로드 시간 - 지역 옆에 */}
+                          {item.time && (
+                            <p className="text-xs text-text-secondary-light dark:text-text-secondary-dark">
+                              {item.time}
+                            </p>
+                          )}
+                        </div>
+                        {item.detailedLocation && item.detailedLocation !== item.location && (
+                          <p className="text-sm text-text-secondary-light dark:text-text-secondary-dark mt-0.5">
+                            {item.location}
+                          </p>
+                        )}
+                      </div>
+                      
+                      {/* 해시태그 - 지역 이름 밑에 (줄 바꿈 없이) */}
+                      {item.tags && item.tags.length > 0 && (
+                        <div className="flex gap-1.5 overflow-x-auto [-ms-scrollbar-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                          {item.tags.slice(0, 5).map((tag, tagIndex) => (
+                            <span key={tagIndex} className="text-xs font-medium text-primary bg-primary/10 px-2.5 py-1 rounded-full whitespace-nowrap flex-shrink-0">
+                              #{typeof tag === 'string' ? tag.replace('#', '') : tag}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      
+                      {/* 메모/내용 */}
+                      {item.note && (
+                        <p className="text-sm text-text-secondary-light dark:text-text-secondary-dark line-clamp-2">
+                          {item.note}
                         </p>
                       )}
                     </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 

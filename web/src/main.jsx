@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client'
 import App from './App'
 import './index.css'
 import './utils/clearStorage'
+import { requestNotificationPermission } from './utils/browserNotifications'
 
 // Kakao Map API 동적 로드
 const loadKakaoMapAPI = () => {
@@ -56,6 +57,19 @@ const initApp = async () => {
     // Kakao Map API 로드 및 대기
     await loadKakaoMapAPI();
     console.log('🗺️ Kakao Map API 준비 완료!');
+    
+    // 브라우저 알림 권한 요청 (사용자가 로그인한 경우에만)
+    setTimeout(async () => {
+      const user = localStorage.getItem('user');
+      if (user) {
+        const hasPermission = await requestNotificationPermission();
+        if (hasPermission) {
+          console.log('✅ 브라우저 알림 권한 허용됨');
+        } else {
+          console.log('ℹ️ 브라우저 알림 권한이 거부되었거나 요청되지 않았습니다.');
+        }
+      }
+    }, 2000); // 앱 로드 후 2초 뒤에 권한 요청
     
     // React 앱 렌더링
     ReactDOM.createRoot(document.getElementById('root')).render(

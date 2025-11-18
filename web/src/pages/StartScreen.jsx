@@ -5,7 +5,7 @@ import LiveJourneyLogo from '../components/LiveJourneyLogo';
 
 const StartScreen = () => {
   const navigate = useNavigate();
-  const { login, signup, isAuthenticated } = useAuth();
+  const { login, signup, isAuthenticated, testerLogin } = useAuth();
   const [showEmailForm, setShowEmailForm] = useState(false);
   const [isLogin, setIsLogin] = useState(false);
   const [formData, setFormData] = useState({
@@ -41,6 +41,24 @@ const StartScreen = () => {
       sessionStorage.removeItem('showLoginScreen');
     }
   }, [isAuthenticated, navigate]);
+
+  const handleTesterLogin = async () => {
+    setLoading(true);
+    setError('');
+    
+    try {
+      const result = await testerLogin();
+      if (result.success) {
+        navigate('/main');
+      } else {
+        setError(result.error);
+      }
+    } catch (err) {
+      setError('테스터 계정 로그인에 실패했습니다.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSocialLogin = async (provider) => {
     setLoading(true);
@@ -366,6 +384,17 @@ const StartScreen = () => {
 
           {/* 소셜 로그인 버튼들 */}
           <div className="flex flex-col w-full gap-3 mb-4">
+            {/* 테스터 계정 버튼 */}
+            <button 
+              onClick={handleTesterLogin}
+              disabled={loading}
+              className="flex cursor-pointer items-center justify-center gap-3 overflow-hidden rounded-xl h-14 px-5 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-sm font-bold leading-normal tracking-[0.015em] hover:from-purple-600 hover:to-pink-600 active:from-purple-700 active:to-pink-700 transition-all shadow-lg disabled:opacity-50"
+              style={{ touchAction: 'manipulation' }}
+            >
+              <span className="material-symbols-outlined text-lg">bug_report</span>
+              <span className="truncate">테스터 계정으로 시작하기</span>
+            </button>
+
             <button 
               onClick={() => handleSocialLogin('Google')}
               disabled={loading}
