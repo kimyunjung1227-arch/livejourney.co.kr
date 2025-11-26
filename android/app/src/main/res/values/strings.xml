@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">LiveJourney</string>
+    <string name="title_activity_main">LiveJourney</string>
+    <string name="package_name">com.livejourney.app</string>
+    <string name="custom_url_scheme">com.livejourney.app</string>
+</resources>

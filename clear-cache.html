@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>캐시 클리어</title>
+</head>
+<body>
+    <h1>브라우저 캐시 클리어 중...</h1>
+    <script>
+        // LocalStorage 클리어
+        localStorage.clear();
+        
+        // SessionStorage 클리어
+        sessionStorage.clear();
+        
+        // Service Worker 제거
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(function(registrations) {
+                for(let registration of registrations) {
+                    registration.unregister();
+                }
+            });
+        }
+        
+        // 캐시 스토리지 클리어
+        if ('caches' in window) {
+            caches.keys().then(function(names) {
+                for (let name of names) {
+                    caches.delete(name);
+                }
+            });
+        }
+        
+        alert('캐시가 모두 삭제되었습니다! 확인을 누르면 메인 페이지로 이동합니다.');
+        window.location.href = '/';
+    </script>
+</body>
+</html>
+

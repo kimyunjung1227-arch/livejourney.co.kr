@@ -1,0 +1,369 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* 데스크톱 웹 브라우저용 스타일 */
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* 그라데이션 배경 */
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  min-height: 100vh;
+  overflow-x: hidden;
+  overflow-y: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 30px 20px;
+}
+
+#root {
+  width: 100%;
+  max-width: 360px;
+  height: 780px;
+  margin: 0 auto;
+}
+
+/* 핸드폰 프레임 - 웹 브라우저에서만 표시 */
+.app-container {
+  width: 360px;
+  height: 780px;
+  margin: 0 auto;
+  background-color: #ffffff;
+  position: relative;
+  border-radius: 40px;
+  overflow: hidden;
+  /* 핸드폰 프레임 효과 */
+  box-shadow: 
+    /* 내부 베젤 (검정) */
+    0 0 0 12px #1a1a1a,
+    /* 외부 베젤 (진회색) */
+    0 0 0 14px #2d2d2d,
+    /* 큰 그림자 */
+    0 25px 70px rgba(0, 0, 0, 0.6),
+    /* 중간 그림자 */
+    0 12px 30px rgba(0, 0, 0, 0.4),
+    /* 작은 그림자 */
+    0 6px 12px rgba(0, 0, 0, 0.3),
+    /* 내부 하이라이트 */
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.3);
+  display: flex;
+  flex-direction: column;
+}
+
+/* 페이지 래퍼 - 표준 레이아웃 구조 */
+.page-wrapper {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  height: 100%;
+  width: 100%;
+  position: relative;
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 표준 화면 레이아웃: 모든 화면에서 동일한 구조 */
+.screen-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  /* 시스템 UI 영역 침범 방지 */
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+.screen-content {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.screen-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  /* 완전 불투명 - 뒤 내용 완전히 가리기 */
+}
+
+.screen-body {
+  padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px)); /* BottomNavigation + 하단 safe-area */
+}
+
+/* 모든 페이지의 안전 영역 확보 */
+.safe-area-top {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* 페이지 래퍼 내부 스크롤바 완전히 숨기기 */
+.page-wrapper::-webkit-scrollbar,
+.screen-content::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.page-wrapper,
+.screen-content {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+/* 웹은 개발용이므로 고정 사이즈 유지 */
+
+/* 버튼 기본 스타일 */
+button {
+  cursor: pointer;
+  border: none;
+  outline: none;
+  font-family: inherit;
+}
+
+button:active {
+  opacity: 0.7;
+}
+
+/* 입력 필드 기본 스타일 */
+input, textarea {
+  font-family: inherit;
+  outline: none;
+}
+
+/* 링크 스타일 */
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+/* 모든 스크롤바 완전히 숨기기 */
+* {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+*::-webkit-scrollbar {
+  display: none;  /* Chrome, Safari, Opera */
+  width: 0;
+  height: 0;
+}
+
+/* 부드러운 스크롤 */
+* {
+  scroll-behavior: smooth;
+}
+
+/* 스크롤 스냅 부드럽게 */
+.scroll-smooth {
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* 드래그 스크롤 영역 - 하나씩 스냅 */
+.snap-x {
+  scroll-snap-type: x mandatory;
+  scroll-padding: 1rem;
+}
+
+.snap-start {
+  scroll-snap-align: start;
+  scroll-snap-stop: always; /* 하나씩 멈춤! */
+}
+
+/* 스크롤바 숨기기 */
+.hide-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;  /* Chrome, Safari, Opera */
+}
+
+/* 선택 방지 (드래그 시) */
+.select-none {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+/* 이미지 기본 스타일 */
+img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* 슬라이드 업 애니메이션 */
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-up {
+  animation: slideUp 0.3s ease-out;
+}
+
+/* 페이드 인 애니메이션 */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* 스케일 업 애니메이션 */
+@keyframes scaleUp {
+  from {
+    transform: scale(0.9);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.animate-scale-up {
+  animation: scaleUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* 프로그레스 바 애니메이션 */
+@keyframes progress {
+  from {
+    width: 0%;
+  }
+  to {
+    width: 100%;
+  }
+}
+
+.animate-progress {
+  animation: progress 2s linear;
+}
+
+/* 하트 애니메이션 - 네이버 카페 스타일 */
+@keyframes heartBeat {
+  0% {
+    transform: scale(0);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.3);
+    opacity: 1;
+  }
+  70% {
+    transform: scale(1.0);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.0);
+    opacity: 0;
+  }
+}
+
+.heart-animation {
+  animation: heartBeat 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation-fill-mode: forwards;
+}
+
+/* 펄스 링 애니메이션 (큰 하트 강조 효과) */
+@keyframes pulseRing {
+  0% {
+    transform: scale(0);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(2.5);
+    opacity: 0;
+  }
+}
+
+.pulse-ring {
+  position: absolute;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  border: 3px solid #ef4444;
+  background-color: transparent;
+  animation: pulseRing 0.6s ease-out forwards;
+}
+
+/* 작은 하트 네이버 카페 스타일로 떨어지는 애니메이션 */
+@keyframes floatHeart {
+  0% {
+    transform: translateX(var(--translate-x, 0)) translateY(var(--start-y, 0)) scale(1) rotate(0deg);
+    opacity: 1;
+  }
+  30% {
+    transform: translateX(calc((var(--translate-x, 0) + var(--translate-x-final, 0)) * 0.3)) translateY(100px) scale(0.8) rotate(calc(var(--rotation, 0) * 0.3));
+    opacity: 1;
+  }
+  60% {
+    transform: translateX(calc((var(--translate-x, 0) + var(--translate-x-final, 0)) * 0.6)) translateY(200px) scale(0.6) rotate(calc(var(--rotation, 0) * 0.6));
+    opacity: 0.7;
+  }
+  100% {
+    transform: translateX(var(--translate-x-final, 0)) translateY(350px) scale(0.4) rotate(var(--rotation, 0));
+    opacity: 0;
+  }
+}
+
+/* Shimmer 애니메이션 */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.floating-heart {
+  position: absolute;
+  animation: floatHeart 2s cubic-bezier(0.4, 0, 0.2, 1) forwards,
+             fadeIn 0.3s ease-out forwards;
+  animation-delay: var(--delay, 0ms), var(--delay, 0ms);
+  animation-fill-mode: both;
+}

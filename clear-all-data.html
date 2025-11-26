@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>데이터 완전 삭제</title>
+    <style>
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .container {
+            text-align: center;
+            padding: 40px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+        }
+        h1 { font-size: 32px; margin-bottom: 20px; }
+        p { font-size: 18px; line-height: 1.6; }
+        .spinner {
+            border: 4px solid rgba(255,255,255,0.3);
+            border-top: 4px solid white;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧹 데이터 완전 삭제 중...</h1>
+        <div class="spinner"></div>
+        <p id="status">모든 Mock 데이터를 삭제하고 있습니다...</p>
+    </div>
+    
+    <script>
+        const statusEl = document.getElementById('status');
+        
+        async function clearAllData() {
+            try {
+                // 1. LocalStorage 완전 삭제
+                statusEl.textContent = '📦 LocalStorage 삭제 중...';
+                await new Promise(resolve => setTimeout(resolve, 500));
+                localStorage.clear();
+                
+                // 2. SessionStorage 삭제
+                statusEl.textContent = '💾 SessionStorage 삭제 중...';
+                await new Promise(resolve => setTimeout(resolve, 500));
+                sessionStorage.clear();
+                
+                // 3. IndexedDB 삭제
+                statusEl.textContent = '🗄️ IndexedDB 삭제 중...';
+                await new Promise(resolve => setTimeout(resolve, 500));
+                if ('indexedDB' in window) {
+                    const databases = await indexedDB.databases();
+                    for (const db of databases) {
+                        indexedDB.deleteDatabase(db.name);
+                    }
+                }
+                
+                // 4. Service Worker 제거
+                statusEl.textContent = '⚙️ Service Worker 제거 중...';
+                await new Promise(resolve => setTimeout(resolve, 500));
+                if ('serviceWorker' in navigator) {
+                    const registrations = await navigator.serviceWorker.getRegistrations();
+                    for (const registration of registrations) {
+                        await registration.unregister();
+                    }
+                }
+                
+                // 5. 캐시 스토리지 삭제
+                statusEl.textContent = '🗑️ 캐시 삭제 중...';
+                await new Promise(resolve => setTimeout(resolve, 500));
+                if ('caches' in window) {
+                    const cacheNames = await caches.keys();
+                    for (const cacheName of cacheNames) {
+                        await caches.delete(cacheName);
+                    }
+                }
+                
+                statusEl.textContent = '✅ 모든 데이터가 삭제되었습니다!';
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                statusEl.textContent = '🔄 메인 페이지로 이동합니다...';
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                // 메인 페이지로 이동 (캐시 무시)
+                window.location.href = '/?t=' + Date.now();
+                
+            } catch (error) {
+                statusEl.textContent = '❌ 오류: ' + error.message;
+                console.error('데이터 삭제 오류:', error);
+            }
+        }
+        
+        // 페이지 로드 시 자동 실행
+        clearAllData();
+    </script>
+</body>
+</html>
+
