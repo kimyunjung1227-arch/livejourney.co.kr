@@ -1,0 +1,21 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://livejourney.com/sitemap.xml
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
