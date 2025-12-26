@@ -18,11 +18,20 @@
 
 ## 🌐 라이브 데모
 
-GitHub Pages로 배포된 앱을 바로 확인할 수 있습니다:
+> ⚡ **빠른 배포**: 다른 사람들과 바로 공유하려면 [빠른 배포 가이드](./QUICK_DEPLOY.md)를 확인하세요! (5분 안에 완료)
 
-🔗 **https://kimyunjung1227-arch.github.io/app/**
+### 배포 방법
 
-> ⚠️ **참고**: GitHub Pages 설정이 완료되지 않았다면 [GitHub Pages 설정 가이드](./GITHUB_PAGES_SETUP.md)를 참고하세요.
+**방법 1: Netlify (추천 - 가장 빠름!)**
+- [빠른 배포 가이드](./QUICK_DEPLOY.md) 참고
+- 3-5분 안에 공유 가능한 URL 생성
+
+**방법 2: Vercel**
+- [빠른 배포 가이드](./QUICK_DEPLOY.md) 참고
+- Netlify 대안
+
+**방법 3: GitHub Pages**
+- [GitHub Pages 설정 가이드](./GITHUB_PAGES_SETUP.md) 참고
 
 ---
 
