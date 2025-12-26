@@ -77,6 +77,7 @@ body {
   max-height: 100%;
   display: flex;
   flex-direction: column;
+  padding-top: 0;
 }
 
 /* 표준 화면 레이아웃: 모든 화면에서 동일한 구조 */
@@ -93,6 +94,7 @@ body {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
+  padding-bottom: 100px; /* 네비게이션 바 높이(80px) + 여유 공간(20px) */
 }
 
 .screen-header {
@@ -104,6 +106,7 @@ body {
 
 .screen-body {
   padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px)); /* BottomNavigation + 하단 safe-area */
+  min-height: calc(100vh - 80px); /* 네비게이션 바를 제외한 최소 높이 */
 }
 
 /* 모든 페이지의 안전 영역 확보 */
@@ -129,7 +132,7 @@ body {
   scrollbar-width: none;  /* Firefox */
 }
 
-/* 웹은 개발용이므로 고정 사이즈 유지 */
+/* 개발용 배너 제거됨 */
 
 /* 버튼 기본 스타일 */
 button {
@@ -242,6 +245,17 @@ img {
 
 .animate-fade-in {
   animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeInSlide {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 /* 스케일 업 애니메이션 */

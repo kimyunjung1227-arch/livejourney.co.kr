@@ -2,17 +2,17 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom';
 import BottomNavigation from '../components/BottomNavigation';
 import { seedMockData } from '../utils/mockUploadData';
-import { getPosts } from '../api/posts';
 import { getUnreadCount } from '../utils/notifications';
-import { getTimeAgo, updatePostTimes, filterRecentPosts } from '../utils/timeUtils';
-import { getUserDailyTitle, getTitleEffect, getAllTodayTitles, DAILY_TITLES } from '../utils/dailyTitleSystem';
-import { initializeTitlePosts } from '../utils/titlePostsMockData';
+import { getTimeAgo, filterRecentPosts } from '../utils/timeUtils';
+import { getInterestPlaces, toggleInterestPlace } from '../utils/interestPlaces';
+import { getRegionIcon } from '../utils/regionIcons';
+import { logger } from '../utils/logger';
 
 const MainScreen = () => {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('자연');
-  const [uploadedPosts, setUploadedPosts] = useState([]);
+  const [selectedTag, setSelectedTag] = useState(null);
+  const [popularTags, setPopularTags] = useState([]);
 
   const [realtimeData, setRealtimeData] = useState([]);
   const [crowdedData, setCrowdedData] = useState([]);
@@ -20,163 +20,363 @@ const MainScreen = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
-  const [titleHallPosts, setTitleHallPosts] = useState([]);
-  const titleHallScrollRef = useRef(null);
-  const [dailyTitle, setDailyTitle] = useState(null);
-  const [allTodayTitles, setAllTodayTitles] = useState([]);
-  const [showTitleModal, setShowTitleModal] = useState(false);
-  const [selectedTitle, setSelectedTitle] = useState(null);
-  const [showTitleCelebration, setShowTitleCelebration] = useState(false);
-  const [earnedTitle, setEarnedTitle] = useState(null);
-
+  const [interestPlaces, setInterestPlaces] = useState([]);
+  const [selectedInterest, setSelectedInterest] = useState(null);
+  const [showAddInterestModal, setShowAddInterestModal] = useState(false);
+  const [newInterestPlace, setNewInterestPlace] = useState('');
+  const [deleteConfirmPlace, setDeleteConfirmPlace] = useState(null);
+  const [hoveredPlaceIndex, setHoveredPlaceIndex] = useState(null);
   const realtimeScrollRef = useRef(null);
   const crowdedScrollRef = useRef(null);
   const recommendedScrollRef = useRef(null);
-  const categoryScrollRef = useRef(null);
+  const tagScrollRef = useRef(null);
+  const interestScrollRef = useRef(null);
+  const themeScrollRef = useRef(null);
+  const magazineScrollRef = useRef(null);
   const [isDragging, setIsDragging] = useState(false);
   const [startX, setStartX] = useState(0);
   const [scrollLeft, setScrollLeft] = useState(0);
   const [currentScrollRef, setCurrentScrollRef] = useState(null);
   const [hasMoved, setHasMoved] = useState(false);
+  const [isInterestSectionVisible, setIsInterestSectionVisible] = useState(true);
+  const [interestOpacity, setInterestOpacity] = useState(1);
+  const scrollY = useRef(0);
+  
+  // SOS 알림
+  const [nearbySosRequests, setNearbySosRequests] = useState([]);
+  const [currentLocation, setCurrentLocation] = useState(null);
+  const [dismissedSosIds, setDismissedSosIds] = useState([]);
+  
+  // 위도/경도 거리 계산 (km)
+  const getDistanceKm = (lat1, lon1, lat2, lon2) => {
+    const toRad = (v) => (v * Math.PI) / 180;
+    const R = 6371;
+    const dLat = toRad(lat2 - lat1);
+    const dLon = toRad(lon2 - lon1);
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(toRad(lat1)) *
+        Math.cos(toRad(lat2)) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  };
+  
+  // SOS 요청 로드 및 주변 요청 필터링
+  const loadSosRequests = useCallback(() => {
+    try {
+      const sosJson = localStorage.getItem('sosRequests_v1');
+      const sosRequests = sosJson ? JSON.parse(sosJson) : [];
+      
+      if (!currentLocation) {
+        setNearbySosRequests([]);
+        return;
+      }
+      
+      const nearby = sosRequests.filter((req) => {
+        if (req.status !== 'open' || !req.coordinates) return false;
+        const d = getDistanceKm(
+          currentLocation.latitude,
+          currentLocation.longitude,
+          req.coordinates.lat,
+          req.coordinates.lng
+        );
+        // 반경 5km 이내 SOS만 표시 (메인화면에서는 더 넓은 범위)
+        return d <= 5;
+      });
+      
+      setNearbySosRequests(nearby);
+    } catch (error) {
+      console.error('SOS 요청 로드 실패:', error);
+    }
+  }, [currentLocation]);
+  
+  // 현재 위치 가져오기
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setCurrentLocation({
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+          });
+        },
+        (error) => {
+          console.error('위치 가져오기 실패:', error);
+        }
+      );
+    }
+  }, []);
+  
+  // SOS 요청 로드
+  useEffect(() => {
+    loadSosRequests();
+    
+    // 주기적으로 SOS 요청 확인 (30초마다)
+    const interval = setInterval(() => {
+      loadSosRequests();
+    }, 30000);
+    
+    return () => clearInterval(interval);
+  }, [loadSosRequests]);
 
-  const categories = useMemo(() => ['자연', '힐링', '액티비티', '맛집', '카페'], []);
+  // 관심 지역/장소로 필터링된 데이터
+  const filteredRealtimeData = useMemo(() => {
+    if (!selectedInterest) return realtimeData;
+    return realtimeData.filter(item => {
+      const location = item.location || item.title || '';
+      return location.includes(selectedInterest) || selectedInterest.includes(location);
+    });
+  }, [realtimeData, selectedInterest]);
 
-  const filteredRecommendedData = useMemo(() => 
-    recommendedData.filter(item => 
-      item.category === selectedCategory || item.tags?.includes(selectedCategory)
-    ),
-    [recommendedData, selectedCategory]
+  const filteredCrowdedData = useMemo(() => {
+    if (!selectedInterest) return crowdedData;
+    return crowdedData.filter(item => {
+      const location = item.location || item.title || '';
+      return location.includes(selectedInterest) || selectedInterest.includes(location);
+    });
+  }, [crowdedData, selectedInterest]);
+
+  // 모든 게시물에서 태그 수집 및 인기 태그 계산
+  const extractPopularTags = useCallback((posts) => {
+    const tagCountMap = new Map();
+    
+    posts.forEach(post => {
+      const tags = post.tags || [];
+      tags.forEach(tag => {
+        const cleanTag = typeof tag === 'string' ? tag.replace(/^#+/, '').trim() : String(tag).replace(/^#+/, '').trim();
+        if (cleanTag && cleanTag.length >= 2) {
+          tagCountMap.set(cleanTag, (tagCountMap.get(cleanTag) || 0) + 1);
+        }
+      });
+    });
+    
+    const sortedTags = Array.from(tagCountMap.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([tag]) => tag);
+    
+    return sortedTags;
+  }, []);
+
+  const filteredRecommendedData = useMemo(() => {
+    if (!selectedTag) {
+      return recommendedData;
+    }
+    
+    return recommendedData.filter(item => {
+      const tags = item.tags || [];
+      return tags.some(tag => {
+        const cleanTag = typeof tag === 'string' ? tag.replace(/^#+/, '').trim() : String(tag).replace(/^#+/, '').trim();
+        return cleanTag === selectedTag;
+      });
+    });
+  }, [recommendedData, selectedTag]);
+
+  // 상황별 추천 테마 (가벼운 추천 여행지)
+  const travelThemes = useMemo(() => [
+    {
+      id: 'weekend_nearby',
+      name: '주말 근교',
+      description: '서울 기준 2시간 이내',
+      regions: ['서울', '강릉', '춘천'],
+    },
+    {
+      id: 'one_day',
+      name: '당일치기',
+      description: '아침에 떠나서 밤에 돌아오기',
+      regions: ['인천', '수원', '속초'],
+    },
+    {
+      id: 'healing_2days',
+      name: '1박 2일 힐링',
+      description: '조용히 쉬고 오는 여행',
+      regions: ['제주', '여수', '남해'],
+    },
+    {
+      id: 'solo_trip',
+      name: '혼자 가기 좋아요',
+      description: '혼자서도 부담 없는 동선',
+      regions: ['부산', '전주', '광주'],
+    },
+    {
+      id: 'couple_trip',
+      name: '커플 여행',
+      description: '함께 걷기 좋은 감성 코스',
+      regions: ['여수', '부산', '제주'],
+    },
+  ], []);
+
+  // 지역별 한 줄 카피
+  const regionCopyMap = useMemo(
+    () => ({
+      서울: '야경과 맛집이 가까운 도심 여행',
+      부산: '해운대와 광안리를 걷는 바다 여행',
+      제주: '섬을 한 바퀴 도는 힐링 드라이브',
+      강릉: '바다와 카페를 동시에 즐기는 해변 도시',
+      여수: '야경과 해산물이 맛있는 항구 여행',
+      속초: '설악산과 동해를 함께 보는 힐링 여행',
+      춘천: '호수와 카페가 어우러진 감성 여행',
+      인천: '바다와 거리 산책이 함께 있는 근교 여행',
+      수원: '화성과 구도심을 도는 역사 여행',
+      남해: '조용한 남쪽 바다 마을로 떠나는 휴식',
+      전주: '한옥마을에서 즐기는 전통 도시 여행',
+      광주: '카페와 예술 공간을 걷는 문화 여행',
+    }),
+    []
   );
+
+  const [selectedThemeId, setSelectedThemeId] = useState(travelThemes[0]?.id);
+
+  const selectedTheme = useMemo(
+    () => travelThemes.find((theme) => theme.id === selectedThemeId) || travelThemes[0],
+    [travelThemes, selectedThemeId]
+  );
+
+  // 선택된 테마에 맞는 추천 게시물만 필터링 (현재는 하단 큰 피드는 숨기고, 테마별 지역 카드만 사용)
+  const themeFilteredRecommendedData = useMemo(() => {
+    return [];
+  }, [selectedTheme, filteredRecommendedData, recommendedData]);
+
+  // 웹 메인 전용: 여행 매거진 카드 데이터
+  const travelMagazineArticles = useMemo(() => ([
+    {
+      id: 'web-weekend-jeju',
+      regionName: '제주',
+      detailedLocation: '애월·협재',
+      title: '이번 주말, 꼭 가봐야 하는 제주 서쪽 노을 드라이브',
+      tagLine: '노을이 제일 예쁜 서쪽 해안 도로',
+      summary: '애월에서 협재까지, 서쪽 해안을 따라 드라이브하면서 노을 맛집만 골라 들르는 1일 코스.',
+      coverImage: 'https://images.unsplash.com/photo-1542367592-8849eb950fd8?auto=format&fit=crop&w=1200&q=80',
+      content: [
+        {
+          type: 'text',
+          title: '1. 오후, 애월 카페 거리에서 천천히 출발',
+          body: '비행기에서 내려 숙소에 짐을 풀었다면, 애월 카페 거리에서 가벼운 브런치로 시작해 보세요.\n\n바다를 내려다보는 테라스 자리에 앉으면, 파도 소리와 함께 오늘 루트를 여유롭게 정리할 수 있어요.'
+        },
+        {
+          type: 'image',
+          caption: '애월 바다를 바라보는 테라스 카페',
+          imageUrl: 'https://images.unsplash.com/photo-1500375592092-40eb2168fd21?auto=format&fit=crop&w=1200&q=80'
+        },
+        {
+          type: 'text',
+          title: '2. 협재·금능에서 맞이하는 황금빛 노을',
+          body: '해가 지기 1시간 전쯤, 협재해수욕장 쪽으로 이동해 보세요.\n\n하얀 모래와 에메랄드빛 바다 위로 해가 천천히 떨어지면서, 실감나는 그림 같은 풍경이 펼쳐집니다.'
+        },
+        {
+          type: 'image',
+          caption: '협재에서 바라본 서쪽 노을',
+          imageUrl: 'https://images.unsplash.com/photo-1518837695005-2083093ee35b?auto=format&fit=crop&w=1200&q=80'
+        }
+      ]
+    },
+    {
+      id: 'web-weekend-busan',
+      regionName: '부산',
+      detailedLocation: '해운대·청사포',
+      title: '현지인처럼 걷는 해운대·청사포 산책 루트',
+      tagLine: '바다와 카페를 번갈아 걷는 산책 코스',
+      summary: '해운대 해변에서 시작해 청사포까지, 기차선로와 바다를 따라 걷는 감성 산책 루트.',
+      coverImage: 'https://images.unsplash.com/photo-1537953773345-d172ccf13cf1?auto=format&fit=crop&w=1200&q=80',
+      content: [
+        {
+          type: 'text',
+          title: '1. 해운대 모래사장에서 천천히 몸 풀기',
+          body: '아침에는 해운대 해변을 가볍게 걸으며 하루를 시작해 보세요.\n\n생각보다 파도가 잔잔해서, 신발을 벗고 물에 살짝 발을 담그고 걷기에도 좋아요.'
+        },
+        {
+          type: 'image',
+          caption: '한적한 오전의 해운대 해변',
+          imageUrl: 'https://images.unsplash.com/photo-1500375592092-40eb2168fd21?auto=format&fit=crop&w=1200&q=80'
+        },
+        {
+          type: 'text',
+          title: '2. 청사포 다릿돌 전망대에서 바다 한 번 더',
+          body: '해운대에서 미포를 지나 청사포까지 이어지는 해변 산책로는, 부산 현지인들도 자주 찾는 코스예요.\n\n유리 바닥으로 바다가 내려다보이는 다릿돌 전망대는 꼭 한 번 올라가 보세요.'
+        },
+        {
+          type: 'image',
+          caption: '청사포 다릿돌 전망대에서 내려다본 바다',
+          imageUrl: 'https://images.unsplash.com/photo-1526481280695-3c687fd543c4?auto=format&fit=crop&w=1200&q=80'
+        }
+      ]
+    },
+    {
+      id: 'web-weekend-seoul',
+      regionName: '서울',
+      detailedLocation: '잠실·반포',
+      title: '멀리 가지 않아도, 도심에서 즐기는 한강 야경 산책',
+      tagLine: '퇴근 후에도 가능한 도심 야경 코스',
+      summary: '잠실·반포·여의도, 굳이 멀리 떠나지 않아도 충분히 여행 같은 한강 야경 산책 루트.',
+      coverImage: 'https://images.unsplash.com/photo-1519181245277-cffeb31da2fb?auto=format&fit=crop&w=1200&q=80',
+      content: [
+        {
+          type: 'text',
+          title: '1. 해 질 무렵, 잠실대교 아래에서 시작하기',
+          body: '해가 지기 시작할 때쯤, 잠실대교 근처 한강공원으로 가 보세요.\n\n하늘이 분홍빛으로 물들기 시작하면 롯데타워와 한강이 함께 들어오는, 서울다운 풍경을 볼 수 있어요.'
+        },
+        {
+          type: 'image',
+          caption: '야경이 예쁜 잠실 일대 한강 뷰',
+          imageUrl: 'https://images.unsplash.com/photo-1549692520-acc6669e2f0c?auto=format&fit=crop&w=1200&q=80'
+        },
+        {
+          type: 'text',
+          title: '2. 반포대교 분수와 함께 마무리',
+          body: '조금 더 여유가 있다면 반포대교 달빛무지개분수 시간에 맞춰 이동해 보세요.\n\n분수와 다리 불빛, 그리고 강가에 앉아 있는 사람들까지 합쳐져, 멀리 가지 않아도 여행 온 듯한 기분이 듭니다.'
+        },
+        {
+          type: 'image',
+          caption: '반포대교 분수와 한강 야경',
+          imageUrl: 'https://images.unsplash.com/photo-1526481280695-3c687fd543c4?auto=format&fit=crop&w=1200&q=80'
+        }
+      ]
+    },
+  ]), []);
 
   const updateNotificationCount = useCallback(() => {
     setUnreadNotificationCount(getUnreadCount());
   }, []);
 
-  // 타이틀 명예의 전당용 게시물 업데이트 (localStorage 기반)
-  const updateTitleHallPosts = useCallback(() => {
-    try {
-      const posts = JSON.parse(localStorage.getItem('uploadedPosts') || '[]');
-      if (!Array.isArray(posts) || posts.length === 0) {
-        setTitleHallPosts([]);
-        return;
-      }
-
-      // 타이틀을 가진 사용자의 게시물만 필터링
-      const hallPosts = posts
-        .filter((post) => post.userId && getUserDailyTitle(post.userId))
-        .sort((a, b) => {
-          const timeA = new Date(a.timestamp || a.createdAt || 0).getTime();
-          const timeB = new Date(b.timestamp || b.createdAt || 0).getTime();
-          return timeB - timeA;
-        })
-        .slice(0, 8)
-        .map((post) => ({
-          id: post.id,
-          images: post.images || [],
-          image: post.images?.[0] || '',
-          location: post.location,
-          note: post.note,
-          userId: post.userId,
-          timestamp: post.timestamp || post.createdAt,
-        }));
-
-      setTitleHallPosts(hallPosts);
-    } catch (e) {
-      console.error('타이틀 명예의 전당 게시물 업데이트 실패:', e);
-      setTitleHallPosts([]);
-    }
-  }, []);
-
-  const getTimeAgo = useCallback((date) => {
-    const now = new Date();
-    const postDate = new Date(date);
-    const diffMs = now - postDate;
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
-    
-    if (diffMins < 1) return '방금 전';
-    if (diffMins < 60) return `${diffMins}분 전`;
-    if (diffHours < 24) return `${diffHours}시간 전`;
-    return `${diffDays}일 전`;
-  }, []);
-
-  const formatQnA = useCallback((questions) => {
-    return questions.map((q, idx) => {
-      const items = [{
-        id: idx * 2 + 1,
-        type: 'question',
-        user: q.user?.username || '익명',
-        content: q.question,
-        time: getTimeAgo(q.createdAt),
-        avatar: q.user?.profileImage || `https://i.pravatar.cc/150?img=${idx + 1}`
-      }];
-      
-      if (q.answer) {
-        items.push({
-          id: idx * 2 + 2,
-          type: 'answer',
-          user: q.answeredBy?.username || '작성자',
-          isAuthor: true,
-          content: q.answer,
-          time: getTimeAgo(q.createdAt),
-          avatar: q.answeredBy?.profileImage || `https://i.pravatar.cc/150?img=${idx + 10}`
-        });
-      }
-      
-      return items;
-    }).flat();
-  }, [getTimeAgo]);
-
   const loadMockData = useCallback(() => {
-    // localStorage에서 모든 게시물 가져오기 (기록은 유지)
+    // 목업 데이터 생성
+    seedMockData();
+    
+    // localStorage에서 직접 가져오기 (getPosts는 async이므로)
     const allPosts = JSON.parse(localStorage.getItem('uploadedPosts') || '[]');
-    console.log(`📸 전체 게시물 (기록): ${allPosts.length}개`);
+    logger.log(`📸 전체 게시물 (기록): ${allPosts.length}개`);
     
-    // 2일 이내 게시물만 필터링 (메인 화면 노출용)
-    // 2일 이상 된 게시물은 localStorage에 저장되어 있지만 화면에는 표시 안 함
-    let posts = filterRecentPosts(allPosts, 2);
-    console.log(`📊 메인화면 노출 게시물 (2일 이내): ${posts.length}개`);
-    // 메인 화면에서는 "오늘의 타이틀"을 이미 획득한 사용자의 게시물은 제외
-    posts = posts.filter((post) => {
-      if (!post.userId) return true;
-      const userTitle = getUserDailyTitle(post.userId);
-      return !userTitle;
-    });
-
-    // 최신순 정렬
-    posts.sort((a, b) => {
-      const timeA = new Date(a.timestamp || a.createdAt || 0).getTime();
-      const timeB = new Date(b.timestamp || b.createdAt || 0).getTime();
-      return timeB - timeA;
-    });
-    
-    // 2일 이내 게시물이 없으면 빈 배열 설정
-    if (posts.length === 0) {
-      console.log('📭 최근 2일 이내 업로드된 사진이 없습니다 (기록은 유지됨)');
+    // 배열인지 확인
+    if (!Array.isArray(allPosts)) {
+      logger.error('게시물 데이터가 배열이 아닙니다:', allPosts);
       setRealtimeData([]);
       setCrowdedData([]);
       setRecommendedData([]);
       return;
     }
     
-    // 2일 이내 게시물만 표시 (최대 30개)
+    const posts = filterRecentPosts(allPosts, 2);
+    logger.log(`📊 메인화면 노출 게시물 (2일 이내): ${posts.length}개`);
+    
     const realtimeFormatted = posts.slice(0, 30).map((post) => {
-      // timestamp 기반으로 동적 시간 계산 ⭐
       const dynamicTime = getTimeAgo(post.timestamp || post.createdAt || post.time);
       
       return {
         id: post.id,
         images: post.images || [],
         videos: post.videos || [],
-        image: post.images?.[0] || post.videos?.[0] || '',
+        image: (post.images && post.images.length > 0) ? post.images[0] : 
+               (post.videos && post.videos.length > 0) ? post.videos[0] : 
+               (post.image || ''),
         title: post.location,
         location: post.location,
         detailedLocation: post.detailedLocation || post.location,
         placeName: post.placeName || post.location,
-        time: dynamicTime, // 동적 시간 ⭐
-        timeLabel: dynamicTime, // 동적 시간 ⭐
-        timestamp: post.timestamp || post.createdAt || post.time, // 원본 timestamp 유지
+        time: dynamicTime,
+        timeLabel: dynamicTime,
+        timestamp: post.timestamp || post.createdAt || post.time,
         user: post.user || '여행자',
         userId: post.userId,
         badge: post.categoryName || '여행러버',
@@ -194,14 +394,14 @@ const MainScreen = () => {
       };
     });
     
-    // 1시간 이내 게시물만 필터링 (인기 섹션)
     const oneHourAgo = Date.now() - (60 * 60 * 1000);
     const crowdedFormatted = posts
       .filter(post => {
-        const postTime = new Date(post.timestamp || post.createdAt || post.time).getTime();
-        return postTime > oneHourAgo; // 1시간 이내
+        const postTime = post.timestamp || post.createdAt || post.time;
+        const timestamp = typeof postTime === 'number' ? postTime : new Date(postTime).getTime();
+        return timestamp >= oneHourAgo;
       })
-      .slice(0, 150)
+      .slice(0, 20)
       .map((post) => {
         const dynamicTime = getTimeAgo(post.timestamp || post.createdAt || post.time);
         
@@ -209,19 +409,21 @@ const MainScreen = () => {
           id: post.id,
           images: post.images || [],
           videos: post.videos || [],
-          image: post.images?.[0] || post.videos?.[0] || '',
+          image: (post.images && post.images.length > 0) ? post.images[0] : 
+                 (post.videos && post.videos.length > 0) ? post.videos[0] : 
+                 (post.image || ''),
           title: post.location,
           location: post.location,
           detailedLocation: post.detailedLocation || post.location,
           placeName: post.placeName || post.location,
-          badge: '인기',
-          category: post.category || '자연',
-          categoryName: post.categoryName,
-          time: dynamicTime, // 동적 시간 ⭐
-          timeLabel: dynamicTime, // 동적 시간 ⭐
+          time: dynamicTime,
+          timeLabel: dynamicTime,
           timestamp: post.timestamp || post.createdAt || post.time,
           user: post.user || '여행자',
           userId: post.userId,
+          badge: post.categoryName || '여행러버',
+          category: post.category,
+          categoryName: post.categoryName,
           content: post.note || `${post.location}의 인기 명소!`,
           note: post.note,
           tags: post.tags || [],
@@ -229,50 +431,45 @@ const MainScreen = () => {
           likes: post.likes || 0,
           comments: post.comments || [],
           questions: post.questions || [],
-          aiLabels: post.aiLabels
+          qnaList: [],
+          aiLabels: post.aiLabels,
+          crowdLevel: post.crowdLevel || 'medium'
         };
       });
     
-    // 2일 이내 게시물만 표시 (최대 200개)
-    const recommendedFormatted = posts.slice(0, 200).map((post, idx) => {
+    const recommendedFormatted = posts.slice(0, 10).map((post) => {
       const dynamicTime = getTimeAgo(post.timestamp || post.createdAt || post.time);
-      
-      let assignedCategory = '자연';
-      if (post.category === 'food') {
-        assignedCategory = idx % 2 === 0 ? '맛집' : '카페';
-      } else if (post.category === 'landmark' || post.category === 'scenic') {
-        assignedCategory = idx % 2 === 0 ? '자연' : '힐링';
-      } else if (post.category === 'bloom') {
-        assignedCategory = '힐링';
-      } else {
-        assignedCategory = '액티비티';
-      }
       
       return {
         id: post.id,
         images: post.images || [],
         videos: post.videos || [],
-        image: post.images?.[0] || post.videos?.[0] || '',
+        image: (post.images && post.images.length > 0) ? post.images[0] : 
+               (post.videos && post.videos.length > 0) ? post.videos[0] : 
+               (post.image || ''),
         title: post.location,
         location: post.location,
         detailedLocation: post.detailedLocation || post.location,
         placeName: post.placeName || post.location,
-        badge: '추천',
-        category: assignedCategory,
-        categoryName: post.categoryName,
-        tags: post.tags || [assignedCategory],
-        time: dynamicTime, // 동적 시간 ⭐
-        timeLabel: dynamicTime, // 동적 시간 ⭐
+        time: dynamicTime,
+        timeLabel: dynamicTime,
         timestamp: post.timestamp || post.createdAt || post.time,
         user: post.user || '여행자',
         userId: post.userId,
+        badge: post.categoryName || '여행러버',
+        category: post.category,
+        categoryName: post.categoryName,
         content: post.note || `${post.location} 추천!`,
         note: post.note,
+        tags: post.tags || [],
         coordinates: post.coordinates,
         likes: post.likes || 0,
         comments: post.comments || [],
         questions: post.questions || [],
-        aiLabels: post.aiLabels
+        qnaList: [],
+        aiLabels: post.aiLabels,
+        weather: post.weather,
+        crowdLevel: post.crowdLevel
       };
     });
     
@@ -280,101 +477,59 @@ const MainScreen = () => {
     setCrowdedData(crowdedFormatted);
     setRecommendedData(recommendedFormatted);
     
-    console.log('📊 메인화면 Mock 데이터 로드:', {
+    const tags = extractPopularTags(posts);
+    setPopularTags(tags);
+    
+    logger.log('📊 메인화면 Mock 데이터 로드:', {
       realtime: realtimeFormatted.length,
       crowded: crowdedFormatted.length,
-      recommended: recommendedFormatted.length
+      recommended: recommendedFormatted.length,
+      popularTags: tags.length
     });
-    // 타이틀 명예의 전당 업데이트
-    updateTitleHallPosts();
-  }, [getTimeAgo, updateTitleHallPosts]);
+  }, [getTimeAgo, extractPopularTags, selectedTag]);
 
-  const loadUploadedPosts = useCallback(() => {
-    const posts = JSON.parse(localStorage.getItem('uploadedPosts') || '[]');
-    console.log(`📸 업로드된 게시물 로드: ${posts.length}개`);
-    
-    const formattedPosts = posts.slice(0, 10).map(post => ({
-      id: `uploaded-${post.id}`,
-      images: post.images,
-      image: post.images[0],
-      title: post.location,
-      location: post.location,
-      time: post.timeLabel || '방금',
-      user: post.user || '나',
-      badge: '여행러버',
-      qnaList: [],
-      isUploaded: true
-    }));
-    setUploadedPosts(formattedPosts);
-    // 업로드된 게시물 기준으로도 명예의 전당 갱신
-    updateTitleHallPosts();
-  }, [updateTitleHallPosts]);
 
   const fetchPosts = useCallback(async () => {
-    try {
-      // loading 제거 - 사진이 바로 보이도록
+    setLoading(true);
       setError(null);
       
-      // 타임아웃 1초로 단축 - 빠르게 Mock 데이터로 전환!
-      const timeout = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('timeout')), 1000)
-      );
-      
-      const postsPromise = getPosts({ isRealtime: true, limit: 10 });
-      
-      try {
-        const realtimeResponse = await Promise.race([postsPromise, timeout]);
-        
-        if (realtimeResponse.success && realtimeResponse.posts && realtimeResponse.posts.length > 0) {
-          const formattedRealtime = realtimeResponse.posts.map(post => ({
-            id: post._id,
-            images: post.images || [],
-            image: post.images[0],
-            title: post.location?.name || '여행지',
-            location: post.location?.name || '여행지',
-            time: getTimeAgo(post.createdAt),
-            user: post.user?.username || '익명',
-            badge: post.user?.badges?.[0] || '여행러버',
-            qnaList: formatQnA(post.questions || []),
-            content: post.content,
-            likesCount: post.likesCount || 0,
-            comments: post.comments || []
-          }));
-          setRealtimeData(formattedRealtime);
-          
-          const allPostsResponse = await getPosts({ isRealtime: false, limit: 20 });
-          if (allPostsResponse.success && allPostsResponse.posts && allPostsResponse.posts.length > 0) {
-            const formattedRecommended = allPostsResponse.posts.map(post => ({
-              id: post._id,
-              images: post.images || [],
-              image: post.images[0],
-              title: post.location?.name || '여행지',
-              badge: '추천',
-              category: post.tags?.[0] || '자연',
-              user: post.user?.username || '익명',
-              time: getTimeAgo(post.createdAt),
-              qnaList: formatQnA(post.questions || []),
-              content: post.content
-            }));
-            setRecommendedData(formattedRecommended);
-            setCrowdedData(formattedRecommended.slice(0, 10));
-          } else {
-            // 백엔드에 데이터 없음 - Mock 데이터 사용
-            loadMockData();
-          }
-        } else {
-          // 백엔드에 데이터 없음 - Mock 데이터 사용
-          loadMockData();
-        }
-      } catch (timeoutError) {
-        // 조용히 Mock 데이터로 전환
-        loadMockData();
-      }
-    } catch (err) {
-      // 조용히 Mock 데이터로 전환
+    try {
+      // localStorage에서 직접 가져오기
       loadMockData();
+    } catch (err) {
+      logger.error('게시물 로드 실패:', err);
+      setError(err.message);
+      loadMockData();
+    } finally {
+      setLoading(false);
     }
-  }, [getTimeAgo, formatQnA, loadMockData]);
+  }, [loadMockData]);
+
+  const loadInterestPlaces = useCallback(() => {
+    const places = getInterestPlaces();
+    setInterestPlaces(places);
+    logger.log(`⭐ 관심 지역/장소 로드: ${places.length}개`);
+  }, []);
+
+  const handleAddInterestPlace = useCallback(() => {
+    if (!newInterestPlace.trim()) return;
+    
+    const added = toggleInterestPlace(newInterestPlace.trim());
+    if (added) {
+      loadInterestPlaces();
+      setNewInterestPlace('');
+      setShowAddInterestModal(false);
+    }
+  }, [newInterestPlace, loadInterestPlaces]);
+
+  const handleDeleteInterestPlace = useCallback((placeName) => {
+    toggleInterestPlace(placeName);
+    loadInterestPlaces();
+    setDeleteConfirmPlace(null);
+    if (selectedInterest === placeName) {
+      setSelectedInterest(null);
+    }
+  }, [loadInterestPlaces, selectedInterest]);
 
   const handleSearch = useCallback((e) => {
     e.preventDefault();
@@ -387,8 +542,20 @@ const MainScreen = () => {
     navigate('/search');
   }, [navigate]);
 
+  const handleItemClickWithDragCheck = useCallback((item, sectionType) => {
+    if (!hasMoved) {
+      navigate(`/post/${item.id}`, { 
+        state: { 
+          post: item,
+          sectionType,
+          fromMain: true
+        }
+      });
+    }
+    setHasMoved(false);
+  }, [hasMoved, navigate]);
+
   const handleMouseDown = useCallback((e, scrollRef) => {
-    if (!scrollRef || !scrollRef.current) return;
     setIsDragging(true);
     setHasMoved(false);
     setCurrentScrollRef(scrollRef);
@@ -402,19 +569,14 @@ const MainScreen = () => {
     if (!isDragging || !currentScrollRef) return;
     e.preventDefault();
     const x = e.pageX - currentScrollRef.current.offsetLeft;
-    const walk = (x - startX) * 2; // 더 빠르고 부드러운 스크롤
+    const walk = (x - startX) * 1.2;
     
     if (Math.abs(walk) > 5) {
       setHasMoved(true);
     }
     
     if (currentScrollRef.current) {
-      // requestAnimationFrame으로 부드러운 스크롤
-      requestAnimationFrame(() => {
-    if (currentScrollRef.current) {
       currentScrollRef.current.scrollLeft = scrollLeft - walk;
-    }
-      });
     }
   }, [isDragging, currentScrollRef, startX, scrollLeft]);
 
@@ -436,1153 +598,1280 @@ const MainScreen = () => {
     setCurrentScrollRef(null);
   }, [isDragging, currentScrollRef]);
 
-  const handleItemClickWithDragCheck = useCallback((item, sectionType = 'realtime') => {
-    if (!hasMoved) {
-      // 섹션별로 모든 게시물 목록 가져오기
-      let allPosts = [];
-      let currentIndex = 0;
-      
-      switch (sectionType) {
-        case 'realtime':
-          allPosts = realtimeData;
-          currentIndex = realtimeData.findIndex(p => p.id === item.id);
-          break;
-        case 'crowded':
-          allPosts = crowdedData;
-          currentIndex = crowdedData.findIndex(p => p.id === item.id);
-          break;
-        case 'recommended':
-          allPosts = filteredRecommendedData;
-          currentIndex = filteredRecommendedData.findIndex(p => p.id === item.id);
-          break;
-        default:
-          allPosts = [item];
-          currentIndex = 0;
-      }
-      
-      navigate(`/post/${item.id}`, { 
-        state: { 
-          post: item,
-          allPosts: allPosts,
-          currentPostIndex: currentIndex >= 0 ? currentIndex : 0
-        } 
-      });
+  // 스크롤 이벤트 핸들러
+  const handleScroll = useCallback((e) => {
+    const currentScrollY = e.target.scrollTop;
+    const scrollingDown = currentScrollY > scrollY.current;
+    
+    // 스크롤 시작 (10px 이상)하면 관심지역 섹션만 숨기기 (부드러운 애니메이션)
+    if (currentScrollY > 10 && scrollingDown) {
+      // 페이드 아웃
+      setInterestOpacity(0);
+      setTimeout(() => setIsInterestSectionVisible(false), 200);
+    } else if (currentScrollY <= 10) {
+      setIsInterestSectionVisible(true);
+      // 페이드 인
+      setInterestOpacity(1);
     }
-  }, [hasMoved, navigate, realtimeData, crowdedData, filteredRecommendedData]);
+    
+    scrollY.current = currentScrollY;
+  }, []);
 
-  // 메인화면 진입 시 한 번 업데이트 후 자동 새로고침
   useEffect(() => {
-    console.log('📱 메인화면 진입 - 초기 데이터 로드');
-    
-    // 타이틀 예시 데이터 및 명예의 전당용 게시물 초기화 (항상 예시를 볼 수 있도록)
-    initializeTitlePosts();
-    
-    // Mock 데이터 + 업로드 데이터 즉시 로드 (사진 바로 표시!)
-    loadMockData();
-    loadUploadedPosts();
-    updateTitleHallPosts();
-    updateNotificationCount();
-    
-    console.log('✅ Mock 데이터 로드 완료 - 화면 즉시 표시!');
-    
-    // 오늘의 타이틀 로드
-    const savedUser = JSON.parse(localStorage.getItem('user') || '{}');
-    if (savedUser?.id) {
-      const title = getUserDailyTitle(savedUser.id);
-      setDailyTitle(title);
-    }
-    
-    // 백엔드 연결은 백그라운드에서 (비차단)
-    setTimeout(() => {
       fetchPosts();
-    }, 100);
-    
-      const handleNotificationChange = () => {
-      updateNotificationCount();
-    };
-    
-    // 타이틀 업데이트 이벤트 리스너
-    const handleTitleUpdate = () => {
-      const savedUser = JSON.parse(localStorage.getItem('user') || '{}');
-      if (savedUser?.id) {
-        const previousTitle = dailyTitle;
-        const title = getUserDailyTitle(savedUser.id);
-        setDailyTitle(title);
-        
-        // 새로 타이틀을 획득한 경우 축하 모달 표시
-        if (title && (!previousTitle || previousTitle.name !== title.name)) {
-          setEarnedTitle(title);
-          setShowTitleCelebration(true);
-        }
-      }
-      // 오늘의 모든 타이틀도 업데이트
-      const todayTitles = getAllTodayTitles();
-      setAllTodayTitles(todayTitles);
-    };
-    
-    // 게시물 업데이트 시 타이틀도 새로고침
-      const handlePostsUpdateForTitles = () => {
-      setTimeout(() => {
-        const todayTitles = getAllTodayTitles();
-        setAllTodayTitles(todayTitles);
-        updateTitleHallPosts();
-      }, 200);
-    };
-    
-    // newPostsAdded 이벤트 리스너 (사진 업로드 시)
-      const handleNewPosts = () => {
-      console.log('🔄 메인 화면 - 새 게시물 추가됨!');
-      // 약간의 지연을 두고 업데이트 (localStorage 저장 완료 대기)
-      setTimeout(() => {
-        console.log('📸 메인 화면 - 데이터 새로고침 시작');
-        loadMockData();
-        loadUploadedPosts();
-        updateTitleHallPosts();
-        console.log('✅ 메인 화면 - 데이터 새로고침 완료');
-      }, 200); // 100ms -> 200ms로 증가
-    };
-    
-    // postsUpdated 이벤트 리스너 (게시물 업데이트 시)
-      const handlePostsUpdate = () => {
-      console.log('📊 메인 화면 - 게시물 업데이트!');
-      // 약간의 지연을 두고 업데이트 (localStorage 저장 완료 대기)
-      setTimeout(() => {
-        console.log('📸 메인 화면 - 데이터 새로고침 시작');
-        loadMockData();
-        loadUploadedPosts();
-        handlePostsUpdateForTitles();
-        console.log('✅ 메인 화면 - 데이터 새로고침 완료');
-      }, 200); // 100ms -> 200ms로 증가
-    };
-    
-    // 알림 개수 업데이트
-    window.addEventListener('notificationCountChanged', handleNotificationChange);
-    window.addEventListener('newPostsAdded', handleNewPosts);
-    window.addEventListener('postsUpdated', handlePostsUpdate);
-    window.addEventListener('titleUpdated', handleTitleUpdate);
-    
-    // 자동 새로고침: 30초마다 데이터 및 시간 업데이트 ⏰
-    const autoRefreshInterval = setInterval(() => {
-      console.log('⏰ 자동 새로고침 (30초) - 시간 업데이트');
-      loadUploadedPosts();
-      loadMockData(); // 시간도 자동으로 재계산됨
-      // 타이틀도 자동 새로고침
-      const todayTitles = getAllTodayTitles();
-      setAllTodayTitles(todayTitles);
-      updateTitleHallPosts();
-    }, 30000);
-    
-    return () => {
-      window.removeEventListener('notificationCountChanged', handleNotificationChange);
-      window.removeEventListener('newPostsAdded', handleNewPosts);
-      window.removeEventListener('postsUpdated', handlePostsUpdate);
-      window.removeEventListener('titleUpdated', handleTitleUpdate);
-      clearInterval(autoRefreshInterval);
-    };
-  }, [fetchPosts, loadUploadedPosts, loadMockData, updateNotificationCount, updateTitleHallPosts]);
+    updateNotificationCount();
+      loadInterestPlaces();
+  }, [fetchPosts, updateNotificationCount, loadInterestPlaces]);
 
+  // 랜딩페이지 phone-screen 구조 그대로 적용
   return (
-    <div className="screen-layout text-text-light dark:text-text-dark bg-background-light dark:bg-background-dark">
-      {/* 메인 스크롤 영역 */}
-      <div className="screen-content">
-        {/* 상단 헤더 - sticky */}
-        <div className="screen-header bg-white dark:bg-gray-900 border-b border-border-light/50 dark:border-border-dark/50 shadow-sm relative z-50">
-        <div className="flex items-center px-4 py-3 justify-between">
-          <h2 className="text-xl font-bold leading-tight tracking-[-0.015em]">LiveJourney</h2>
-          <div className="flex items-center gap-2">
-            {/* 타이틀 축하 버튼 */}
-            {dailyTitle && (
-              <button
-                onClick={() => {
-                  setEarnedTitle(dailyTitle);
-                  setShowTitleCelebration(true);
-                }}
-                className="relative flex items-center justify-center w-11 h-11 rounded-lg bg-gradient-to-r from-amber-100 to-orange-100 dark:from-amber-900/40 dark:to-orange-900/40 border border-amber-300 dark:border-amber-600 hover:shadow-md transition-all"
-                title="타이틀 확인"
-              >
-                <span className="text-xl">{dailyTitle.icon || '👑'}</span>
-              </button>
-            )}
+    <>
+      <div className="phone-screen" style={{ 
+        background: '#f8fafc',
+        borderRadius: '32px',
+        overflow: 'hidden',
+        height: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        position: 'relative'
+      }}>
+        {/* 상태바 영역 (시스템 UI 제거, 공간만 유지) */}
+        <div style={{ height: '20px' }} />
+        
+        {/* 앱 헤더 */}
+        <div className="app-header" style={{ 
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          padding: '12px 16px',
+          background: 'transparent',
+          color: '#111827'
+        }}>
+          <span className="app-title" style={{ 
+            fontSize: '20px',
+            fontWeight: 800,
+            letterSpacing: '-0.8px',
+            color: '#111827',
+            fontFamily: "'Noto Sans KR', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+          }}>Live Journey</span>
             <button 
               onClick={() => navigate('/notifications')}
-              className="relative flex items-center justify-center w-11 h-11 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors flex-shrink-0"
-            >
-              <span className="material-symbols-outlined text-text-light dark:text-text-dark" style={{ fontSize: '26px' }}>notifications</span>
+            className="icon-btn"
+            style={{ 
+              fontSize: '24px',
+              cursor: 'pointer',
+              color: '#374151',
+              fontWeight: 300,
+              background: 'none',
+              border: 'none',
+              padding: 0,
+              position: 'relative'
+            }}
+          >
+            <span className="material-symbols-outlined">notifications</span>
               {unreadNotificationCount > 0 && (
-              <span className="absolute top-1.5 right-1.5 flex h-2.5 w-2.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-primary"></span>
-              </span>
+              <span style={{ 
+                position: 'absolute',
+                top: '1.5px',
+                right: '1.5px',
+                width: '10px',
+                height: '10px',
+                background: '#00BCD4',
+                borderRadius: '50%'
+              }}></span>
               )}
             </button>
-          </div>
         </div>
 
-        {/* 검색창 */}
-        <div className="px-4 pb-3">
-          <form onSubmit={handleSearch}>
-            <label className="flex flex-col min-w-40 h-14 w-full">
-              <div className="flex w-full flex-1 items-stretch rounded-full h-full shadow-lg ring-2 ring-primary/30 hover:ring-primary/50 transition-all">
-                <div className="text-primary flex border-none bg-white dark:bg-gray-800 items-center justify-center pl-5 rounded-l-full border-r-0">
-                  <span className="material-symbols-outlined text-2xl">search</span>
-                </div>
+        {/* SOS 알림 배너 - 로고와 검색창 사이 */}
+        {nearbySosRequests.length > 0 && !dismissedSosIds.includes(nearbySosRequests[0]?.id) && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            padding: '0 16px 8px 16px',
+            gap: '8px'
+          }}>
+            <button
+              onClick={() => navigate('/map')}
+              style={{
+                flex: 1,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '6px 12px',
+                backgroundColor: '#ff6b35',
+                borderRadius: '8px',
+                border: 'none',
+                cursor: 'pointer',
+                boxShadow: '0 2px 4px rgba(255, 107, 53, 0.2)',
+                textAlign: 'left'
+              }}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: '14px', color: 'white' }}>warning</span>
+              <span style={{
+                flex: 1,
+                fontSize: '11px',
+                fontWeight: '600',
+                color: 'white',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap'
+              }}>
+                현재 당신 근처에 도움이 필요한 사람이 있습니다
+              </span>
+              <span className="material-symbols-outlined" style={{ fontSize: '14px', color: 'white' }}>chevron_right</span>
+            </button>
+            <button
+              onClick={() => {
+                if (nearbySosRequests[0]?.id) {
+                  setDismissedSosIds([...dismissedSosIds, nearbySosRequests[0].id]);
+                }
+              }}
+              style={{
+                width: '24px',
+                height: '24px',
+                borderRadius: '12px',
+                backgroundColor: 'rgba(255, 107, 53, 0.2)',
+                border: 'none',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: '14px', color: '#ff6b35' }}>close</span>
+            </button>
+          </div>
+        )}
+
+        {/* 검색바 - 크게 키움 */}
+        <div className="app-search-bar" style={{ 
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          padding: '14px 20px',
+          margin: '12px 16px',
+          background: 'white',
+          borderRadius: '12px',
+          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
+          minHeight: '56px'
+        }}>
+          <form onSubmit={handleSearch} style={{ display: 'flex', alignItems: 'center', gap: '10px', width: '100%' }}>
+            <span className="material-symbols-outlined search-icon" style={{ 
+              fontSize: '24px',
+              fontWeight: 400,
+              color: '#00BCD4'
+            }}>search</span>
                 <input
-                  className="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-full text-text-light dark:text-text-dark focus:outline-0 focus:ring-0 border-none bg-white dark:bg-gray-800 focus:border-none h-full placeholder:text-gray-400 dark:placeholder:text-gray-500 px-4 rounded-l-none border-l-0 pl-2 text-base font-medium leading-normal"
+              type="text"
                   placeholder="어디로 떠나볼까요? 🌏"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   onFocus={handleSearchFocus}
-                />
-              </div>
-            </label>
+              style={{ 
+                border: 'none',
+                outline: 'none',
+                flex: 1,
+                fontSize: '16px',
+                color: '#374151',
+                background: 'transparent',
+                fontWeight: 400
+              }}
+            />
           </form>
         </div>
-        </div>
 
-        {/* 메인 컨텐츠 */}
-        <div className="screen-body">
-          {error && !loading && (
-            <div className="mx-4 my-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-              <p className="text-blue-700 dark:text-blue-300 text-sm">오프라인 모드로 실행 중입니다</p>
-              <p className="text-blue-600 dark:text-blue-400 text-xs mt-1">게시물을 작성하면 여기에 표시됩니다.</p>
-            </div>
-          )}
-
-          <main>
-        {/* 오늘의 타이틀 목록 - 실시간 정보 위에 눈에 띄게 표시 */}
-        <section className="px-4 pt-4 pb-3 bg-gradient-to-b from-amber-50/50 to-transparent dark:from-amber-900/10 dark:to-transparent">
-          <div className="mb-3 flex items-center justify-between">
-            <div>
-              <h3 className="text-sm font-bold text-text-light dark:text-text-dark flex items-center gap-2">
-                <span className="text-lg">👑</span>
-                오늘의 타이틀
-                <span className="text-xs font-normal text-gray-500 dark:text-gray-400 ml-1">
-                  ({allTodayTitles.length}개)
-                </span>
-              </h3>
-              <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                타이틀을 클릭하면 획득 조건을 확인할 수 있어요
-              </p>
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setShowTitleModal(true)}
-                className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-amber-100 to-orange-100 dark:from-amber-900/40 dark:to-orange-900/40 border border-amber-300 dark:border-amber-600 text-xs font-semibold text-amber-900 dark:text-amber-200 hover:shadow-md transition-all whitespace-nowrap"
-              >
-                모아보기
-              </button>
-            </div>
+        {/* 관심 지역 (스토리 스타일) - 스크롤시 숨김 (부드러운 애니메이션) */}
+        {isInterestSectionVisible && (
+          <div style={{ 
+            opacity: interestOpacity,
+            transition: 'opacity 0.2s ease-out'
+          }}>
+            <div style={{ padding: '0 16px 6px 16px' }}>
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '8px',
+                marginBottom: '6px'
+          }}>
+            <h3 style={{ 
+              fontSize: '16px', 
+              fontWeight: 700, 
+              color: '#111827',
+              margin: 0
+            }}>
+              관심 지역/장소
+            </h3>
+            {interestPlaces.length === 0 && (
+              <span style={{ 
+                fontSize: '12px', 
+                color: '#9CA3AF',
+                fontWeight: 400
+              }}>
+                관심지역을 추가해보세요
+              </span>
+            )}
           </div>
-          {titleHallPosts.length > 0 ? (
-            // 타이틀을 획득한 사용자가 있으면, 이 영역을 오늘의 명예의 전당으로 사용
-            <div className="mt-2">
-              <p className="text-[11px] text-gray-600 dark:text-gray-400 mb-2">
-                오늘 타이틀을 획득한 사용자들이 명예의 전당에 올라왔어요.
-              </p>
-              <div
-                ref={titleHallScrollRef}
-                onMouseDown={(e) => handleMouseDown(e, titleHallScrollRef)}
-                onMouseMove={handleMouseMove}
-                onMouseUp={handleMouseUp}
-                onMouseLeave={handleMouseLeave}
-                className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide"
-                style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-              >
-                {titleHallPosts.map((post) => {
-                  const userTitle = getUserDailyTitle(post.userId);
-                  const titleEffect = userTitle ? getTitleEffect(userTitle.effect) : null;
-                  return (
-                    <div
-                      key={post.id}
-                      onClick={() => navigate(`/post/${post.id}`)}
-                      className="relative flex-shrink-0 w-16 h-16 md:w-20 md:h-20 flex items-center justify-center cursor-pointer group"
-                    >
-                      {/* 후광 + 그림자 (타이틀마다 다른 색감) */}
-                      <div
-                        className={`absolute inset-0 rounded-full blur-md opacity-80 transition-opacity ${
-                          titleEffect ? titleEffect.shadow : 'shadow-lg shadow-primary/40'
-                        }`}
-                      />
-                      {/* 메달 썸네일 */}
-                      <div
-                        className={`relative w-full h-full rounded-full overflow-hidden border-4 bg-gray-200 dark:bg-gray-800 transition-transform duration-200 group-hover:scale-105 ${
-                          titleEffect ? `${titleEffect.border} ${titleEffect.glow}` : 'border-primary'
-                        }`}
-                      >
-                        <img
-                          src={
-                            post.image ||
-                            'https://images.unsplash.com/photo-1524222717473-730000096953?w=800&auto=format&fit=crop&q=80'
-                          }
-                          alt={post.location || '타이틀 게시물'}
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            e.currentTarget.src =
-                              'https://images.unsplash.com/photo-1524222717473-730000096953?w=800&auto=format&fit=crop&q=80';
-                          }}
-                        />
-                        {/* 상단 작은 타이틀 아이콘 배지 (글씨 최소화) */}
-                        {userTitle && (
-                          <div className="absolute -top-1 left-0 right-0 flex justify-center">
-                            <div className="w-6 h-6 rounded-full bg-primary/95 text-[11px] text-white font-semibold shadow-md flex items-center justify-center border border-white/70 group-hover:scale-110 transition-transform">
-                              <span>{userTitle.icon}</span>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ) : (
-            // 아직 타이틀을 획득한 사용자가 없을 때만 안내 문구 표시
-            <div className="px-4 py-3 rounded-xl bg-gray-50 dark:bg-gray-800/60 border border-dashed border-gray-300 dark:border-gray-600">
-              <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
-                오늘의 타이틀은 아직 비어 있어요. 지금 바로 활동을 시작해서 타이틀을 획득하고, 명예의 전당에 올라가 보세요!
-              </p>
-            </div>
-          )}
-
-        </section>
-
-        {/* 실시간 정보 섹션 */}
-        <section className="pt-5">
-          <div className="flex items-center justify-between px-4 pb-3">
-            <h2 className="text-text-light dark:text-text-dark text-[22px] font-bold leading-tight tracking-[-0.015em]">
-              실시간 정보
-            </h2>
-            <button 
-              onClick={() => navigate('/detail?filter=realtime')}
-              className="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-transparent text-text-subtle-light dark:text-text-subtle-dark text-sm font-bold leading-normal tracking-[0.015em] hover:text-primary transition-colors"
+        </div>
+        <div 
+          className="interest-places"
+          ref={interestScrollRef}
+          onMouseDown={(e) => handleMouseDown(e, interestScrollRef)}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseLeave}
+          style={{ 
+            display: 'flex',
+                gap: '10px',
+                padding: '0 16px 6px 16px',
+            overflowX: 'auto',
+            scrollbarWidth: 'none'
+          }}
+        >
+          {/* 추가 버튼 */}
+          <div className="interest-item" style={{ 
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '4px',
+            minWidth: '52px'
+          }}>
+            <button
+              onClick={() => {
+                if (!hasMoved) {
+                  setShowAddInterestModal(true);
+                }
+              }}
+              style={{ 
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '4px',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                width: '100%'
+              }}
             >
-              <span className="truncate">더보기</span>
+              <div className="interest-avatar" style={{ 
+                width: '46px',
+                height: '46px',
+                borderRadius: '50%',
+                background: 'linear-gradient(135deg, #F3F4F6 0%, #E5E7EB 100%)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '22px',
+                border: '1.5px dashed #9CA3AF',
+                color: '#9CA3AF'
+              }}>
+                <span className="material-symbols-outlined" style={{ fontWeight: 300, fontSize: '22px' }}>add_circle</span>
+              </div>
+              <span className="interest-name" style={{ 
+                fontSize: '10px',
+                fontWeight: 500,
+                color: '#9CA3AF',
+                textAlign: 'center',
+                whiteSpace: 'nowrap'
+              }}>
+                추가
+              </span>
             </button>
           </div>
 
-          {realtimeData.length === 0 ? (
-            <div className="flex flex-col items-center justify-center w-full py-12 px-4">
-              <span className="material-symbols-outlined text-6xl text-gray-300 dark:text-gray-600 mb-4">
-                travel_explore
-              </span>
-              <p className="text-gray-500 dark:text-gray-400 text-center text-base font-medium mb-2">
-                아직 공유된 여행 정보가 없어요
-              </p>
-              <p className="text-gray-400 dark:text-gray-500 text-center text-sm mb-4">
-                첫 번째로 여행 정보를 공유해보세요!
-              </p>
-              <button
-                onClick={() => navigate('/upload')}
-                className="bg-primary text-white px-6 py-3 rounded-full font-semibold hover:bg-primary/90 transition-colors shadow-lg flex items-center gap-2"
+              {/* 관심 지역/장소들 */}
+              {interestPlaces.map((place, index) => {
+                const isSelected = selectedInterest === place.name;
+            const regionIcon = getRegionIcon(place.name);
+            const isHovered = hoveredPlaceIndex === index;
+                return (
+              <div
+                    key={index}
+                className={`interest-item ${isSelected ? 'active' : ''}`}
+                style={{ 
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '4px',
+                  minWidth: '52px',
+                  position: 'relative'
+                }}
+                onMouseEnter={() => setHoveredPlaceIndex(index)}
+                onMouseLeave={() => setHoveredPlaceIndex(null)}
               >
-                <span className="material-symbols-outlined">add_a_photo</span>
-                첫 사진 올리기
+                <button
+                    onClick={() => {
+                      if (!hasMoved) {
+                        setSelectedInterest(isSelected ? null : place.name);
+                      }
+                    }}
+                  style={{ 
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '4px',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    width: '100%'
+                  }}
+                >
+                  <div 
+                    className="interest-avatar"
+                    style={{ 
+                      width: '46px',
+                      height: '46px',
+                      borderRadius: '50%',
+                      background: 'white',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '22px',
+                      border: isSelected ? '2px solid #00BCD4' : '2px solid transparent',
+                      boxShadow: isSelected ? '0 0 0 2px #E0F7FA' : 'none',
+                      color: '#4B5563'
+                    }}
+                  >
+                    {regionIcon}
+                    </div>
+                  <span className="interest-name" style={{ 
+                    fontSize: '10px',
+                    fontWeight: 500,
+                    color: isSelected ? '#00BCD4' : '#374151',
+                    textAlign: 'center',
+                    whiteSpace: 'nowrap'
+                  }}>
+                      {place.name}
+                    </span>
+                  </button>
+                {isHovered && (
+            <button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDeleteConfirmPlace(place.name);
+                    }}
+                    style={{
+                      position: 'absolute',
+                      top: '-4px',
+                      right: '-4px',
+                      width: '20px',
+                      height: '20px',
+                      background: 'white',
+                      borderRadius: '50%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                      border: '1px solid #E5E7EB',
+                      cursor: 'pointer',
+                      zIndex: 10
+                    }}
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: '14px', color: '#EF4444' }}>close</span>
+            </button>
+                )}
+          </div>
+            );
+          })}
+            </div>
+          </div>
+        )}
+        
+        {/* 실시간 피드 */}
+        <div className="app-content" style={{ 
+          padding: '0 0 100px 0',
+          flex: 1,
+          overflowY: 'auto',
+          scrollbarWidth: 'none'
+        }} onScroll={handleScroll}>
+          {/* 실시간 여행 피드 섹션 */}
+          <div className="feed-section" style={{ marginBottom: '20px' }}>
+            <div className="section-header-main" style={{ 
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '0 16px 12px 16px'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <h3 style={{ 
+                  fontSize: '15px',
+                  fontWeight: 700,
+                  color: '#111827',
+                  margin: 0
+                }}>🔥 지금 여기는</h3>
+                <span className="live-badge" style={{ 
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  padding: '4px 10px',
+                  background: '#FFF8E1',
+                  borderRadius: '12px',
+                  fontSize: '10px',
+                  fontWeight: 700,
+                  color: '#FFA000'
+                }}>
+                  <span className="live-dot" style={{ 
+                    width: '5px',
+                    height: '5px',
+                    background: '#ef4444',
+                    borderRadius: '50%',
+                    animation: 'pulse 1.5s ease-in-out infinite'
+                  }}></span>
+                  <span>LIVE</span>
+              </span>
+              </div>
+              <button
+                onClick={() => navigate('/realtime-feed')}
+                className="more-btn"
+                style={{ 
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  color: '#00BCD4',
+                  cursor: 'pointer',
+                  background: 'none',
+                  border: 'none',
+                  padding: 0,
+                  transition: 'opacity 0.2s'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.opacity = '0.7'}
+                onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
+              >
+                더보기
               </button>
             </div>
-          ) : (
+            
+            {/* 횡스크롤 카드 */}
+            {filteredRealtimeData.length > 0 ? (
             <div 
+                className="horizontal-scroll"
               ref={realtimeScrollRef}
               onMouseDown={(e) => handleMouseDown(e, realtimeScrollRef)}
               onMouseMove={handleMouseMove}
               onMouseUp={handleMouseUp}
               onMouseLeave={handleMouseLeave}
-              className="flex overflow-x-scroll overflow-y-hidden [-ms-scrollbar-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden snap-x snap-mandatory scroll-smooth"
               style={{ 
+                  display: 'flex',
+                  gap: '12px',
+                  padding: '0 16px',
+                  overflowX: 'auto',
+                  scrollbarWidth: 'none',
+                  paddingBottom: '4px',
                 scrollBehavior: 'smooth', 
                 WebkitOverflowScrolling: 'touch',
+                  cursor: 'grab',
+                userSelect: 'none',
                 scrollSnapType: 'x mandatory',
-                scrollPaddingLeft: '16px'
+                scrollPadding: '0 16px' // 첫/마지막 카드 양쪽 선 잘 안 잘리도록
               }}
             >
-              <div className="flex items-stretch px-4 gap-3 pb-2">
-                {realtimeData.map((item) => {
-                  // 24시간 타이틀 확인
-                  const userTitle = getUserDailyTitle(item.userId);
-                  const titleEffect = userTitle ? getTitleEffect(userTitle.effect) : null;
-                  
-                  return (
+                {filteredRealtimeData.map((item, index) => (
                     <div 
                       key={item.id} 
-                      className="flex h-full flex-col gap-2 rounded-lg w-[180px] flex-shrink-0 cursor-pointer snap-start select-none"
-                      style={{ scrollSnapAlign: 'start', scrollSnapStop: 'always' }}
+                    className="scroll-card"
+                    style={{ 
+                      flexShrink: 0,
+                      width: '180px', // 두 장 정도 보이게 유지
+                      borderRadius: '12px',
+                      overflow: 'hidden',
+                      background: 'white',
+                      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
+                      cursor: 'pointer',
+                      transition: 'transform 0.3s ease, box-shadow 0.3s ease',
+                      animation: `fadeInSlide 0.5s ease-out ${index * 0.1}s both`,
+                      scrollSnapAlign: 'start',
+                    }}
                       onClick={() => handleItemClickWithDragCheck(item, 'realtime')}
-                    >
-                      <div 
-                        className={`relative w-full aspect-[1/1.2] rounded-lg overflow-hidden hover:opacity-90 transition-opacity ${
-                          titleEffect ? `${titleEffect.border} ${titleEffect.shadow}` : 'shadow-md border border-border-light'
-                        }`}
-                        style={userTitle ? { position: 'relative' } : {}}
-                      >
-                        {/* 동영상이 있으면 동영상 표시, 없으면 이미지 */}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = 'translateY(-4px)';
+                      e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.12)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = 'translateY(0)';
+                      e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.08)';
+                    }}
+                  >
+                    <div className="scroll-image" style={{ 
+                      position: 'relative',
+                      width: '100%',
+                      height: '200px',
+                      overflow: 'hidden'
+                    }}>
                         {item.videos && item.videos.length > 0 ? (
                           <video
                             src={item.videos[0]}
-                            className="w-full h-full object-cover"
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                             autoPlay
                             loop
                             muted
                             playsInline
-                            onMouseEnter={(e) => e.target.play()}
-                            onMouseLeave={(e) => e.target.pause()}
+                            draggable={false}
                           />
                         ) : (
                           <img
                             src={item.image || 'https://images.unsplash.com/photo-1524222717473-730000096953?w=800&auto=format&fit=crop&q=80'}
                             alt={item.location || '여행 사진'}
-                            className="w-full h-full object-cover"
+                          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
                             onError={(e) => {
                               e.currentTarget.src = 'https://images.unsplash.com/photo-1524222717473-730000096953?w=800&auto=format&fit=crop&q=80';
                             }}
+                            draggable={false}
                           />
                         )}
-                        {/* 그라데이션 오버레이 */}
-                        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.8), rgba(0,0,0,0.1) 50%, rgba(0,0,0,0.3))' }}></div>
-                        
-                        {/* 우측상단: 24시간 타이틀 배지 - 심플하게 */}
-                        {userTitle && (
-                          <div 
-                            style={{ 
-                              position: 'absolute', 
-                              top: '8px', 
-                              right: '8px', 
-                              zIndex: 30
-                            }}
-                          >
-                            <div className="px-2.5 py-1 rounded-full bg-primary/90 text-white text-[10px] font-bold flex items-center gap-1 shadow-md">
-                              <span>{userTitle.icon}</span>
-                              <span>{titleEffect?.badge || '오늘의 타이틀'}</span>
-                            </div>
-                          </div>
-                        )}
-                        
-                      
-                      {/* 좌측하단: 위치정보 + 업로드시간 */}
-                      <div style={{ 
+                      {item.time && (
+                        <div className="scroll-badge" style={{ 
                         position: 'absolute', 
-                        left: 0, 
-                        bottom: 0, 
-                        right: 0, 
-                        padding: '12px', 
-                        background: 'linear-gradient(to top, rgba(0,0,0,0.7), transparent)',
-                        zIndex: 10
-                      }}>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                          {item.title && (
-                            <p style={{ 
+                          top: '8px',
+                          right: '8px',
+                          background: 'rgba(0, 0, 0, 0.7)',
+                          backdropFilter: 'blur(10px)',
                               color: 'white', 
-                              fontSize: '14px', 
-                              fontWeight: 'bold', 
-                              lineHeight: '1.2',
-                              textShadow: '0 2px 8px rgba(0,0,0,0.8)',
-                              margin: 0
-                            }}>
-                              {item.title}
-                            </p>
-                          )}
-                          {item.time && (
-                            <p style={{ 
-                              color: 'rgba(255,255,255,0.9)', 
+                          fontSize: '10px',
+                          fontWeight: 700,
+                          padding: '4px 8px',
+                          borderRadius: '10px'
+                        }}>
+                          {item.time}
+                        </div>
+                      )}
+                    </div>
+                    <div className="scroll-info" style={{ 
+                      padding: '10px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '4px'
+                    }}>
+                      <span className="scroll-location" style={{ 
                               fontSize: '12px', 
-                              fontWeight: '600', 
-                              lineHeight: '1.2',
-                              textShadow: '0 2px 8px rgba(0,0,0,0.8)',
-                              margin: 0
-                            }}>
-                              {item.time}
-                            </p>
-                          )}
+                        fontWeight: 600,
+                        color: '#111827',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis'
+                      }}>
+                        {item.location ? `📍 ${item.location}` : item.title || '위치 정보 없음'}
+                      </span>
+                      <span className="scroll-user" style={{ 
+                        fontSize: '11px',
+                        color: '#6B7280'
+                      }}>
+                        {item.user || '여행자'}
+                      </span>
                         </div>
                       </div>
+                ))}
                     </div>
-                  </div>
-                );
-              })}
-              </div>
+            ) : (
+              <div style={{ padding: '40px 16px', textAlign: 'center', color: '#6B7280' }}>
+                아직 게시물이 없습니다.
             </div>
           )}
-        </section>
-
-        {/* 실시간 밀집 지역 섹션 */}
-        <section className="pt-8">
-          <div className="flex items-center justify-between px-4 pb-3">
-            <h2 className="text-text-light dark:text-text-dark text-[22px] font-bold leading-tight tracking-[-0.015em]">
-              실시간 밀집 지역
-            </h2>
-            <button 
-              onClick={() => navigate('/detail?filter=crowded')}
-              className="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-transparent text-text-subtle-light dark:text-text-subtle-dark text-sm font-bold leading-normal tracking-[0.015em] hover:text-primary transition-colors"
-            >
-              <span className="truncate">더보기</span>
-            </button>
           </div>
 
-          {crowdedData.length === 0 ? (
-            <div className="flex flex-col items-center justify-center w-full py-12 px-4">
-              <span className="material-symbols-outlined text-6xl text-gray-300 dark:text-gray-600 mb-4">
-                people
-              </span>
-              <p className="text-gray-500 dark:text-gray-400 text-center text-base font-medium mb-2">
-                아직 밀집 지역 정보가 없어요
-              </p>
-              <p className="text-gray-400 dark:text-gray-500 text-center text-sm mb-4">
-                첫 번째로 현장 정보를 공유해보세요!
-              </p>
-              <button
-                onClick={() => navigate('/upload')}
-                className="bg-primary text-white px-6 py-3 rounded-full font-semibold hover:bg-primary/90 transition-colors shadow-lg flex items-center gap-2"
-              >
-                <span className="material-symbols-outlined">add_a_photo</span>
-                첫 사진 올리기
-              </button>
+          {/* 혼잡도 정보 섹션 */}
+          <div className="feed-section" style={{ marginBottom: '20px' }}>
+            <div className="section-header-main" style={{ 
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '0 16px 12px 16px'
+            }}>
+              <h3 style={{ 
+                fontSize: '15px',
+                fontWeight: 700,
+                color: '#111827',
+                margin: 0
+              }}>👥 지금 가장 붐비는 곳</h3>
+              <span className="more-btn" style={{ 
+                fontSize: '12px',
+                fontWeight: 600,
+                color: '#00BCD4',
+                cursor: 'pointer'
+              }}>더보기</span>
             </div>
-          ) : (
+            
+            {filteredCrowdedData.length > 0 ? (
             <div 
+                className="horizontal-scroll"
               ref={crowdedScrollRef}
               onMouseDown={(e) => handleMouseDown(e, crowdedScrollRef)}
               onMouseMove={handleMouseMove}
               onMouseUp={handleMouseUp}
               onMouseLeave={handleMouseLeave}
-              className="flex overflow-x-scroll overflow-y-hidden [-ms-scrollbar-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden snap-x snap-mandatory scroll-smooth"
               style={{ 
+                  display: 'flex',
+                  gap: '12px',
+                  padding: '0 16px',
+                  overflowX: 'auto',
+                  scrollbarWidth: 'none',
+                  paddingBottom: '4px',
                 scrollBehavior: 'smooth', 
                 WebkitOverflowScrolling: 'touch',
-                scrollSnapType: 'x mandatory',
-                scrollPaddingLeft: '16px'
+                  cursor: 'grab',
+                  userSelect: 'none'
               }}
             >
-              <div className="flex items-stretch px-4 gap-3 pb-2">
-                {crowdedData.map((item) => {
-                  // 24시간 타이틀 확인
-                  const userTitle = getUserDailyTitle(item.userId);
-                  const titleEffect = userTitle ? getTitleEffect(userTitle.effect) : null;
+                {filteredCrowdedData.map((item) => {
+                  const getCrowdLevel = () => {
+                    if (item.crowdLevel) return item.crowdLevel;
+                    if (item.tags && item.tags.some(tag => tag.includes('혼잡') || tag.includes('붐빔'))) return 'high';
+                    if (item.tags && item.tags.some(tag => tag.includes('보통'))) return 'medium';
+                    return 'low';
+                  };
+                  const crowdLevel = getCrowdLevel();
+                  const crowdText = crowdLevel === 'high' ? '매우 혼잡' : crowdLevel === 'medium' ? '보통' : '여유';
+                  const crowdBadgeClass = crowdLevel === 'high' ? 'high' : crowdLevel === 'medium' ? 'medium' : 'low';
                   
                   return (
                   <div 
                     key={item.id} 
-                    className="flex h-full flex-col gap-2 rounded-lg w-[180px] flex-shrink-0 cursor-pointer snap-start select-none"
-                    style={{ scrollSnapAlign: 'start', scrollSnapStop: 'always' }}
+                      className="scroll-card-small"
+                      style={{ 
+                        flexShrink: 0,
+                        width: '140px',
+                        borderRadius: '10px',
+                        overflow: 'hidden',
+                        background: 'white',
+                        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
+                        cursor: 'pointer'
+                      }}
                     onClick={() => handleItemClickWithDragCheck(item, 'crowded')}
                   >
-                      <div 
-                          className={`relative w-full aspect-[1/1.2] rounded-lg overflow-hidden hover:opacity-90 transition-opacity ${
-                           titleEffect ? `${titleEffect.border} ${titleEffect.shadow}` : 'shadow-md border border-border-light'
-                          }`}
-                          style={userTitle ? { position: 'relative' } : {}}
-                        >
-                      {/* 동영상이 있으면 동영상 표시, 없으면 이미지 */}
+                      <div className="scroll-image-small" style={{ 
+                        position: 'relative',
+                        width: '100%',
+                        height: '140px',
+                        overflow: 'hidden'
+                      }}>
                       {item.videos && item.videos.length > 0 ? (
                         <video
                           src={item.videos[0]}
-                          className="w-full h-full object-cover"
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                           autoPlay
                           loop
                           muted
                           playsInline
-                          onMouseEnter={(e) => e.target.play()}
-                          onMouseLeave={(e) => e.target.pause()}
                         />
                       ) : (
                         <img
                           src={item.image || 'https://images.unsplash.com/photo-1524222717473-730000096953?w=800&auto=format&fit=crop&q=80'}
                           alt={item.location || '여행 사진'}
-                          className="w-full h-full object-cover"
+                            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
                           onError={(e) => {
                             e.currentTarget.src = 'https://images.unsplash.com/photo-1524222717473-730000096953?w=800&auto=format&fit=crop&q=80';
                           }}
                         />
                       )}
-                      {/* 그라데이션 오버레이 */}
-                      <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.8), rgba(0,0,0,0.1) 50%, rgba(0,0,0,0.3))' }}></div>
-                      
-                        {/* 우측상단: 24시간 타이틀 배지 - 심플하게 */}
-                      {userTitle && (
-                         <div 
-                           style={{ 
-                             position: 'absolute', 
-                             top: '8px', 
-                             right: '8px', 
-                             zIndex: 30
-                           }}
-                         >
-                           <div className="px-2.5 py-1 rounded-full bg-primary/90 text-white text-[10px] font-bold flex items-center gap-1 shadow-md">
-                             <span>{userTitle.icon}</span>
-                             <span>{titleEffect?.badge || '오늘의 타이틀'}</span>
-                           </div>
-                         </div>
-                      )}
-                      
-                      {/* 좌측하단: 위치정보 + 업로드시간 */}
-                      <div style={{ 
+                        <div className={`crowd-badge ${crowdBadgeClass}`} style={{ 
                         position: 'absolute', 
-                        left: 0, 
-                        bottom: 0, 
-                        right: 0, 
-                        padding: '12px', 
-                        background: 'linear-gradient(to top, rgba(0,0,0,0.7), transparent)',
-                        zIndex: 10
-                      }}>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                          {item.title && (
-                            <p style={{ 
-                              color: 'white', 
-                              fontSize: '14px', 
-                              fontWeight: 'bold', 
-                              lineHeight: '1.2',
-                              textShadow: '0 2px 8px rgba(0,0,0,0.8)',
-                              margin: 0
-                            }}>
-                              {item.title}
-                            </p>
-                          )}
-                          {item.time && (
-                            <p style={{ 
-                              color: 'rgba(255,255,255,0.9)', 
-                              fontSize: '12px', 
-                              fontWeight: '600', 
-                              lineHeight: '1.2',
-                              textShadow: '0 2px 8px rgba(0,0,0,0.8)',
-                              margin: 0
-                            }}>
-                              {item.time}
-                            </p>
-                          )}
+                          top: '8px',
+                          right: '8px',
+                          fontSize: '9px',
+                          fontWeight: 700,
+                          padding: '4px 8px',
+                          borderRadius: '8px',
+                          background: crowdLevel === 'high' ? 'rgba(239, 68, 68, 0.9)' : crowdLevel === 'medium' ? 'rgba(245, 158, 11, 0.9)' : 'rgba(16, 185, 129, 0.9)',
+                          color: 'white'
+                        }}>
+                          {crowdText}
                         </div>
-                    </div>
+                      </div>
+                      <div className="scroll-info-small" style={{ 
+                        padding: '8px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '3px'
+                      }}>
+                        <span className="scroll-location-small" style={{ 
+                          fontSize: '11px',
+                          fontWeight: 600,
+                          color: '#111827',
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis'
+                        }}>
+                          {item.location || item.title || '위치 정보 없음'}
+                        </span>
+                        <span className="scroll-time-small" style={{ 
+                          fontSize: '10px',
+                          color: '#6B7280'
+                        }}>
+                          {item.time ? `${item.time} 업데이트` : '방금 전 업데이트'}
+                        </span>
                   </div>
                 </div>
                 );
               })}
               </div>
+            ) : (
+              <div style={{ padding: '40px 16px', textAlign: 'center', color: '#6B7280' }}>
+                아직 혼잡도 정보가 없습니다.
             </div>
           )}
-        </section>
-
-        {/* 추천 장소 섹션 */}
-        <section className="pt-8">
-          <div className="flex items-center justify-between px-4 pb-3">
-            <h2 className="text-text-light dark:text-text-dark text-[22px] font-bold leading-tight tracking-[-0.015em]">
-              추천 장소
-            </h2>
-            <button 
-              onClick={() => navigate('/detail?filter=recommended')}
-              className="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-transparent text-text-subtle-light dark:text-text-subtle-dark text-sm font-bold leading-normal tracking-[0.015em] hover:text-primary transition-colors"
-            >
-              <span className="truncate">더보기</span>
-            </button>
+          </div>
+          
+          {/* 상세 게시물 (추천 여행지 피드) */}
+          <div className="feed-section" style={{ marginBottom: '20px' }}>
+            <div className="section-header-main" style={{ 
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '0 16px 12px 16px'
+            }}>
+              <h3 style={{ 
+                fontSize: '15px',
+                fontWeight: 700,
+                color: '#111827',
+                margin: 0
+              }}>✨ 추천 여행지</h3>
           </div>
 
-            <div 
-              ref={categoryScrollRef}
-              onMouseDown={(e) => handleMouseDown(e, categoryScrollRef)}
-              onMouseMove={handleMouseMove}
-              onMouseUp={handleMouseUp}
-              onMouseLeave={handleMouseUp}
-              onTouchStart={(e) => {
-                const touch = e.touches[0];
-                handleMouseDown({ pageX: touch.pageX, preventDefault: () => {} }, categoryScrollRef);
-              }}
-              onTouchMove={(e) => {
-                const touch = e.touches[0];
-                handleMouseMove({ pageX: touch.pageX, preventDefault: () => {} });
-              }}
-              onTouchEnd={handleMouseUp}
-              className="flex gap-2 px-4 pb-4 overflow-x-auto overflow-y-hidden [-ms-scrollbar-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden scroll-smooth cursor-grab active:cursor-grabbing"
-              style={{ scrollBehavior: 'smooth', WebkitOverflowScrolling: 'touch', userSelect: 'none' }}
-            >
-            {categories.map((category) => (
-              <button
-                key={category}
-                  onClick={() => !hasMoved && setSelectedCategory(category)}
-                  className={`flex-shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition-all duration-300 select-none ${
-                  selectedCategory === category
-                    ? 'bg-primary/20 text-primary scale-105 shadow-md'
-                    : 'bg-card-light dark:bg-card-dark text-text-subtle-light dark:text-text-subtle-dark hover:bg-primary/10 hover:scale-105'
-                }`}
-              >
-                #{category}
-              </button>
-            ))}
-          </div>
+            {/* 추천 여행지 섹션 안에 가벼운 테마 기반 추천 블록 */}
+            <div style={{ padding: '0 16px 10px 16px' }}>
+              {selectedTheme && (
+                <p style={{ 
+                  fontSize: '12px', 
+                  color: '#6B7280',
+                  margin: '0 0 6px 0'
+                }}>
+                  {selectedTheme.description}
+                </p>
+              )}
 
-          {recommendedData.length === 0 ? (
-            <div className="flex flex-col items-center justify-center w-full py-12 px-4">
-              <span className="material-symbols-outlined text-6xl text-gray-300 dark:text-gray-600 mb-4">
-                recommend
-              </span>
-              <p className="text-gray-500 dark:text-gray-400 text-center text-base font-medium mb-2">
-                추천 장소가 아직 없어요
-              </p>
-              <p className="text-gray-400 dark:text-gray-500 text-center text-sm mb-4">
-                첫 번째로 추천 장소를 공유해보세요!
-              </p>
-              <button
-                onClick={() => navigate('/upload')}
-                className="bg-primary text-white px-6 py-3 rounded-full font-semibold hover:bg-primary/90 transition-colors shadow-lg flex items-center gap-2"
-              >
-                <span className="material-symbols-outlined">add_a_photo</span>
-                첫 사진 올리기
-              </button>
+              {/* 테마 탭 */}
+              <div
+                ref={themeScrollRef}
+                onMouseDown={(e) => handleMouseDown(e, themeScrollRef)}
+                onMouseMove={handleMouseMove}
+                onMouseUp={handleMouseUp}
+                onMouseLeave={handleMouseLeave}
+                style={{ 
+                display: 'flex',
+                gap: '8px',
+                marginBottom: '8px',
+                overflowX: 'auto',
+                scrollBehavior: 'smooth',
+                WebkitOverflowScrolling: 'touch'
+              }}>
+                {travelThemes.map((theme) => {
+                  const isActive = theme.id === selectedThemeId;
+                  return (
+                    <button
+                      key={theme.id}
+                      onClick={() => setSelectedThemeId(theme.id)}
+                      style={{
+                        padding: '6px 12px',
+                        borderRadius: '999px',
+                        border: 'none',
+                        cursor: 'pointer',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        whiteSpace: 'nowrap',
+                        backgroundColor: isActive ? '#00BCD4' : '#E5E7EB',
+                        color: isActive ? '#FFFFFF' : '#4B5563',
+                      }}
+                    >
+                      {theme.name}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* 선택된 테마의 여행지 카드 리스트 (사진 포함, 한 줄 문장) */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {selectedTheme?.regions.map((regionName) => (
+                  <button
+                    key={regionName}
+                    onClick={() =>
+                      navigate('/search?region=' + encodeURIComponent(regionName))
+                    }
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'flex-start',
+                      padding: '8px 10px',
+                      borderRadius: '12px',
+                      border: 'none',
+                      backgroundColor: '#FFFFFF',
+                      boxShadow: '0 1px 4px rgba(15, 23, 42, 0.06)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {/* 지역 대표 사진 (Unsplash 기반) */}
+                    <div
+                      style={{
+                        width: '72px',
+                        height: '54px',
+                        borderRadius: '10px',
+                        overflow: 'hidden',
+                        marginRight: '10px',
+                        backgroundColor: '#E5E7EB',
+                        flexShrink: 0,
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          backgroundImage: `url("https://source.unsplash.com/featured/?${encodeURIComponent(
+                            regionName + ' travel landscape'
+                          )}")`,
+                          backgroundSize: 'cover',
+                          backgroundPosition: 'center',
+                        }}
+                      />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
+                      <span
+                        style={{
+                          fontSize: '13px',
+                          fontWeight: 700,
+                          color: '#111827',
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                        }}
+                      >
+                        {regionName}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: '11px',
+                          color: '#6B7280',
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                        }}
+                      >
+                        {regionCopyMap[regionName] || selectedTheme.description}
+                      </span>
+                    </div>
+                  </button>
+                ))}
+              </div>
             </div>
-          ) : (
-            <div 
-              ref={recommendedScrollRef}
-              onMouseDown={(e) => handleMouseDown(e, recommendedScrollRef)}
+
+            {themeFilteredRecommendedData.map((item) => (
+              <div 
+                key={item.id} 
+                className="feed-card"
+                style={{ 
+                  background: 'white',
+                  borderRadius: '14px',
+                  overflow: 'hidden',
+                  margin: '0 16px 14px 16px',
+                  boxShadow: '0 2px 10px rgba(0, 0, 0, 0.06)',
+                  cursor: 'pointer'
+                }}
+                onClick={() => handleItemClickWithDragCheck(item, 'recommended')}
+              >
+                <div className="card-header" style={{ 
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '11px'
+                }}>
+                  <div className="user-info" style={{ 
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '9px'
+                  }}>
+                    <div className="user-avatar" style={{ 
+                      width: '34px',
+                      height: '34px',
+                      borderRadius: '50%',
+                      background: 'linear-gradient(135deg, #E0F7FA 0%, #00BCD4 100%)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '17px'
+                    }}>
+                      {item.userId ? String(item.userId).charAt(0) : '👤'}
+          </div>
+                    <div className="user-details" style={{ 
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '1px'
+                    }}>
+                      <span className="user-name" style={{ 
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        color: '#111827'
+                      }}>
+                        {item.user || '여행자'}
+              </span>
+                      <span className="post-time" style={{ 
+                        fontSize: '10px',
+                        color: '#6B7280'
+                      }}>
+                        {item.time || '방금 전'}
+                      </span>
+            </div>
+                  </div>
+                  {item.location && (
+                    <span className="location-badge" style={{ 
+                      fontSize: '10px',
+                      fontWeight: 600,
+                      color: '#00BCD4',
+                      background: '#E0F7FA',
+                      padding: '4px 8px',
+                      borderRadius: '8px'
+                    }}>
+                      📍 {item.location}
+              </span>
+                  )}
+            </div>
+                <div className="card-image" style={{ 
+                  position: 'relative',
+                  width: '100%',
+                  height: '220px',
+                  background: 'linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%)',
+                  overflow: 'hidden'
+                }}>
+                      {item.videos && item.videos.length > 0 ? (
+                        <video
+                          src={item.videos[0]}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                          autoPlay
+                          loop
+                          muted
+                          playsInline
+                        />
+                      ) : (
+                        <img
+                          src={item.image || 'https://images.unsplash.com/photo-1524222717473-730000096953?w=800&auto=format&fit=crop&q=80'}
+                          alt={item.location || '여행 사진'}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                          onError={(e) => {
+                            e.currentTarget.src = 'https://images.unsplash.com/photo-1524222717473-730000096953?w=800&auto=format&fit=crop&q=80';
+                          }}
+                        />
+                      )}
+                  <div className="live-indicator" style={{ 
+                        position: 'absolute', 
+                    top: '10px',
+                    right: '10px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    padding: '5px 11px',
+                    background: 'rgba(0, 0, 0, 0.75)',
+                    backdropFilter: 'blur(10px)',
+                    borderRadius: '16px',
+                    fontSize: '10px',
+                    fontWeight: 700,
+                    color: 'white'
+                  }}>
+                    <span className="live-pulse" style={{ 
+                      width: '5px',
+                      height: '5px',
+                      background: '#ef4444',
+                      borderRadius: '50%',
+                      animation: 'pulse 1.5s ease-in-out infinite'
+                    }}></span>
+                    <span>{item.time || 'LIVE'}</span>
+                  </div>
+                </div>
+                <div className="card-info" style={{ padding: '11px' }}>
+                  <div className="info-tags" style={{ 
+                    display: 'flex',
+                    gap: '5px',
+                    marginBottom: '9px',
+                    flexWrap: 'wrap'
+                  }}>
+                    {item.category && (
+                      <span className="tag" style={{ 
+                        fontSize: '10px',
+                        fontWeight: 600,
+                        color: '#374151',
+                        background: '#F3F4F6',
+                        padding: '4px 9px',
+                        borderRadius: '8px'
+                      }}>
+                        {item.category === '자연' ? '🏞️' : item.category === '맛집' ? '🍜' : item.category === '카페' ? '☕' : '📍'} {item.category}
+                      </span>
+                    )}
+                    {item.weather && (
+                      <span className="tag" style={{ 
+                        fontSize: '10px',
+                        fontWeight: 600,
+                        color: '#374151',
+                        background: '#F3F4F6',
+                        padding: '4px 9px',
+                        borderRadius: '8px'
+                      }}>
+                        {item.weather}
+                      </span>
+                    )}
+                    {item.crowdLevel && (
+                      <span className="tag" style={{ 
+                        fontSize: '10px',
+                        fontWeight: 600,
+                        color: '#374151',
+                        background: '#F3F4F6',
+                        padding: '4px 9px',
+                        borderRadius: '8px'
+                      }}>
+                        {item.crowdLevel === 'high' ? '👥 매우 혼잡' : item.crowdLevel === 'medium' ? '👥 보통' : '👥 여유'}
+                      </span>
+                    )}
+                  </div>
+                  {item.note && (
+                    <p className="post-text" style={{ 
+                              fontSize: '12px', 
+                      lineHeight: '1.5',
+                      color: '#1F2937',
+                      marginBottom: '10px'
+                    }}>
+                      "{item.note}"
+                            </p>
+                          )}
+                  <div className="card-actions" style={{ 
+                    display: 'flex',
+                    gap: '14px',
+                    paddingTop: '9px',
+                    borderTop: '1px solid #F3F4F6'
+                  }}>
+                    <span className="action-btn" style={{ 
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      color: '#4B5563'
+                    }}>❤️ {item.likes || 0}</span>
+                    <span className="action-btn" style={{ 
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      color: '#4B5563'
+                    }}>💬 {item.comments?.length || 0}</span>
+                    <span className="action-btn" style={{ 
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      color: '#4B5563',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}>
+                      <span className="material-symbols-outlined" style={{ fontSize: '14px', margin: 0 }}>bookmark</span>
+                    </span>
+                        </div>
+                    </div>
+                  </div>
+            ))}
+                </div>
+
+          {/* 여행 매거진 섹션 – 추천 여행지 하단 */}
+          <div className="feed-section" style={{ marginBottom: '20px' }}>
+            <div className="section-header-main" style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'flex-start',
+              padding: '0 16px 12px 16px',
+              gap: '4px'
+            }}>
+              <h3 style={{
+                fontSize: '15px',
+                fontWeight: 700,
+                color: '#111827',
+                margin: 0
+              }}>📰 여행 매거진</h3>
+              <p style={{
+                fontSize: '12px',
+                color: '#6B7280',
+                margin: 0
+              }}>이번 주말 꼭 가봐야 하는 장소</p>
+            </div>
+
+            <div
+              ref={magazineScrollRef}
+              onMouseDown={(e) => handleMouseDown(e, magazineScrollRef)}
               onMouseMove={handleMouseMove}
               onMouseUp={handleMouseUp}
               onMouseLeave={handleMouseLeave}
-              className="flex overflow-x-scroll overflow-y-hidden [-ms-scrollbar-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden snap-x snap-mandatory scroll-smooth"
-              style={{ 
-                scrollBehavior: 'smooth', 
+              style={{
+              display: 'flex',
+              overflowX: 'auto',
+              padding: '0 16px 16px 16px',
+                gap: '12px',
+                scrollBehavior: 'smooth',
                 WebkitOverflowScrolling: 'touch',
-                scrollSnapType: 'x mandatory',
-                scrollPaddingLeft: '16px'
+                cursor: 'grab',
+                userSelect: 'none'
               }}
             >
-              <div className="flex items-stretch px-4 gap-3 pb-2">
-                {(filteredRecommendedData.length > 0 ? filteredRecommendedData : recommendedData.filter(item => item.category === selectedCategory)).map((item) => {
-                  // 24시간 타이틀 확인
-                  const userTitle = getUserDailyTitle(item.userId);
-                  const titleEffect = userTitle ? getTitleEffect(userTitle.effect) : null;
-                  
-                  return (
-                  <div 
-                    key={item.id} 
-                    className="flex h-full flex-col gap-2 rounded-lg w-[180px] flex-shrink-0 cursor-pointer snap-start select-none"
-                    style={{ scrollSnapAlign: 'start', scrollSnapStop: 'always' }}
-                    onClick={() => handleItemClickWithDragCheck(item, 'recommended')}
-                  >
-                      <div 
-                          className={`relative w-full aspect-[1/1.2] rounded-lg overflow-hidden hover:opacity-90 transition-opacity ${
-                           titleEffect ? `${titleEffect.border} ${titleEffect.shadow}` : 'shadow-md border border-border-light'
-                          }`}
-                          style={userTitle ? { position: 'relative' } : {}}
-                        >
-                      {/* 동영상이 있으면 동영상 표시, 없으면 이미지 */}
-                      {item.videos && item.videos.length > 0 ? (
-                        <video
-                          src={item.videos[0]}
-                          className="w-full h-full object-cover"
-                          autoPlay
-                          loop
-                          muted
-                          playsInline
-                          onMouseEnter={(e) => e.target.play()}
-                          onMouseLeave={(e) => e.target.pause()}
-                        />
-                      ) : (
-                        <img
-                          src={item.image || 'https://images.unsplash.com/photo-1524222717473-730000096953?w=800&auto=format&fit=crop&q=80'}
-                          alt={item.location || '여행 사진'}
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            e.currentTarget.src = 'https://images.unsplash.com/photo-1524222717473-730000096953?w=800&auto=format&fit=crop&q=80';
-                          }}
-                        />
-                      )}
-                      {/* 그라데이션 오버레이 */}
-                      <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.8), rgba(0,0,0,0.1) 50%, rgba(0,0,0,0.3))' }}></div>
-                      
-                        {/* 우측상단: 24시간 타이틀 배지 - 심플하게 */}
-                      {userTitle && (
-                         <div 
-                           style={{ 
-                             position: 'absolute', 
-                             top: '8px', 
-                             right: '8px', 
-                             zIndex: 30
-                           }}
-                         >
-                           <div className="px-2.5 py-1 rounded-full bg-primary/90 text-white text-[10px] font-bold flex items-center gap-1 shadow-md">
-                             <span>{userTitle.icon}</span>
-                             <span>{titleEffect?.badge || '오늘의 타이틀'}</span>
-                           </div>
-                         </div>
-                      )}
-                      
-                      {/* 좌측하단: 위치정보 + 업로드시간 */}
-                      <div style={{ 
-                        position: 'absolute', 
-                        left: 0, 
-                        bottom: 0, 
-                        right: 0, 
-                        padding: '12px', 
-                        background: 'linear-gradient(to top, rgba(0,0,0,0.7), transparent)',
-                        zIndex: 10
-                      }}>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                          {item.title && (
-                            <p style={{ 
-                              color: 'white', 
-                              fontSize: '14px', 
-                              fontWeight: 'bold', 
-                              lineHeight: '1.2',
-                              textShadow: '0 2px 8px rgba(0,0,0,0.8)',
-                              margin: 0
-                            }}>
-                              {item.title}
-                            </p>
-                          )}
-                          {item.time && (
-                            <p style={{ 
-                              color: 'rgba(255,255,255,0.9)', 
-                              fontSize: '12px', 
-                              fontWeight: '600', 
-                              lineHeight: '1.2',
-                              textShadow: '0 2px 8px rgba(0,0,0,0.8)',
-                              margin: 0
-                            }}>
-                              {item.time}
-                            </p>
-                          )}
-                        </div>
+              {travelMagazineArticles.map((article) => (
+                <div
+                  key={article.id}
+                  style={{
+                    minWidth: '220px',
+                    maxWidth: '240px',
+                    borderRadius: '16px',
+                    background: '#FFFFFF',
+                    boxShadow: '0 2px 10px rgba(0,0,0,0.06)',
+                    overflow: 'hidden',
+                    cursor: 'pointer',
+                    flexShrink: 0
+                  }}
+                  onClick={() => navigate(`/magazine/${article.id}`, { state: { magazine: article } })}
+                >
+                  <div style={{
+                    position: 'relative',
+                    width: '100%',
+                    height: '140px',
+                    background: 'linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%)',
+                    overflow: 'hidden'
+                  }}>
+                    <div style={{
+                      position: 'absolute',
+                      inset: 0,
+                      backgroundImage: `url("https://source.unsplash.com/featured/?${encodeURIComponent(article.regionName + ' travel landscape')}")`,
+                      backgroundSize: 'cover',
+                      backgroundPosition: 'center'
+                    }} />
+                    <div style={{
+                      position: 'absolute',
+                      left: 8,
+                      bottom: 8,
+                      padding: '4px 8px',
+                      borderRadius: 999,
+                      backgroundColor: 'rgba(0,0,0,0.6)',
+                      color: '#FFFFFF',
+                      fontSize: '10px',
+                      fontWeight: 600
+                    }}>
+                      {article.tagLine}
+                    </div>
+                  </div>
+                  <div style={{ padding: '10px 12px 12px 12px' }}>
+                    <div style={{
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      color: '#00BCD4',
+                      marginBottom: '2px'
+                    }}>
+                      {article.regionName}
+                    </div>
+                    <div style={{
+                      fontSize: '13px',
+                      fontWeight: 600,
+                      color: '#111827',
+                      lineHeight: 1.4
+                    }}>
+                      {article.title}
                     </div>
                   </div>
                 </div>
-                );
-              })}
+              ))}
+            </div>
+          </div>
+        </div>
+        
+        {/* 바텀 네비게이션 */}
+        <BottomNavigation />
+      </div>
+
+      {/* 관심 지역/장소 추가 모달 */}
+      {showAddInterestModal && (
+        <div className="fixed inset-0 bg-black/50 z-[200] flex items-end" onClick={() => setShowAddInterestModal(false)}>
+          <div className="w-full bg-white dark:bg-gray-900 rounded-t-3xl p-6 max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4 pb-4 border-b border-gray-200 dark:border-gray-700">
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white">관심 지역/장소 추가</h3>
+              <button
+                onClick={() => {
+                  setShowAddInterestModal(false);
+                  setNewInterestPlace('');
+                }}
+                className="w-8 h-8 flex items-center justify-center text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                지역 또는 장소 이름
+              </label>
+              <input
+                type="text"
+                value={newInterestPlace}
+                onChange={(e) => setNewInterestPlace(e.target.value)}
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter') {
+                    handleAddInterestPlace();
+                  }
+                }}
+                placeholder="예: 제주, 부산 해운대, 경주 불국사"
+                className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                autoFocus
+              />
+              
+              {newInterestPlace.trim() && (
+                <div className="mt-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">미리보기</p>
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center">
+                      <span className="text-2xl">{getRegionIcon(newInterestPlace.trim())}</span>
+                    </div>
+                    <span className="text-base font-semibold text-gray-900 dark:text-white">
+                      {newInterestPlace.trim()}
+                    </span>
               </div>
             </div>
           )}
-        </section>
-        </main>
-
-        {/* 오늘의 타이틀 모달 - 핸드폰 프레임 안에서만 표시 */}
-        {showTitleModal && (
-          <div 
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              zIndex: 50,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: 'rgba(0, 0, 0, 0.6)',
-              padding: '16px'
-            }}
-            onClick={() => {
-              setShowTitleModal(false);
-              setSelectedTitle(null);
-            }}
-          >
-            <div 
-              className="w-full bg-white dark:bg-gray-900 rounded-2xl shadow-2xl overflow-hidden"
-              style={{
-                maxHeight: 'calc(100% - 80px)',
-                maxWidth: '100%'
-              }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* 헤더 */}
-              <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-800">
-              <h2 className="text-lg font-bold text-text-light dark:text-text-dark flex items-center gap-2">
-                <span className="text-xl">👑</span>
-                오늘의 타이틀
-              </h2>
-              <button 
-                onClick={() => {
-                  setShowTitleModal(false);
-                  setSelectedTitle(null);
-                }}
-                className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
-              >
-                <span className="material-symbols-outlined text-text-light dark:text-text-dark">close</span>
-              </button>
-              </div>
-
-              {/* 컨텐츠 */}
-              <div className="p-4 overflow-y-auto" style={{ maxHeight: 'calc(100% - 120px)' }}>
-              {selectedTitle ? (
-                // 선택된 타이틀 상세 정보
-                <div className="space-y-4">
-                  <div className="flex items-center gap-4 p-4 rounded-xl bg-gradient-to-r from-amber-100 to-orange-100 dark:from-amber-900/40 dark:to-orange-900/40 border-2 border-amber-300 dark:border-amber-600">
-                    <span className="text-5xl">{selectedTitle.icon || '👑'}</span>
-                    <div className="flex-1">
-                      <h3 className="text-xl font-bold text-amber-900 dark:text-amber-200 mb-1">
-                        {selectedTitle.name}
-                      </h3>
-                      <p className="text-sm text-amber-800/80 dark:text-amber-200/80">
-                        {selectedTitle.category}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="p-4 rounded-xl bg-gray-50 dark:bg-gray-800/60">
-                    <h4 className="text-sm font-bold text-text-light dark:text-text-dark mb-2">획득 조건</h4>
-                    <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
-                      {selectedTitle.description}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setSelectedTitle(null);
-                    }}
-                    className="w-full py-2 px-4 rounded-lg bg-gray-100 dark:bg-gray-800 text-text-light dark:text-text-dark text-sm font-semibold hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-                  >
-                    목록으로 돌아가기
-                  </button>
-                </div>
-              ) : (
-                // 전체 타이틀 + 명예의 전당을 한 시트에서 함께 표시
-                <div className="space-y-4">
-                  {/* 획득한 타이틀 */}
-                  {allTodayTitles.length > 0 && (
-                    <div>
-                      <h3 className="text-sm font-bold text-text-light dark:text-text-dark mb-2">
-                        획득한 타이틀 ({allTodayTitles.length}개)
-                      </h3>
-                      <div className="grid grid-cols-1 gap-2">
-                        {allTodayTitles.map((item, index) => (
-                          <div
-                            key={`${item.userId}-${index}`}
-                            className="flex items-center gap-3 p-3 rounded-xl bg-gradient-to-r from-amber-100 to-orange-100 dark:from-amber-900/40 dark:to-orange-900/40 border border-amber-300 dark:border-amber-600 cursor-pointer hover:shadow-md transition-all"
-                            onClick={() => setSelectedTitle(item.title)}
-                          >
-                            <span className="text-2xl">{item.title.icon || '👑'}</span>
-                            <div className="flex-1">
-                              <p className="text-sm font-bold text-amber-900 dark:text-amber-200">
-                                {item.title.name}
-                              </p>
-                              <p className="text-xs text-amber-700/70 dark:text-amber-300/70">
-                                {item.title.category}
-                              </p>
-                            </div>
-                            <span className="material-symbols-outlined text-amber-600 dark:text-amber-400">chevron_right</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* 오늘의 타이틀 명예의 전당 - 같은 시트 안에서 함께 보기 (더 특별한 스타일) */}
-                  {titleHallPosts.length > 0 && (
-                    <div className="pt-3 border-t border-gray-200 dark:border-gray-800">
-                      <div className="flex items-center justify-between mb-2">
-                        <h3 className="text-sm font-bold text-text-light dark:text-text-dark flex items-center gap-1.5">
-                          <span className="text-base">🏅</span>
-                          타이틀 명예의 전당
-                        </h3>
-                        <button
-                          onClick={() => navigate('/title-posts')}
-                          className="text-[11px] font-semibold text-primary hover:underline"
-                        >
-                          전체 보기
-                        </button>
-                      </div>
-                      <p className="text-[11px] text-gray-500 dark:text-gray-400 mb-2">
-                        오늘 타이틀을 획득한 순간들이 동그란 메달처럼 모여 있어요.
-                      </p>
-                      <div className="grid grid-cols-4 gap-3 mt-1">
-                        {titleHallPosts.map((post) => {
-                          const userTitle = getUserDailyTitle(post.userId);
-                          const titleEffect = userTitle ? getTitleEffect(userTitle.effect) : null;
-                          return (
-                            <div
-                              key={post.id}
-                              onClick={() => navigate(`/post/${post.id}`)}
-                              className="relative w-full aspect-square flex items-center justify-center cursor-pointer group"
-                            >
-                              {/* 외곽 후광 */}
-                              <div className={`absolute inset-0 rounded-full blur-md opacity-70 transition-opacity ${
-                                titleEffect ? titleEffect.shadow : 'shadow-lg shadow-primary/40'
-                              }`} />
-                              {/* 메달 형태 썸네일 */}
-                              <div
-                                className={`relative w-[90%] h-[90%] rounded-full overflow-hidden border-4 bg-gray-200 dark:bg-gray-800 transition-transform duration-200 group-hover:scale-105 ${
-                                  titleEffect ? titleEffect.border : 'border-primary'
-                                }`}
-                              >
-                                <img
-                                  src={post.image || 'https://images.unsplash.com/photo-1524222717473-730000096953?w=800&auto=format&fit=crop&q=80'}
-                                  alt={post.location || '타이틀 게시물'}
-                                  className="w-full h-full object-cover"
-                                  onError={(e) => {
-                                    e.currentTarget.src = 'https://images.unsplash.com/photo-1524222717473-730000096953?w=800&auto=format&fit=crop&q=80';
-                                  }}
-                                />
-                                {/* 상단 작은 타이틀 배지 */}
-                                {userTitle && (
-                                  <div className="absolute -top-1 left-1 right-1 flex justify-center">
-                                    <div className="px-1.5 py-0.5 rounded-full bg-primary/90 text-[9px] text-white font-semibold shadow-md flex items-center gap-0.5">
-                                      <span>{userTitle.icon}</span>
-                                      <span className="truncate max-w-[48px]">
-                                        {userTitle.name}
-                                      </span>
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* 모든 타이틀 목록 */}
-                  <div className="pt-4 border-t border-gray-200 dark:border-gray-800">
-                    <h3 className="text-sm font-bold text-text-light dark:text-text-dark mb-3">
-                      모든 타이틀 목록 ({Object.keys(DAILY_TITLES).length}개)
-                    </h3>
-                    <div className="grid grid-cols-1 gap-2 max-h-[400px] overflow-y-auto">
-                      {Object.values(DAILY_TITLES).map((title, index) => {
-                        const isEarned = allTodayTitles.some(item => item.title.name === title.name);
-                        return (
-                          <div
-                            key={index}
-                            className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer hover:shadow-md transition-all ${
-                              isEarned
-                                ? 'bg-gradient-to-r from-amber-100 to-orange-100 dark:from-amber-900/40 dark:to-orange-900/40 border-amber-300 dark:border-amber-600'
-                                : 'bg-gray-50 dark:bg-gray-800/60 border-gray-200 dark:border-gray-700'
-                            }`}
-                            onClick={() => setSelectedTitle(title)}
-                          >
-                            <span className="text-2xl">{title.icon || '👑'}</span>
-                            <div className="flex-1">
-                              <p className={`text-sm font-bold ${isEarned ? 'text-amber-900 dark:text-amber-200' : 'text-gray-700 dark:text-gray-300'}`}>
-                                {title.name}
-                                {isEarned && <span className="ml-2 text-xs">✓ 획득</span>}
-                              </p>
-                              <p className={`text-xs ${isEarned ? 'text-amber-700/70 dark:text-amber-300/70' : 'text-gray-500 dark:text-gray-400'}`}>
-                                {title.category}
-                              </p>
-                            </div>
-                            <span className="material-symbols-outlined text-gray-400 dark:text-gray-500">chevron_right</span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-              )}
-              </div>
-          </div>
-        </div>
-        )}
-
-        {/* 타이틀 획득 축하 모달 - 뱃지와 다른 심플한 스타일 (앱 컬러 시스템) */}
-        {showTitleCelebration && earnedTitle && (
-          <div className="absolute inset-0 z-[10000] flex items-center justify-center bg-black/70 p-4" style={{ position: 'absolute' }}>
-            <div className="w-full max-w-sm transform rounded-3xl bg-background-light dark:bg-card-dark p-8 shadow-2xl border-4 border-primary animate-scale-up">
-              <div className="flex justify-center mb-6">
-                <div className="relative">
-                  {/* 심플한 아이콘 원 - primary 컬러 단색 */}
-                  <div className="flex items-center justify-center w-32 h-32 rounded-full bg-primary shadow-xl">
-                    <span className="text-6xl">{earnedTitle.icon || '👑'}</span>
-                  </div>
-                  {/* 단일 펄스 효과 */}
-                  <div className="absolute inset-0 rounded-full bg-primary/30 animate-ping"></div>
-                  {/* VIP 배지 */}
-                  <div className="absolute -top-2 -right-2 bg-primary text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-lg animate-bounce">
-                    VIP
-                  </div>
-                </div>
-              </div>
-
-              <h1 className="text-3xl font-bold text-center mb-3 text-text-primary-light dark:text-text-primary-dark">
-                축하합니다!
-              </h1>
-              
-              <p className="text-xl font-bold text-center text-primary mb-2">
-                {earnedTitle.name}
-              </p>
-              
-              <div className="flex items-center justify-center gap-3 mb-4">
-                <div className="px-3 py-1 rounded-full text-sm font-bold bg-primary/10 text-primary border border-primary/30">
-                  {earnedTitle.category || '24시간 타이틀'}
-                </div>
-              </div>
-              
-              <p className="text-base font-medium text-center text-text-secondary-light dark:text-text-secondary-dark mb-2">
-                24시간 타이틀을 획득했습니다!
-              </p>
-              
-              <p className="text-sm text-center text-text-subtle-light dark:text-text-subtle-dark mb-8 leading-relaxed">
-                {earnedTitle.description || '오늘 하루 동안 이 타이틀을 유지할 수 있습니다!'}
-              </p>
-
-              <div className="space-y-3">
-                <button
-                  onClick={() => {
-                    setShowTitleCelebration(false);
-                    setEarnedTitle(null);
-                    navigate('/profile');
-                  }}
-                  className="w-full py-4 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition-all shadow-lg transform hover:scale-105 active:scale-95 text-lg"
-                >
-                  프로필에서 확인하기
-                </button>
-                <button
-                  onClick={() => {
-                    setShowTitleCelebration(false);
-                    setEarnedTitle(null);
-                    navigate('/title-posts');
-                  }}
-                  className="w-full py-3 bg-subtle-light dark:bg-subtle-dark text-text-primary-light dark:text-text-primary-dark font-semibold rounded-xl hover:bg-border-light dark:hover:bg-border-dark transition-all"
-                >
-                  타이틀 명예의 전당
-                </button>
-              </div>
             </div>
-          </div>
-        )}
+            
+            <div className="flex gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+              <button
+                onClick={() => {
+                  setShowAddInterestModal(false);
+                  setNewInterestPlace('');
+                }}
+                className="flex-1 px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-semibold hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              >
+                취소
+              </button>
+              <button
+                onClick={handleAddInterestPlace}
+                disabled={!newInterestPlace.trim()}
+                className={`flex-1 px-4 py-3 rounded-xl font-semibold transition-colors ${
+                  newInterestPlace.trim()
+                    ? 'bg-primary text-white hover:bg-primary-dark'
+                    : 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-500 cursor-not-allowed'
+                }`}
+              >
+                추가
+              </button>
         </div>
       </div>
+        </div>
+      )}
 
-      <BottomNavigation />
+      {/* 관심 지역/장소 삭제 확인 모달 */}
+      {deleteConfirmPlace && (
+        <div className="fixed inset-0 bg-black/50 z-[200] flex items-center justify-center" onClick={() => setDeleteConfirmPlace(null)}>
+          <div className="bg-white dark:bg-gray-900 rounded-2xl p-6 w-[80%] max-w-[320px] shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2 text-center">
+              관심 지역/장소 삭제
+            </h3>
+            <p className="text-base text-gray-600 dark:text-gray-400 mb-6 text-center">
+              "{deleteConfirmPlace}"을(를) 삭제하시겠어요?
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeleteConfirmPlace(null)}
+                className="flex-1 px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-semibold hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              >
+                취소
+              </button>
+              <button
+                onClick={() => handleDeleteInterestPlace(deleteConfirmPlace)}
+                className="flex-1 px-4 py-3 rounded-xl font-semibold bg-red-500 text-white hover:bg-red-600 transition-colors"
+              >
+                삭제
+              </button>
     </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 };
 
 export default MainScreen;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

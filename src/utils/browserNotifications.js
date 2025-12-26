@@ -1,4 +1,5 @@
 // 브라우저 푸시 알림 유틸리티
+import { addNotification } from './notifications';
 
 // 알림 권한 요청
 export const requestNotificationPermission = async () => {
@@ -29,6 +30,21 @@ export const getNotificationPermission = () => {
 
 // 브라우저 푸시 알림 발송
 export const sendBrowserNotification = (title, options = {}) => {
+  // ✅ 개발 환경에서는 브라우저 푸시가 실제로 나가든 아니든
+  //    알림 센터(NotificationsScreen)에서도 확인할 수 있도록 기록을 남긴다.
+  try {
+    if (import.meta.env.DEV) {
+      addNotification({
+        type: 'system',
+        title,
+        message: options.body || '브라우저 푸시 알림 (개발 환경 미러링)',
+        link: options.link || null,
+      });
+    }
+  } catch (e) {
+    console.warn('개발용 알림 미러링 실패:', e);
+  }
+
   if (!('Notification' in window)) {
     console.warn('이 브라우저는 알림을 지원하지 않습니다.');
     return null;
@@ -150,36 +166,21 @@ export const notifyNewLike = async (postId, postLocation, likeCount) => {
   );
 };
 
-// 내 게시물이 도움되었습니다 알림 (앱 내부 + 브라우저 푸시)
+// 내 게시물이 도움되었습니다 알림 (브라우저 푸시만)
 export const notifyPostHelped = async (postId, postLocation, likeCount) => {
-  // 앱 내부 알림 추가
-  try {
-    const { addNotification } = await import('./notifications');
-    addNotification({
-      type: 'like',
-      title: '💚 내 게시물이 도움되었습니다!',
-      message: `"${postLocation}" 사진이 ${likeCount}명에게 도움이 되었습니다!`,
-      link: `/post/${postId}`
-    });
-  } catch (error) {
-    console.error('앱 내부 알림 추가 실패:', error);
-  }
-
-  // 브라우저 푸시 알림 (앱이 포커스되어 있지 않을 때만)
-  if (!document.hasFocus()) {
-    const hasPermission = await requestNotificationPermission();
-    if (hasPermission) {
-      sendBrowserNotification(
-        '💚 내 게시물이 도움되었습니다!',
-        {
-          body: `"${postLocation}" 사진이 ${likeCount}명에게 도움이 되었습니다!`,
-          icon: '/favicon.svg',
-          badge: '/favicon.svg',
-          tag: `post-helped-${postId}`,
-          link: `/post/${postId}`
-        }
-      );
-    }
+  // 브라우저 푸시 알림만 (앱 외부 알림)
+  const hasPermission = await requestNotificationPermission();
+  if (hasPermission) {
+    sendBrowserNotification(
+      '💚 내 게시물이 도움되었습니다!',
+      {
+        body: `"${postLocation}" 사진이 ${likeCount}명에게 도움이 되었습니다!`,
+        icon: '/favicon.svg',
+        badge: '/favicon.svg',
+        tag: `post-helped-${postId}`,
+        link: `/post/${postId}`
+      }
+    );
   }
 };
 

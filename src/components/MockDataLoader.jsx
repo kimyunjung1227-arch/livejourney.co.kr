@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { seedMockData, clearMockData, getMockDataStats } from '../utils/mockUploadData';
-import { initializeTitlePosts } from '../utils/titlePostsMockData';
 
 const MockDataLoader = () => {
   const [stats, setStats] = useState(null);
@@ -58,7 +57,6 @@ const MockDataLoader = () => {
     if (import.meta.env.MODE === 'production' && existingPosts.length === 0) {
       console.log('🌱 프로덕션 최초 접속 - 데모용 Mock 데이터 자동 생성');
       const result = seedMockData(200); // 한국 전역 사진 + 여러 사용자
-      initializeTitlePosts(); // 타이틀 보유자 + 명예의 전당 예시 생성
       setStats(result);
     } else if (existingPosts.length > 0) {
       const currentStats = getMockDataStats();
@@ -155,7 +153,7 @@ const MockDataLoader = () => {
           <div className="space-y-2">
             <button
               onClick={handleRegenerateAll}
-              className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-2 px-4 rounded-lg hover:from-purple-700 hover:to-pink-700 transition-colors text-sm font-semibold flex items-center justify-center gap-2 shadow-lg"
+              className="w-full bg-gradient-to-r from-primary to-accent text-white py-2 px-4 rounded-lg hover:from-primary-dark hover:to-accent-dark transition-colors text-sm font-semibold flex items-center justify-center gap-2 shadow-lg"
             >
               <span className="material-symbols-outlined text-sm">autorenew</span>
               Mock 데이터 재생성 (1000개)

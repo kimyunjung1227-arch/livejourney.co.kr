@@ -98,7 +98,18 @@ export const toggleLike = (postId) => {
         console.log(`   총 좋아요 수: ${verifyTotalLikes}개`);
         
         console.log('🔍 뱃지 체크 실행 중...');
-        const newBadges = checkNewBadges();
+        
+        // 사용자 통계 계산
+        const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+        const stats = calculateUserStats(verifyMyPosts, currentUser);
+        
+        console.log('📊 현재 통계:', {
+          totalPosts: stats.totalPosts,
+          totalLikes: stats.totalLikes,
+          maxLikes: stats.maxLikes
+        });
+        
+        const newBadges = checkNewBadges(stats);
         console.log(`📋 발견된 새 뱃지: ${newBadges.length}개`);
         
         if (newBadges.length > 0) {
@@ -118,9 +129,6 @@ export const toggleLike = (postId) => {
           }
         } else {
           console.log('📭 획득 가능한 새 뱃지 없음');
-          // 디버깅: 통계 다시 확인
-          const stats = calculateUserStats();
-          console.log('📊 현재 통계:', stats);
           console.log(`   totalLikes: ${stats.totalLikes}`);
           console.log(`   첫 좋아요 조건: ${stats.totalLikes >= 1}`);
         }

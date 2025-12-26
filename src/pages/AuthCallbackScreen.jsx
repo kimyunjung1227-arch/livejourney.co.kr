@@ -43,8 +43,8 @@ const AuthCallbackScreen = () => {
             
             console.log('✅ 소셜 로그인 성공:', user);
             
-            // 메인 화면으로 이동
-            navigate('/main', { replace: true });
+            // 소셜 로그인 후에는 프로필 화면으로 이동
+            navigate('/profile', { replace: true });
           } catch (parseError) {
             console.error('사용자 정보 파싱 오류:', parseError);
             setError('사용자 정보를 처리할 수 없습니다.');

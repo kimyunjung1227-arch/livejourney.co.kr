@@ -246,7 +246,7 @@ const MapPhotoGridScreen = () => {
               <button
                 onClick={() => navigate('/upload')}
                 style={{
-                  backgroundColor: '#ff6b35',
+                  backgroundColor: '#00BCD4',
                   color: 'white',
                   border: 'none',
                   borderRadius: '9999px',
@@ -279,7 +279,7 @@ const MapPhotoGridScreen = () => {
               onClick={handleClose}
               style={{
                 width: '100%',
-                backgroundColor: '#ff6b35',
+                backgroundColor: '#00BCD4',
                 color: 'white',
                 border: 'none',
                 borderRadius: '12px',

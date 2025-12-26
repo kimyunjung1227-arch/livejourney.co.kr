@@ -86,11 +86,11 @@ const FAQScreen = () => {
         <header className="screen-header flex h-16 items-center justify-between border-b border-border-light bg-white dark:border-border-dark dark:bg-gray-900 px-4 shadow-sm">
         <button
           onClick={() => navigate('/settings')}
-          className="flex size-12 shrink-0 items-center justify-center cursor-pointer text-content-light dark:text-content-dark hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+          className="flex size-12 shrink-0 items-center justify-center cursor-pointer text-black dark:text-white hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
         >
           <span className="material-symbols-outlined text-2xl">arrow_back</span>
         </button>
-        <h1 className="text-lg font-bold leading-tight tracking-[-0.015em] text-content-light dark:text-content-dark">자주 묻는 질문 (FAQ)</h1>
+        <h1 className="text-lg font-bold leading-tight tracking-[-0.015em] text-black dark:text-white">자주 묻는 질문 (FAQ)</h1>
         <div className="flex size-12 shrink-0 items-center justify-end"></div>
       </header>
 
@@ -100,13 +100,13 @@ const FAQScreen = () => {
           <div className="px-4 pt-6 pb-4">
             <div className="relative">
               <input
-                className="w-full h-12 rounded-lg border border-border-light bg-surface-subtle-light dark:bg-surface-subtle-dark dark:border-border-dark pl-10 pr-4 text-content-light dark:text-content-dark placeholder-subtle-light dark:placeholder-subtle-dark focus:outline-none focus:ring-2 focus:ring-primary/50"
+                className="w-full h-12 rounded-lg border border-border-light bg-surface-subtle-light dark:bg-surface-subtle-dark dark:border-border-dark pl-10 pr-4 text-black dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-primary/50"
                 placeholder="궁금한 점을 검색해보세요"
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
-              <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-subtle-light dark:text-subtle-dark">
+              <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-black/70 dark:text-white/70">
                 search
               </span>
             </div>
@@ -121,8 +121,8 @@ const FAQScreen = () => {
                   onClick={() => setSelectedCategory(category)}
                   className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
                     selectedCategory === category
-                      ? 'bg-primary text-white'
-                      : 'bg-surface-subtle-light text-content-light dark:bg-surface-subtle-dark dark:text-content-dark hover:bg-surface-subtle-light/80 dark:hover:bg-surface-subtle-dark/80'
+                      ? 'bg-black dark:bg-white text-white dark:text-black'
+                      : 'bg-surface-subtle-light text-black dark:bg-surface-subtle-dark dark:text-white hover:bg-surface-subtle-light/80 dark:hover:bg-surface-subtle-dark/80'
                   }`}
                 >
                   {category}
@@ -148,16 +148,16 @@ const FAQScreen = () => {
                   onClick={() => toggleFAQ(faq.id)}
                   className="w-full flex h-16 items-center justify-between px-4 cursor-pointer hover:bg-surface-subtle-light dark:hover:bg-surface-subtle-dark transition-colors"
                 >
-                  <p className="text-base font-medium leading-normal text-content-light dark:text-content-dark text-left">
-                    <span className="text-primary mr-1">Q.</span>
+                  <p className="text-base font-medium leading-normal text-black dark:text-white text-left">
+                    <span className="font-bold mr-1">Q.</span>
                     {faq.question}
                   </p>
-                  <span className={`material-symbols-outlined ${expandedFAQ === faq.id ? 'text-content-light dark:text-content-dark' : 'text-subtle-light dark:text-subtle-dark'}`}>
+                  <span className={`material-symbols-outlined ${expandedFAQ === faq.id ? 'text-black dark:text-white' : 'text-black/70 dark:text-white/70'}`}>
                     {expandedFAQ === faq.id ? 'expand_less' : 'expand_more'}
                   </span>
                 </button>
                 {expandedFAQ === faq.id && (
-                  <div className="p-4 pt-0 text-subtle-light dark:text-subtle-dark text-sm leading-6">
+                  <div className="p-4 pt-0 text-black/70 dark:text-white/70 text-sm leading-6">
                     <p>{faq.answer}</p>
                   </div>
                 )}
@@ -165,7 +165,7 @@ const FAQScreen = () => {
             ))
           ) : (
             <div className="px-4 py-12 text-center">
-              <p className="text-sm text-subtle-light dark:text-subtle-dark">
+              <p className="text-sm text-black/70 dark:text-white/70">
                 검색 결과가 없습니다.
               </p>
             </div>
@@ -174,10 +174,10 @@ const FAQScreen = () => {
 
         {/* 1:1 문의하기 */}
         <div className="px-4 py-8 text-center bg-background-light dark:bg-background-dark">
-          <p className="text-sm text-subtle-light dark:text-subtle-dark">찾으시는 답변이 없으신가요?</p>
+          <p className="text-sm text-black/70 dark:text-white/70">찾으시는 답변이 없으신가요?</p>
           <button
             onClick={handleInquiry}
-            className="mt-2 inline-block text-sm font-bold text-primary hover:text-primary/80 transition-colors"
+            className="mt-2 inline-block text-sm font-bold text-black dark:text-white hover:text-black/80 dark:hover:text-white/80 transition-colors"
           >
             1:1 문의하기
           </button>

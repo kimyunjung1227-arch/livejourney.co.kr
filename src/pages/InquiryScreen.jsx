@@ -13,7 +13,6 @@ const InquiryScreen = () => {
   const [content, setContent] = useState('');
   const [email, setEmail] = useState(user?.email || '');
   const [agreedToPrivacy, setAgreedToPrivacy] = useState(false);
-  const [attachment, setAttachment] = useState(null);
 
   // 유효성 검사
   const isFormValid = () => {
@@ -49,7 +48,6 @@ const InquiryScreen = () => {
     setContent('');
     setEmail(user?.email || '');
     setAgreedToPrivacy(false);
-    setAttachment(null);
     
     navigate('/settings');
   };
@@ -60,15 +58,15 @@ const InquiryScreen = () => {
         <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-border-light bg-surface-light/80 dark:border-border-dark dark:bg-surface-dark/80 backdrop-blur-sm px-4">
         <button
           onClick={() => navigate('/settings')}
-          className="flex size-12 shrink-0 items-center justify-center cursor-pointer text-content-light dark:text-content-dark hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+          className="flex size-12 shrink-0 items-center justify-center cursor-pointer text-black dark:text-white hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
         >
           <span className="material-symbols-outlined text-2xl">arrow_back</span>
         </button>
-        <h1 className="text-lg font-bold leading-tight tracking-[-0.015em] text-content-light dark:text-content-dark">문의하기</h1>
+        <h1 className="text-lg font-bold leading-tight tracking-[-0.015em] text-black dark:text-white">문의하기</h1>
         <div className="flex size-auto shrink-0 items-center justify-end">
           <button
             onClick={handleInquiryHistory}
-            className="text-sm font-medium text-content-light dark:text-content-dark px-2 py-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
+            className="text-sm font-medium text-black dark:text-white px-2 py-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
           >
             문의 내역
           </button>
@@ -79,13 +77,13 @@ const InquiryScreen = () => {
         <div className="flex flex-col">
           {/* 문의 안내 섹션 */}
           <section className="bg-surface-light dark:bg-surface-dark px-4 pt-8 pb-6">
-            <h2 className="text-xl font-bold leading-tight tracking-[-0.015em] text-content-light dark:text-content-dark">문의 안내</h2>
-            <p className="mt-2 text-sm text-subtle-light dark:text-subtle-dark">
+            <h2 className="text-xl font-bold leading-tight tracking-[-0.015em] text-black dark:text-white">문의 안내</h2>
+            <p className="mt-2 text-sm text-black/70 dark:text-white/70">
               문의 전 자주 묻는 질문(FAQ)를 확인하시면 더 빠르게 궁금증을 해결하실 수 있습니다. 궁금한 점이 해결되지 않을 경우 문의를 남겨주세요.
             </p>
             <button
               onClick={() => navigate('/faq')}
-              className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-primary hover:text-primary/80 transition-colors"
+              className="mt-4 inline-flex items-center gap-1 text-sm font-bold text-black dark:text-white hover:text-black/80 dark:hover:text-white/80 transition-colors"
             >
               <span>자주 묻는 질문(FAQ) 바로가기</span>
               <span className="material-symbols-outlined text-sm">arrow_forward</span>
@@ -96,22 +94,19 @@ const InquiryScreen = () => {
 
           {/* 문의 양식 섹션 */}
           <section className="bg-surface-light dark:bg-surface-dark px-4 py-8">
-            <h2 className="text-xl font-bold leading-tight tracking-[-0.015em] text-content-light dark:text-content-dark">문의 양식</h2>
+            <h2 className="text-xl font-bold leading-tight tracking-[-0.015em] text-black dark:text-white">문의 양식</h2>
             
             <div className="mt-6 flex flex-col gap-6">
               {/* 문의 유형 */}
               <div>
-                <label className="mb-2 block text-sm font-medium text-content-light dark:text-content-dark" htmlFor="inquiry-type">
-                  문의 유형 <span className="text-primary">*</span>
+                <label className="mb-2 block text-sm font-bold text-black dark:text-white" htmlFor="inquiry-type">
+                  문의 유형 <span className="text-black dark:text-white">*</span>
                 </label>
                 <select
-                  className="custom-select block w-full rounded-lg border-border-light bg-surface-subtle-light p-3 text-base placeholder:text-subtle-light focus:border-primary focus:ring-primary dark:border-border-dark dark:bg-surface-subtle-dark dark:placeholder:text-subtle-dark"
+                  className="custom-select block w-full rounded-lg border-border-light bg-surface-subtle-light p-3 text-base text-black placeholder:text-gray-400 focus:border-primary focus:ring-primary dark:border-border-dark dark:bg-surface-subtle-dark dark:text-white dark:placeholder:text-gray-500"
                   id="inquiry-type"
                   value={inquiryType}
                   onChange={(e) => setInquiryType(e.target.value)}
-                  style={{
-                    color: inquiryType ? 'var(--content-light)' : 'var(--subtle-light)'
-                  }}
                 >
                   <option value="">문의 유형을 선택해주세요</option>
                   <option value="계정 관련">계정 관련</option>
@@ -123,11 +118,11 @@ const InquiryScreen = () => {
 
               {/* 제목 */}
               <div>
-                <label className="mb-2 block text-sm font-medium text-content-light dark:text-content-dark" htmlFor="title">
-                  제목 <span className="text-primary">*</span>
+                <label className="mb-2 block text-sm font-bold text-black dark:text-white" htmlFor="title">
+                  제목 <span className="text-black dark:text-white">*</span>
                 </label>
                 <input
-                  className="block w-full rounded-lg border-border-light bg-surface-subtle-light p-3 text-base text-content-light placeholder:text-subtle-light focus:border-primary focus:ring-primary dark:border-border-dark dark:bg-surface-subtle-dark dark:text-content-dark dark:placeholder:text-subtle-dark"
+                  className="block w-full rounded-lg border-border-light bg-surface-subtle-light p-3 text-base text-black placeholder:text-gray-400 focus:border-primary focus:ring-primary dark:border-border-dark dark:bg-surface-subtle-dark dark:text-white dark:placeholder:text-gray-500"
                   id="title"
                   placeholder="제목을 입력해주세요"
                   type="text"
@@ -138,11 +133,11 @@ const InquiryScreen = () => {
 
               {/* 내용 */}
               <div>
-                <label className="mb-2 block text-sm font-medium text-content-light dark:text-content-dark" htmlFor="content">
-                  내용 <span className="text-primary">*</span>
+                <label className="mb-2 block text-sm font-bold text-black dark:text-white" htmlFor="content">
+                  내용 <span className="text-black dark:text-white">*</span>
                 </label>
                 <textarea
-                  className="block w-full resize-none rounded-lg border-border-light bg-surface-subtle-light p-3 text-base text-content-light placeholder:text-subtle-light focus:border-primary focus:ring-primary dark:border-border-dark dark:bg-surface-subtle-dark dark:text-content-dark dark:placeholder:text-subtle-dark"
+                  className="block w-full resize-none rounded-lg border-border-light bg-surface-subtle-light p-3 text-base text-black placeholder:text-gray-400 focus:border-primary focus:ring-primary dark:border-border-dark dark:bg-surface-subtle-dark dark:text-white dark:placeholder:text-gray-500"
                   id="content"
                   placeholder="문의하실 내용을 입력해주세요"
                   rows="6"
@@ -153,11 +148,11 @@ const InquiryScreen = () => {
 
               {/* 답변 받을 이메일 */}
               <div>
-                <label className="mb-2 block text-sm font-medium text-content-light dark:text-content-dark" htmlFor="email">
-                  답변 받을 이메일 <span className="text-primary">*</span>
+                <label className="mb-2 block text-sm font-bold text-black dark:text-white" htmlFor="email">
+                  답변 받을 이메일 <span className="text-black dark:text-white">*</span>
                 </label>
                 <input
-                  className="block w-full rounded-lg border-border-light bg-surface-subtle-light p-3 text-base text-content-light placeholder:text-subtle-light focus:border-primary focus:ring-primary dark:border-border-dark dark:bg-surface-subtle-dark dark:text-content-dark dark:placeholder:text-subtle-dark"
+                  className="block w-full rounded-lg border-border-light bg-surface-subtle-light p-3 text-base text-black placeholder:text-gray-400 focus:border-primary focus:ring-primary dark:border-border-dark dark:bg-surface-subtle-dark dark:text-white dark:placeholder:text-gray-500"
                   id="email"
                   placeholder="이메일 주소를 입력해주세요"
                   type="email"
@@ -168,12 +163,12 @@ const InquiryScreen = () => {
 
               {/* 첨부 파일 */}
               <div>
-                <label className="mb-2 block text-sm font-medium text-content-light dark:text-content-dark" htmlFor="attachment">
+                <label className="mb-2 block text-sm font-bold text-black dark:text-white" htmlFor="attachment">
                   첨부 파일
                 </label>
                 <button
                   onClick={handleFileAttachment}
-                  className="flex w-full items-center justify-center gap-2 rounded-lg border border-border-light bg-surface-light px-4 py-3 text-base font-medium text-content-light dark:border-border-dark dark:bg-surface-dark dark:text-content-dark hover:bg-surface-subtle-light dark:hover:bg-surface-subtle-dark transition-colors"
+                  className="flex w-full items-center justify-center gap-2 rounded-lg border border-border-light bg-surface-light px-4 py-3 text-base font-medium text-black dark:border-border-dark dark:bg-surface-dark dark:text-white hover:bg-surface-subtle-light dark:hover:bg-surface-subtle-dark transition-colors"
                 >
                   <span className="material-symbols-outlined text-lg">attachment</span>
                   <span>파일 첨부하기</span>
@@ -195,14 +190,14 @@ const InquiryScreen = () => {
                 onChange={(e) => setAgreedToPrivacy(e.target.checked)}
               />
               <div className="ml-3">
-                <label className="text-sm font-medium text-content-light dark:text-content-dark cursor-pointer" htmlFor="privacy-policy">
+                <label className="text-sm font-bold text-black dark:text-white cursor-pointer" htmlFor="privacy-policy">
                   개인 정보 처리 방침 동의 (필수)
                 </label>
-                <p className="text-sm text-subtle-light dark:text-subtle-dark">
+                <p className="text-sm text-black/70 dark:text-white/70">
                   문의 처리를 위한 최소한의 개인 정보를 수집 및 이용합니다.{' '}
                   <button
                     onClick={() => alert('개인정보 처리 방침 상세 페이지는 추후 구현 예정입니다.')}
-                    className="font-medium text-content-light underline dark:text-content-dark hover:text-primary dark:hover:text-primary transition-colors"
+                    className="font-bold text-black underline dark:text-white hover:text-black/80 dark:hover:text-white/80 transition-colors"
                   >
                     자세히보기
                   </button>

@@ -629,13 +629,26 @@ export const generateMockUploadsForRegion = (region, count = 20) => {
  * @param {number} totalCount - 전체 생성할 게시물 수
  */
 export const seedMockData = (totalCount = 100) => {
-  console.log('🌱 Mock 데이터 생성 시작 (각 지역 최소 30개 보장)...');
+  // 기존 데이터가 이미 있으면 생성하지 않음
+  const existingPosts = JSON.parse(localStorage.getItem('uploadedPosts') || '[]');
+  if (existingPosts.length > 0) {
+    console.log(`✅ 기존 데이터가 이미 있습니다 (${existingPosts.length}개). 추가 생성하지 않습니다.`);
+    return {
+      total: existingPosts.length,
+      bloom: existingPosts.filter(p => p.category === 'bloom').length,
+      landmark: existingPosts.filter(p => p.category === 'landmark').length,
+      food: existingPosts.filter(p => p.category === 'food').length,
+      regions: [...new Set(existingPosts.map(p => p.location))].length
+    };
+  }
+  
+  console.log('🌱 Mock 데이터 생성 시작 (각 지역 최소 5개 보장)...');
   
   const mockPosts = [];
-  const minPerRegion = 30; // 각 지역 최소 사진 개수
+  const minPerRegion = 5; // 각 지역 최소 사진 개수 (30개에서 5개로 감소)
   const categories = ['bloom', 'landmark', 'food'];
   
-  // 1단계: 각 지역마다 최소 30개씩 균등하게 생성
+  // 1단계: 각 지역마다 최소 5개씩 균등하게 생성
   regions.forEach((region) => {
     for (let i = 0; i < minPerRegion; i++) {
       const category = categories[i % 3]; // 카테고리 균등 분배
@@ -811,9 +824,10 @@ export const seedMockData = (totalCount = 100) => {
     }
   });
   
-  // 2단계: 나머지는 랜덤하게 분배
+  // 2단계: 나머지는 랜덤하게 분배 (최대 200개로 제한)
   const baseCount = regions.length * minPerRegion; // 기본 생성 개수
-  const remainingCount = Math.max(0, totalCount - baseCount);
+  const maxTotal = 200; // 최대 생성 개수 제한
+  const remainingCount = Math.max(0, Math.min(maxTotal - baseCount, totalCount - baseCount));
   
   for (let i = 0; i < remainingCount; i++) {
     const category = randomItem(categories);
@@ -946,12 +960,46 @@ export const seedMockData = (totalCount = 100) => {
     mockPosts.push(post);
   }
   
-  // 기존 데이터와 병합
-  const existingPosts = JSON.parse(localStorage.getItem('uploadedPosts') || '[]');
-  const allPosts = [...mockPosts, ...existingPosts];
+  // 기존 데이터와 병합 (이미 위에서 체크했으므로 기존 데이터는 없음)
+  // 하지만 안전을 위해 다시 확인
+  const existingPostsCheck = JSON.parse(localStorage.getItem('uploadedPosts') || '[]');
+  const allPosts = [...mockPosts, ...existingPostsCheck];
   
-  // localStorage에 저장
-  localStorage.setItem('uploadedPosts', JSON.stringify(allPosts));
+  // localStorage에 저장 (용량 체크)
+  try {
+    const dataString = JSON.stringify(allPosts);
+    // 대략적인 크기 체크 (5MB 제한)
+    if (dataString.length > 5 * 1024 * 1024) {
+      console.warn('⚠️ 데이터가 너무 큽니다. 최신 1000개만 저장합니다.');
+      // 최신 1000개만 저장
+      const limitedPosts = allPosts.slice(0, 1000).sort((a, b) => {
+        const timeA = new Date(a.timestamp || a.createdAt || 0).getTime();
+        const timeB = new Date(b.timestamp || b.createdAt || 0).getTime();
+        return timeB - timeA;
+      });
+      localStorage.setItem('uploadedPosts', JSON.stringify(limitedPosts));
+    } else {
+      localStorage.setItem('uploadedPosts', dataString);
+    }
+  } catch (error) {
+    console.error('❌ localStorage 저장 실패:', error);
+    // 최신 500개만 저장 시도
+    try {
+      const limitedPosts = allPosts.slice(0, 500).sort((a, b) => {
+        const timeA = new Date(a.timestamp || a.createdAt || 0).getTime();
+        const timeB = new Date(b.timestamp || b.createdAt || 0).getTime();
+        return timeB - timeA;
+      });
+      localStorage.setItem('uploadedPosts', JSON.stringify(limitedPosts));
+      console.log('✅ 최신 500개만 저장했습니다.');
+    } catch (e) {
+      console.error('❌ 저장 실패:', e);
+      // 마지막 시도: 기존 데이터 유지
+      if (existingPosts.length > 0) {
+        console.log('⚠️ 기존 데이터를 유지합니다.');
+      }
+    }
+  }
   
   // 통계 출력
   const stats = {

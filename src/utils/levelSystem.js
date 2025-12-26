@@ -107,7 +107,7 @@ export const LEVEL_EXP = {
   100: 4376000
 };
 
-// 레벨별 타이틀
+// 레벨별 호칭
 export const LEVEL_TITLES = {
   1: '여행 입문자',
   5: '여행 애호가',
@@ -137,7 +137,6 @@ export const EXP_REWARDS = {
   '뱃지 획득 (하)': 100,
   '뱃지 획득 (중)': 300,
   '뱃지 획득 (상)': 500,
-  '24시간 타이틀': 200,
   '프로필 완성': 30,
   '연속 로그인': 15
 };
@@ -157,9 +156,9 @@ export const calculateLevel = (totalExp) => {
   return level;
 };
 
-// 현재 레벨 타이틀
+// 현재 레벨 호칭
 export const getLevelTitle = (level) => {
-  // 가장 가까운 레벨 타이틀 찾기
+  // 가장 가까운 레벨 호칭 찾기
   let title = LEVEL_TITLES[1];
   
   for (let lv = 100; lv >= 1; lv--) {

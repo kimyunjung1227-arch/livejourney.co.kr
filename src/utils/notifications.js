@@ -1,4 +1,5 @@
 // 알림 관리 유틸리티
+import { logger } from './logger';
 
 const NOTIFICATIONS_KEY = 'notifications';
 
@@ -27,7 +28,7 @@ const NOTIFICATION_TYPES = {
   post: {
     icon: 'photo_camera',
     iconBg: 'bg-purple-100 dark:bg-purple-900/20',
-    iconColor: 'text-purple-500'
+    iconColor: 'text-primary'
   },
   system: {
     icon: 'notifications',
@@ -42,7 +43,7 @@ export const getNotifications = () => {
     const notifications = localStorage.getItem(NOTIFICATIONS_KEY);
     return notifications ? JSON.parse(notifications) : [];
   } catch (error) {
-    console.error('알림 불러오기 실패:', error);
+    logger.error('알림 불러오기 실패:', error);
     return [];
   }
 };
@@ -75,10 +76,10 @@ export const addNotification = (notification) => {
     window.dispatchEvent(new Event('notificationUpdate'));
     window.dispatchEvent(new Event('notificationCountChanged'));
     
-    console.log('✅ 알림 추가:', newNotification.title);
+    logger.log('✅ 알림 추가:', newNotification.title);
     return newNotification;
   } catch (error) {
-    console.error('알림 추가 실패:', error);
+    logger.error('알림 추가 실패:', error);
     return null;
   }
 };
@@ -97,7 +98,7 @@ export const markNotificationAsRead = (notificationId) => {
     
     return true;
   } catch (error) {
-    console.error('알림 읽음 처리 실패:', error);
+    logger.error('알림 읽음 처리 실패:', error);
     return false;
   }
 };
@@ -112,10 +113,10 @@ export const markAllNotificationsAsRead = () => {
     // 알림 카운트 업데이트 이벤트 발생
     window.dispatchEvent(new Event('notificationCountChanged'));
     
-    console.log('✅ 모든 알림 읽음 처리');
+    logger.log('✅ 모든 알림 읽음 처리');
     return true;
   } catch (error) {
-    console.error('모든 알림 읽음 처리 실패:', error);
+    logger.error('모든 알림 읽음 처리 실패:', error);
     return false;
   }
 };
@@ -132,7 +133,7 @@ export const deleteNotification = (notificationId) => {
     
     return true;
   } catch (error) {
-    console.error('알림 삭제 실패:', error);
+    logger.error('알림 삭제 실패:', error);
     return false;
   }
 };
@@ -143,7 +144,7 @@ export const getUnreadCount = () => {
     const notifications = getNotifications();
     return notifications.filter(n => !n.read).length;
   } catch (error) {
-    console.error('읽지 않은 알림 개수 조회 실패:', error);
+    logger.error('읽지 않은 알림 개수 조회 실패:', error);
     return 0;
   }
 };
@@ -157,10 +158,10 @@ export const clearAllNotifications = () => {
     window.dispatchEvent(new Event('notificationUpdate'));
     window.dispatchEvent(new Event('notificationCountChanged'));
     
-    console.log('✅ 모든 알림 삭제');
+    logger.log('✅ 모든 알림 삭제');
     return true;
   } catch (error) {
-    console.error('모든 알림 삭제 실패:', error);
+    logger.error('모든 알림 삭제 실패:', error);
     return false;
   }
 };
@@ -253,19 +254,6 @@ export const notifyLevelUp = (newLevel, title) => {
   });
 };
 
-// 24시간 타이틀 획득 알림
-export const notifyDailyTitle = (titleName, icon) => {
-  addNotification({
-    type: 'system',
-    title: `👑 24시간 명예 타이틀 획득!`,
-    message: `"${titleName}" 타이틀을 획득했습니다! (24시간 유지)`,
-    icon: 'emoji_events',
-    iconBg: 'bg-yellow-100 dark:bg-yellow-900/20',
-    iconColor: 'text-yellow-600',
-    link: '/profile'
-  });
-};
-
 export default {
   getNotifications,
   addNotification,
@@ -279,6 +267,5 @@ export default {
   notifyComment,
   notifyFollow,
   notifySystem,
-  notifyLevelUp,
-  notifyDailyTitle
+  notifyLevelUp
 };

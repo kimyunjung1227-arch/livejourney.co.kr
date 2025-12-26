@@ -1,12 +1,27 @@
 // AI 이미지 분석 및 해시태그 자동 생성
 // 클라이언트 측에서 이미지를 분석하여 관련 해시태그를 생성합니다
+import { logger } from './logger';
 
-// 한국 여행 관련 키워드 데이터베이스 (직관적 연상 단어 중심)
+// 한국 여행 관련 키워드 데이터베이스 (전문적이고 날씨 중심)
 const koreanTravelKeywords = {
-  // 자연 & 풍경 (직관적 연상)
+  // 날씨 관련 전문 태그
+  weather: [
+    '맑음', '맑은날씨', '청명한날씨', '화창한날씨', '쾌청한날씨',
+    '흐림', '흐린날씨', '구름많음', '흐리고비', '우천',
+    '비', '소나기', '장마', '강수', '우천주의',
+    '눈', '강설', '눈발', '함박눈', '소낙눈',
+    '바람', '강풍', '미풍', '시원한바람', '따뜻한바람',
+    '안개', '짙은안개', '옅은안개', '안개주의',
+    '습도', '건조', '습함', '쾌적한습도',
+    '체감온도', '체감온도낮음', '체감온도높음', '쾌적한온도',
+    '일출', '일몰', '황금시간대', '블루아워', '골든아워',
+    '자외선', '자외선강함', '자외선주의', '자외선약함'
+  ],
+  
+  // 자연 & 풍경 (전문적)
   nature: ['자연', '풍경', '산', '바다', '강', '호수', '계곡', '폭포', '숲', '들판', '하늘', '구름', '일몰', '일출', '별', '푸른하늘', '맑은하늘', '푸른바다', '푸른숲', '푸른산'],
   
-  // 계절 (직관적 연상)
+  // 계절 (전문적)
   seasons: ['봄', '여름', '가을', '겨울', '벚꽃', '단풍', '눈', '꽃', '따뜻한햇살', '시원한바람', '고운꽃', '아름다운단풍', '하얀눈'],
   
   // 음식 (직관적 연상)
@@ -278,9 +293,9 @@ const analyzeImageColors = async (imageFile) => {
 // 메인 AI 분석 함수 (정교한 버전)
 export const analyzeImageForTags = async (imageFile, location = '', existingNote = '') => {
   try {
-    console.log('🤖 AI 이미지 분석 시작...');
-    console.log('  📍 위치:', location);
-    console.log('  📝 노트:', existingNote);
+    logger.log('🤖 AI 이미지 분석 시작...');
+    logger.debug('  📍 위치:', location);
+    logger.debug('  📝 노트:', existingNote);
     
     const keywords = new Set();
     
@@ -290,24 +305,108 @@ export const analyzeImageForTags = async (imageFile, location = '', existingNote
       readExifData(imageFile)
     ]);
     
-    console.log('🎨 색상 분석 결과:');
-    console.log('  RGB:', colorAnalysis.dominantColor);
-    console.log('  밝기:', (colorAnalysis.brightness * 100).toFixed(1) + '%');
-    console.log('  초록색:', colorAnalysis.isGreen);
-    console.log('  파란색:', colorAnalysis.isBlue);
-    console.log('  빨간색:', colorAnalysis.isRed);
-    console.log('  노란색:', colorAnalysis.isYellow);
-    console.log('  어두움:', colorAnalysis.isDark);
-    console.log('  밝음:', colorAnalysis.isBright);
+    logger.debug('🎨 색상 분석 결과:');
+    logger.debug('  RGB:', colorAnalysis.dominantColor);
+    logger.debug('  밝기:', (colorAnalysis.brightness * 100).toFixed(1) + '%');
+    logger.debug('  초록색:', colorAnalysis.isGreen);
+    logger.debug('  파란색:', colorAnalysis.isBlue);
+    logger.debug('  빨간색:', colorAnalysis.isRed);
+    logger.debug('  노란색:', colorAnalysis.isYellow);
+    logger.debug('  어두움:', colorAnalysis.isDark);
+    logger.debug('  밝음:', colorAnalysis.isBright);
     
-    // 우선순위 1: 위치 기반 키워드 (가장 중요!)
-    const locationKeywords = generateLocationKeywords(location);
-    if (locationKeywords.length > 0) {
-      locationKeywords.slice(0, 4).forEach(kw => keywords.add(kw));
+    // 우선순위 1: 날씨 관련 키워드 (전문적)
+    const currentMonth = new Date().getMonth() + 1;
+    const currentHour = new Date().getHours();
+    
+    // 계절별 날씨 태그
+    if (currentMonth >= 3 && currentMonth <= 5) {
+      keywords.add('봄날씨');
+      keywords.add('화창한날씨');
+      if (currentHour >= 6 && currentHour <= 8) {
+        keywords.add('일출');
+        keywords.add('골든아워');
+      } else if (currentHour >= 17 && currentHour <= 19) {
+        keywords.add('일몰');
+        keywords.add('황금시간대');
+      }
+    } else if (currentMonth >= 6 && currentMonth <= 8) {
+      keywords.add('여름날씨');
+      keywords.add('자외선주의');
+      if (colorAnalysis.isBright) {
+        keywords.add('맑은날씨');
+        keywords.add('청명한날씨');
+      }
+    } else if (currentMonth >= 9 && currentMonth <= 11) {
+      keywords.add('가을날씨');
+      keywords.add('쾌청한날씨');
+      if (currentHour >= 17 && currentHour <= 19) {
+        keywords.add('일몰');
+        keywords.add('골든아워');
+      }
+    } else {
+      keywords.add('겨울날씨');
+      if (colorAnalysis.isWhite) {
+        keywords.add('강설');
+        keywords.add('눈');
+      }
     }
     
-    // 우선순위 2: 노트 내용 분석 (사용자가 직접 입력한 내용)
+    // 밝기 기반 날씨 태그
+    if (colorAnalysis.isBright && colorAnalysis.brightness > 0.7) {
+      keywords.add('맑음');
+      keywords.add('청명한날씨');
+      keywords.add('화창한날씨');
+    } else if (colorAnalysis.isDark && colorAnalysis.brightness < 0.4) {
+      keywords.add('흐림');
+      keywords.add('흐린날씨');
+    }
+    
+    // 색상 기반 날씨 태그
+    if (colorAnalysis.isBlue && b > 150) {
+      keywords.add('맑은하늘');
+      keywords.add('청명한날씨');
+    }
+    if (colorAnalysis.isWhite && colorAnalysis.brightness > 0.8) {
+      keywords.add('구름많음');
+    }
+    
+    // 우선순위 2: 위치 기반 키워드
+    const locationKeywords = generateLocationKeywords(location);
+    if (locationKeywords.length > 0) {
+      locationKeywords.slice(0, 3).forEach(kw => keywords.add(kw));
+    }
+    
+    // 우선순위 3: 노트 내용 분석 (사용자가 직접 입력한 내용) - 날씨 중심
     if (existingNote && existingNote.trim().length > 0) {
+      const noteLower = existingNote.toLowerCase();
+      
+      // 날씨 관련 키워드 우선 추출
+      koreanTravelKeywords.weather.forEach(weatherKeyword => {
+        if (noteLower.includes(weatherKeyword.toLowerCase()) || existingNote.includes(weatherKeyword)) {
+          keywords.add(weatherKeyword);
+        }
+      });
+      
+      // 날씨 관련 일반 표현 추출
+      const weatherPatterns = {
+        '맑음': ['맑', '화창', '청명', '쾌청', '밝', '선명'],
+        '흐림': ['흐', '구름', '우중', '비올', '비가'],
+        '비': ['비', '소나기', '장마', '우천', '강수'],
+        '눈': ['눈', '강설', '눈발', '함박', '소낙'],
+        '바람': ['바람', '강풍', '미풍', '시원한바람', '따뜻한바람'],
+        '안개': ['안개', '짙은안개', '옅은안개'],
+        '일출': ['일출', '새벽', '동틀', '아침'],
+        '일몰': ['일몰', '석양', '황금', '저녁', '노을'],
+        '자외선': ['자외선', '햇빛', '태양', '쨍쨍']
+      };
+      
+      Object.entries(weatherPatterns).forEach(([weatherTag, patterns]) => {
+        if (patterns.some(pattern => noteLower.includes(pattern))) {
+          keywords.add(weatherTag);
+        }
+      });
+      
       // 모든 키워드 카테고리에서 매칭
       Object.values(koreanTravelKeywords).forEach(categoryKeywords => {
         if (Array.isArray(categoryKeywords)) {
@@ -329,7 +428,7 @@ export const analyzeImageForTags = async (imageFile, location = '', existingNote
       }
     }
     
-    // 우선순위 3: 색상 분석 (실제 이미지 특성) - 직관적 연상 단어 생성
+    // 우선순위 4: 색상 분석 (실제 이미지 특성) - 전문적 태그 생성
     const { r, g, b } = colorAnalysis.dominantColor || { r: 128, g: 128, b: 128 };
     const colorDiff = Math.max(Math.abs(r - g), Math.abs(g - b), Math.abs(b - r));
     
@@ -384,7 +483,7 @@ export const analyzeImageForTags = async (imageFile, location = '', existingNote
       }
     }
     
-    // 우선순위 4: 밝기 분석 - 직관적 연상
+    // 우선순위 5: 밝기 분석 - 날씨 관련 전문 태그
     if (colorAnalysis.isDark) {
       keywords.add('야경');
       keywords.add('밤');
@@ -439,7 +538,7 @@ export const analyzeImageForTags = async (imageFile, location = '', existingNote
       keywords.add('편안한');
     }
     
-    // 우선순위 5: 계절 키워드 (위치/노트에 관련 내용이 있을 때만)
+    // 우선순위 6: 계절 키워드 (위치/노트에 관련 내용이 있을 때만)
     const month = new Date().getMonth() + 1;
     const allText = `${location} ${existingNote}`.toLowerCase();
     
@@ -453,52 +552,60 @@ export const analyzeImageForTags = async (imageFile, location = '', existingNote
       keywords.add('겨울');
     }
     
-    // 우선순위 6: 파일명 분석 (의미있는 경우만)
-    const filenameKeywords = extractKeywordsFromFilename(imageFile.name);
-    if (filenameKeywords.length > 0 && !filenameKeywords.some(k => k.includes('img') || k.includes('photo'))) {
-      filenameKeywords.slice(0, 2).forEach(kw => keywords.add(kw));
-    }
+    // 우선순위 6: 파일명 분석 제외 (한국어만 사용하기 위해)
+    // 파일명 분석은 영어 키워드가 나올 수 있어 제외
     
-    // 최소 키워드가 너무 적으면 직관적 기본값 추가
+    // 최소 키워드가 너무 적으면 날씨 중심 기본값 추가
     if (keywords.size < 3) {
       keywords.add('여행');
       if (location) {
         keywords.add('추억');
       }
-      if (colorAnalysis.isBright) {
-        keywords.add('밝은');
-      } else if (colorAnalysis.isDark) {
-        keywords.add('야경');
+      // 날씨 기본 태그 추가
+      if (colorAnalysis.isBright && colorAnalysis.brightness > 0.7) {
+        keywords.add('맑음');
+        keywords.add('화창한날씨');
+      } else if (colorAnalysis.isDark && colorAnalysis.brightness < 0.4) {
+        keywords.add('흐림');
+        keywords.add('흐린날씨');
       } else {
-        keywords.add('아름다운');
+        keywords.add('쾌적한날씨');
       }
     }
     
-    // 직관적 연상 단어 추가 (분위기 키워드)
+    // 날씨 관련 전문 태그 추가 (부족한 경우)
     if (keywords.size < 6) {
-      const moodTags = ['아름다운', '편안한', '즐거운', '기억에남는'];
-      moodTags.forEach(tag => {
-        if (keywords.size < 8) {
-          keywords.add(tag);
-        }
-      });
+      const currentMonth = new Date().getMonth() + 1;
+      if (currentMonth >= 3 && currentMonth <= 5) {
+        keywords.add('봄날씨');
+      } else if (currentMonth >= 6 && currentMonth <= 8) {
+        keywords.add('여름날씨');
+      } else if (currentMonth >= 9 && currentMonth <= 11) {
+        keywords.add('가을날씨');
+      } else {
+        keywords.add('겨울날씨');
+      }
     }
     
     // 8. AI 카테고리 자동 분류 ⭐
     const categoryResult = detectCategory(keywords, location, existingNote, colorAnalysis);
     
-    // 9. 중복 제거 및 배열 변환 (최대 8개로 제한)
+    // 9. 중복 제거 및 배열 변환 - 한국어만 필터링 (5개로 제한)
     const finalTags = Array.from(keywords)
-      .filter(tag => tag && tag.length >= 2)
-      .slice(0, 8);
+      .filter(tag => {
+        // 한국어만 허용 (한글, 공백, 숫자만)
+        const isKorean = /^[가-힣\s\d]+$/.test(tag);
+        return tag && tag.length >= 2 && isKorean;
+      })
+      .slice(0, 5); // 최대 5개로 제한
     
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log('✅ AI 분석 완료!');
-    console.log('📍 위치:', location || '없음');
-    console.log('📝 노트:', existingNote || '없음');
-    console.log('🏷️ 추천 태그 (' + finalTags.length + '개):', finalTags);
-    console.log('🎯 자동 카테고리:', categoryResult.categoryName);
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    logger.log('✅ AI 분석 완료!');
+    logger.debug('📍 위치:', location || '없음');
+    logger.debug('📝 노트:', existingNote || '없음');
+    logger.log('🏷️ 추천 태그 (' + finalTags.length + '개):', finalTags);
+    logger.log('🎯 자동 카테고리:', categoryResult.categoryName);
+    logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     
     return {
       success: true,
@@ -512,7 +619,7 @@ export const analyzeImageForTags = async (imageFile, location = '', existingNote
     };
     
   } catch (error) {
-    console.error('❌ AI 분석 실패:', error);
+    logger.error('❌ AI 분석 실패:', error);
     return {
       success: false,
       tags: ['여행', '풍경', '추억'],

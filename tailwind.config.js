@@ -8,28 +8,67 @@ export default {
   theme: {
     extend: {
       colors: {
-        "primary": "#ff6b35",
+        // Live Blue (메인 키 컬러)
+        "primary": "#00BCD4",           // Live Blue - 신뢰, 실시간, 스마트
+        "primary-dark": "#0097A7",      // Hover/Active 용 약간 더 딥한 블루
+        "primary-soft": "#E0F7FA",      // 배경/하이라이트용 소프트 블루
+
+        // Journey Yellow (보조/CTA 컬러)
+        "accent": "#FFC107",            // Journey Yellow - 즐거움, 설렘, CTA
+        "accent-dark": "#FFA000",
+        "accent-soft": "#FFF8E1",
+
+        // 다양한 보조 컬러 팔레트
+        "secondary-1": "#9C27B0",      // Purple - 특별함, 프리미엄
+        "secondary-1-dark": "#7B1FA2",
+        "secondary-1-soft": "#F3E5F5",
+        
+        "secondary-2": "#4CAF50",       // Green - 자연, 성장, 성공
+        "secondary-2-dark": "#388E3C",
+        "secondary-2-soft": "#E8F5E9",
+        
+        "secondary-3": "#E91E63",       // Pink - 따뜻함, 하이라이트
+        "secondary-3-dark": "#C2185B",
+        "secondary-3-soft": "#FCE4EC",
+        
+        "secondary-4": "#FF5722",       // Deep Orange - 에너지, 활기
+        "secondary-4-dark": "#E64A19",
+        "secondary-4-soft": "#FBE9E7",
+        
+        "secondary-5": "#00ACC1",       // Cyan - 신선함, 명확함
+        "secondary-5-dark": "#00838F",
+        "secondary-5-soft": "#E0F7FA",
+        
+        "secondary-6": "#5C6BC0",       // Indigo - 깊이, 신뢰
+        "secondary-6-dark": "#3F51B5",
+        "secondary-6-soft": "#E8EAF6",
+        
+        "secondary-7": "#26A69A",       // Teal - 균형, 조화
+        "secondary-7-dark": "#00695C",
+        "secondary-7-soft": "#E0F2F1",
+
+        // 기본 톤 (기존 구조 유지, 톤만 살짝 중립적으로 조정)
         "background-light": "#ffffff",
-        "background-dark": "#181410",
-        "text-light": "#181411",
-        "text-dark": "#f8f7f5",
-        "text-primary-light": "#212121",
-        "text-secondary-light": "#757575",
-        "text-primary-dark": "#f8f7f5",
-        "text-secondary-dark": "#8d755e",
-        "text-subtle-light": "#8a7560",
-        "text-subtle-dark": "#a1988e",
+        "background-dark": "#0B1020",
+        "text-light": "#111827",
+        "text-dark": "#F9FAFB",
+        "text-primary-light": "#111827",
+        "text-secondary-light": "#6B7280",
+        "text-primary-dark": "#F9FAFB",
+        "text-secondary-dark": "#9CA3AF",
+        "text-subtle-light": "#9CA3AF",
+        "text-subtle-dark": "#6B7280",
         "card-light": "#ffffff",
-        "card-dark": "#2a2218",
-        "border-light": "#e6e0db",
-        "border-dark": "#3c3329",
+        "card-dark": "#111827",
+        "border-light": "#E5E7EB",
+        "border-dark": "#1F2937",
         "surface": "#ffffff",
-        "text-headings": "#212529",
-        "text-body": "#6C757D",
-        "subtle-light": "#eadbcd",
-        "subtle-dark": "#4a3c2b",
-        "placeholder-light": "#a17145",
-        "placeholder-dark": "#a1917f",
+        "text-headings": "#111827",
+        "text-body": "#4B5563",
+        "subtle-light": "#E0F2FE",
+        "subtle-dark": "#0F172A",
+        "placeholder-light": "#9CA3AF",
+        "placeholder-dark": "#6B7280",
       },
       fontFamily: {
         "display": ["Plus Jakarta Sans", "Noto Sans KR", "sans-serif"]

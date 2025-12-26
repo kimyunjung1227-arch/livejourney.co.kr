@@ -6,12 +6,12 @@ import { getUnreadCount } from '../utils/notifications';
 import { getEarnedBadges } from '../utils/badgeSystem';
 import { getUserLevel } from '../utils/levelSystem';
 import { filterRecentPosts } from '../utils/timeUtils';
-import { getUserDailyTitle, getTitleHistory, getUserTitleStats } from '../utils/dailyTitleSystem';
 import { getCoordinatesByLocation } from '../utils/regionLocationMapping';
+import { logger } from '../utils/logger';
 
 const ProfileScreen = () => {
   const navigate = useNavigate();
-  const { user: authUser, logout } = useAuth();
+  const { user: authUser, logout, isAuthenticated } = useAuth();
   const [user, setUser] = useState(null);
   const [myPosts, setMyPosts] = useState([]);
   const [earnedBadges, setEarnedBadges] = useState([]);
@@ -22,9 +22,6 @@ const ProfileScreen = () => {
   const [isEditMode, setIsEditMode] = useState(false);
   const [selectedPhotos, setSelectedPhotos] = useState([]);
   const [activeTab, setActiveTab] = useState('my'); // 'my' | 'map' | 'timeline'
-  const [dailyTitle, setDailyTitle] = useState(null);
-  const [titleHistory, setTitleHistory] = useState([]);
-  const [titleStats, setTitleStats] = useState(null);
   
   // 지도 관련
   const mapRef = useRef(null);
@@ -32,32 +29,18 @@ const ProfileScreen = () => {
   const markersRef = useRef([]);
   const [mapLoading, setMapLoading] = useState(true);
 
+  // 모든 Hook을 먼저 선언한 후 useEffect 실행
   useEffect(() => {
+    // 로그인되지 않은 경우 useEffect 실행 안함
+    if (!isAuthenticated) return;
     // localStorage에서 사용자 정보 로드
     const savedUser = JSON.parse(localStorage.getItem('user') || '{}');
     setUser(savedUser);
 
-    // 24시간 타이틀 로드
-    if (savedUser?.id) {
-      const title = getUserDailyTitle(savedUser.id);
-      if (title) {
-        console.log('👑 오늘의 타이틀:', title.name);
-      }
-      setDailyTitle(title);
-      
-      // 타이틀 히스토리 로드
-      const history = getTitleHistory(savedUser.id);
-      setTitleHistory(history);
-      
-      // 타이틀 통계 로드
-      const stats = getUserTitleStats(savedUser.id);
-      setTitleStats(stats);
-    }
-
     // 획득한 뱃지 로드
     const badges = getEarnedBadges();
     setEarnedBadges(badges);
-    console.log('🏆 프로필 화면 - 획득한 뱃지 로드:', badges.length);
+    logger.log('🏆 프로필 화면 - 획득한 뱃지 로드:', badges.length);
 
     // 대표 뱃지 로드 (반드시 획득한 뱃지 중에서 선택)
     const userId = savedUser?.id;
@@ -97,16 +80,16 @@ const ProfileScreen = () => {
     // 레벨 정보 로드
     const userLevelInfo = getUserLevel();
     setLevelInfo(userLevelInfo);
-    console.log('📊 레벨 정보:', userLevelInfo);
+    logger.debug('📊 레벨 정보:', userLevelInfo);
 
     // 내가 업로드한 게시물 로드 (영구 보관 - 필터링 없음!)
     const uploadedPosts = JSON.parse(localStorage.getItem('uploadedPosts') || '[]');
     const userPosts = uploadedPosts.filter(post => post.userId === userId);
     
-    console.log('📊 프로필 화면 - 내 게시물 로드 (영구 보관)');
-    console.log('  전체 게시물:', uploadedPosts.length);
-    console.log('  내 게시물 (모두):', userPosts.length);
-    console.log('  사용자 ID:', userId);
+    logger.log('📊 프로필 화면 - 내 게시물 로드 (영구 보관)');
+    logger.debug('  전체 게시물:', uploadedPosts.length);
+    logger.debug('  내 게시물 (모두):', userPosts.length);
+    logger.debug('  사용자 ID:', userId);
     
     setMyPosts(userPosts);
 
@@ -120,7 +103,7 @@ const ProfileScreen = () => {
 
     // 게시물 업데이트 이벤트 리스너
     const handlePostsUpdate = () => {
-      console.log('🔄 프로필 화면 - 게시물 업데이트 이벤트 수신');
+      logger.log('🔄 프로필 화면 - 게시물 업데이트 이벤트 수신');
       setTimeout(() => {
         const updatedPosts = JSON.parse(localStorage.getItem('uploadedPosts') || '[]');
         // 프로필에서는 필터링 없이 모든 내 게시물 표시
@@ -130,7 +113,7 @@ const ProfileScreen = () => {
                             post.user;
           return postUserId === userId;
         });
-        console.log('🔄 게시물 업데이트 (영구 보관):', {
+        logger.debug('🔄 게시물 업데이트 (영구 보관):', {
           전체게시물: updatedPosts.length,
           내게시물: updatedUserPosts.length,
           사용자ID: userId
@@ -147,14 +130,14 @@ const ProfileScreen = () => {
     const handleBadgeUpdate = () => {
       const updatedBadges = getEarnedBadges();
       setEarnedBadges(updatedBadges);
-      console.log('🏆 뱃지 업데이트:', updatedBadges.length);
+      logger.log('🏆 뱃지 업데이트:', updatedBadges.length);
     };
 
     // 레벨 업데이트 이벤트 리스너
     const handleLevelUpdate = () => {
       const updatedLevelInfo = getUserLevel();
       setLevelInfo(updatedLevelInfo);
-      console.log('📊 레벨 업데이트:', updatedLevelInfo);
+      logger.debug('📊 레벨 업데이트:', updatedLevelInfo);
     };
 
     window.addEventListener('notificationUpdate', handleNotificationUpdate);
@@ -174,7 +157,7 @@ const ProfileScreen = () => {
 
   // 지도 초기화 및 마커 표시
   const initMap = useCallback(() => {
-    console.log('🗺️ 지도 초기화 시작', { 
+    logger.log('🗺️ 지도 초기화 시작', {
       kakaoLoaded: !!window.kakao, 
       mapRefExists: !!mapRef.current, 
       activeTab, 
@@ -182,19 +165,19 @@ const ProfileScreen = () => {
     });
 
     if (!window.kakao || !window.kakao.maps) {
-      console.log('⏳ Kakao Map API 로딩 대기...');
+      logger.debug('⏳ Kakao Map API 로딩 대기...');
       setTimeout(initMap, 100);
       return;
     }
 
     if (!mapRef.current) {
-      console.log('⏳ 지도 컨테이너 대기...');
+      logger.debug('⏳ 지도 컨테이너 대기...');
       setTimeout(initMap, 100);
       return;
     }
 
     if (activeTab !== 'map') {
-      console.log('⏸️ 지도 탭이 아님, 초기화 중단');
+      logger.debug('⏸️ 지도 탭이 아님, 초기화 중단');
       return;
     }
 
@@ -228,18 +211,18 @@ const ProfileScreen = () => {
           centerLat = coords.lat;
           centerLng = coords.lng;
           level = 5;
-          console.log('📍 첫 게시물 위치로 지도 중심 설정:', coords);
+          logger.debug('📍 첫 게시물 위치로 지도 중심 설정:', coords);
         }
       }
 
       // 지도 컨테이너 크기 확인
       if (container.offsetWidth === 0 || container.offsetHeight === 0) {
-        console.log('⚠️ 지도 컨테이너 크기가 0입니다. 재시도...');
+        logger.warn('⚠️ 지도 컨테이너 크기가 0입니다. 재시도...');
         setTimeout(initMap, 200);
         return;
       }
 
-      console.log('✅ 지도 생성 시작:', { centerLat, centerLng, level, containerSize: { width: container.offsetWidth, height: container.offsetHeight } });
+      logger.log('✅ 지도 생성 시작:', { centerLat, centerLng, level, containerSize: { width: container.offsetWidth, height: container.offsetHeight } });
 
       // 기존 지도 인스턴스가 있으면 재사용, 없으면 새로 생성
       let map = mapInstance.current;
@@ -257,11 +240,11 @@ const ProfileScreen = () => {
         map.setLevel(level);
       }
       
-      console.log('✅ 지도 인스턴스 생성 완료');
+        logger.log('✅ 지도 인스턴스 생성 완료');
       
       // 지도가 완전히 로드될 때까지 대기
       const tilesLoadedHandler = () => {
-        console.log('✅ 지도 타일 로드 완료');
+        logger.debug('✅ 지도 타일 로드 완료');
         setMapLoading(false);
         // 지도 로드 후 마커 생성
         createMarkersAfterMapLoad(map);
@@ -271,7 +254,7 @@ const ProfileScreen = () => {
       
       // 타임아웃 설정 (지도가 로드되지 않아도 진행)
       setTimeout(() => {
-        console.log('⏰ 지도 로드 타임아웃, 마커 생성 진행');
+        logger.warn('⏰ 지도 로드 타임아웃, 마커 생성 진행');
         setMapLoading(false);
         // 타임아웃 후에도 마커 생성 시도
         if (markersRef.current.length === 0) {
@@ -288,7 +271,7 @@ const ProfileScreen = () => {
 
       // 마커 생성 함수 (지도 로드 후 호출)
       const createMarkersAfterMapLoad = (map) => {
-        console.log('📍 마커 생성 시작:', myPosts.length);
+        logger.log('📍 마커 생성 시작:', myPosts.length);
         
         // 기존 마커 제거
         markersRef.current.forEach(markerData => {
@@ -322,11 +305,12 @@ const ProfileScreen = () => {
           });
 
           window.kakao.maps.event.addListener(marker, 'click', () => {
+            const currentIndex = myPosts.findIndex(p => p.id === post.id);
             navigate(`/post/${post.id}`, {
               state: {
                 post: post,
                 allPosts: myPosts,
-                currentPostIndex: index
+                currentPostIndex: currentIndex >= 0 ? currentIndex : 0
               }
             });
           });
@@ -343,7 +327,7 @@ const ProfileScreen = () => {
           hasValidMarker = true;
         };
 
-        // 마커 생성 함수
+        // 마커 생성 함수 (MapScreen과 동일한 스타일)
         const createMarker = (post, index, map, bounds) => {
           const coords = post.coordinates || getCoordinatesByLocation(post.detailedLocation || post.location);
           if (!coords) return;
@@ -351,101 +335,102 @@ const ProfileScreen = () => {
           const position = new window.kakao.maps.LatLng(coords.lat, coords.lng);
           bounds.extend(position);
 
-          const imageUrl = post.images?.[0];
-          const isBlobUrl = imageUrl && imageUrl.startsWith('blob:');
+          // 모든 경우에 이미지 마커 사용 (blob URL 포함) - MapScreen과 동일
+          const imageUrl = post.images?.[0] || post.imageUrl || post.image;
+          
+          const el = document.createElement('div');
+          el.innerHTML = `
+            <button 
+              class="pin-btn relative w-12 h-12 border-3 border-white shadow-lg rounded-md overflow-hidden hover:scale-110 transition-all duration-200 cursor-pointer" 
+              style="z-index: ${index}" 
+              data-post-id="${post.id}"
+              data-post-index="${index}"
+            >
+              <img 
+                class="w-full h-full object-cover" 
+                src="${imageUrl || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDgiIGhlaWdodD0iNDgiIHZpZXdCb3g9IjAgMCA0OCA0OCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQ4IiBoZWlnaHQ9IjQ4IiByeD0iNCIgZmlsbD0iI0YzRjRGNiIvPgo8cGF0aCBkPSJNMjQgMTZDMjAgMTYgMTcgMTkgMTcgMjNDMTcgMjcgMjAgMzAgMjQgMzBDMjggMzAgMzEgMjcgMzEgMjNDMzEgMTkgMjggMTYgMjQgMTZaIiBmaWxsPSIjOUI5Q0E1Ii8+CjxwYXRoIGQ9Ik0yNCAzMkMyMCAzMiAxNyAyOSAxNyAyNUMxNyAyMSAyMCAxOCAyNCAxOEMyOCAxOCAzMSAyMSAzMSAyNUMzMSAyOSAyOCAzMiAyNCAzMloiIGZpbGw9IiM5QjlDQTUiLz4KPC9zdmc+'} 
+                alt="${post.location || '여행지'}"
+                onerror="this.onerror=null; this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDgiIGhlaWdodD0iNDgiIHZpZXdCb3g9IjAgMCA0OCA0OCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQ4IiBoZWlnaHQ9IjQ4IiByeD0iNCIgZmlsbD0iI0YzRjRGNiIvPgo8cGF0aCBkPSJNMjQgMTZDMjAgMTYgMTcgMTkgMTcgMjNDMTcgMjcgMjAgMzAgMjQgMzBDMjggMzAgMzEgMjcgMzEgMjNDMzEgMTkgMjggMTYgMjQgMTZaIiBmaWxsPSIjOUI5Q0E1Ii8+CjxwYXRoIGQ9Ik0yNCAzMkMyMCAzMiAxNyAyOSAxNyAyNUMxNyAyMSAyMCAxOCAyNCAxOEMyOCAxOCAzMSAyMSAzMSAyNUMzMSAyOSAyOCAzMiAyNCAzMloiIGZpbGw9IiM5QjlDQTUiLz4KPC9zdmc+';"
+              />
+            </button>
+          `;
 
-          if (isBlobUrl || !imageUrl) {
-            // blob URL이거나 이미지가 없으면 기본 마커 사용
-            createDefaultMarker(post, index, position, map);
-          } else {
-            // 일반 URL인 경우 이미지 마커 사용
-            const el = document.createElement('div');
-            el.innerHTML = `
-              <button 
-                class="pin-btn relative w-12 h-12 border-3 border-white shadow-lg rounded-md overflow-hidden hover:scale-110 transition-all duration-200 cursor-pointer" 
-                style="z-index: ${index}" 
-                data-post-id="${post.id}"
-                data-post-index="${index}"
-              >
-                <img 
-                  class="w-full h-full object-cover" 
-                  src="${imageUrl}" 
-                  alt="${post.location || '여행지'}"
-                  onerror="this.parentElement.parentElement.style.display='none'; this.onerror=null;"
-                />
-              </button>
-            `;
-
-            // 클릭 이벤트 핸들러
-            const button = el.querySelector('button');
-            if (button) {
-              button.addEventListener('click', () => {
-                navigate(`/post/${post.id}`, {
-                  state: {
-                    post: post,
-                    allPosts: myPosts,
-                    currentPostIndex: index
-                  }
-                });
+          // 클릭 이벤트 핸들러
+          const button = el.querySelector('button');
+          if (button) {
+            button.addEventListener('click', () => {
+              const currentIndex = myPosts.findIndex(p => p.id === post.id);
+              navigate(`/post/${post.id}`, {
+                state: {
+                  post: post,
+                  allPosts: myPosts,
+                  currentPostIndex: currentIndex >= 0 ? currentIndex : 0
+                }
               });
-
-              button.addEventListener('mouseenter', () => {
-                button.style.transform = 'scale(1.1)';
-              });
-
-              button.addEventListener('mouseleave', () => {
-                button.style.transform = 'scale(1)';
-              });
-            }
-
-            // CustomOverlay 생성
-            const overlay = new window.kakao.maps.CustomOverlay({
-              position: position,
-              content: el,
-              yAnchor: 1,
-              zIndex: index
             });
 
-            overlay.setMap(map);
-
-            // 인포윈도우 생성
-            const infoWindow = new window.kakao.maps.InfoWindow({
-              content: `
-                <div style="padding: 12px; min-width: 200px; max-width: 300px;">
-                  ${imageUrl ? `
-                    <img 
-                      src="${imageUrl}" 
-                      alt="${post.location || '여행지'}"
-                      style="width: 100%; height: 150px; object-fit: cover; border-radius: 8px; margin-bottom: 8px;"
-                      onerror="this.style.display='none'"
-                    />
-                  ` : ''}
-                  <div style="font-weight: bold; margin-bottom: 4px; font-size: 14px;">${post.location || '여행지'}</div>
-                  ${post.note ? `<div style="font-size: 12px; color: #666; margin-top: 4px;">${post.note}</div>` : ''}
-                </div>
-              `,
-              removable: true
+            button.addEventListener('mouseenter', () => {
+              button.style.transform = 'scale(1.1)';
             });
 
-            // 임시 마커 (인포윈도우 표시용)
-            const tempMarker = new window.kakao.maps.Marker({ 
-              position: position
+            button.addEventListener('mouseleave', () => {
+              button.style.transform = 'scale(1)';
             });
-
-            // 마우스오버 이벤트
-            if (button) {
-              button.addEventListener('mouseenter', () => {
-                infoWindow.open(map, tempMarker);
-              });
-
-              button.addEventListener('mouseleave', () => {
-                infoWindow.close();
-              });
-            }
-
-            markersRef.current.push({ marker: null, overlay: overlay, post: post });
-            hasValidMarker = true;
           }
+
+          // CustomOverlay 생성
+          const overlay = new window.kakao.maps.CustomOverlay({
+            position: position,
+            content: el,
+            yAnchor: 1,
+            zIndex: index
+          });
+
+          overlay.setMap(map);
+
+          // 인포윈도우 생성
+          const infoWindow = new window.kakao.maps.InfoWindow({
+            content: `
+              <div style="padding: 12px; min-width: 200px; max-width: 300px;">
+                ${imageUrl ? `
+                  <img 
+                    src="${imageUrl}" 
+                    alt="${post.location || '여행지'}"
+                    style="width: 100%; height: 150px; object-fit: cover; border-radius: 8px; margin-bottom: 8px;"
+                    onerror="this.style.display='none'"
+                  />
+                ` : ''}
+                <div style="font-weight: bold; margin-bottom: 4px; font-size: 14px;">${post.location || '여행지'}</div>
+                ${post.note ? `<div style="font-size: 12px; color: #666; margin-top: 4px;">${post.note}</div>` : ''}
+              </div>
+            `,
+            removable: true
+          });
+
+          // 임시 마커 (인포윈도우 표시용)
+          const tempMarker = new window.kakao.maps.Marker({ 
+            position: position
+          });
+
+          // 마우스오버 이벤트
+          if (button) {
+            button.addEventListener('mouseenter', () => {
+              infoWindow.open(map, tempMarker);
+            });
+
+            button.addEventListener('mouseleave', () => {
+              infoWindow.close();
+            });
+          }
+
+          markersRef.current.push({ 
+            id: post.id, 
+            marker: null, 
+            overlay: overlay, 
+            post: post, 
+            element: el.firstChild 
+          });
+          hasValidMarker = true;
         };
 
         // 모든 게시물에 대해 마커 생성
@@ -469,7 +454,7 @@ const ProfileScreen = () => {
             
             if (markersRef.current.length > 1) {
               map.setBounds(validBounds);
-              console.log('✅ 지도 범위 조정 완료 (여러 마커)');
+              logger.debug('✅ 지도 범위 조정 완료 (여러 마커)');
             } else if (markersRef.current.length === 1) {
               // 마커가 하나일 때는 해당 위치로 이동
               const firstMarker = markersRef.current[0];
@@ -480,13 +465,13 @@ const ProfileScreen = () => {
                 map.setCenter(firstMarker.marker.getPosition());
                 map.setLevel(5);
               }
-              console.log('✅ 지도 중심 이동 완료 (단일 마커)');
+              logger.debug('✅ 지도 중심 이동 완료 (단일 마커)');
             }
           }
         }, 500);
       };
     } catch (error) {
-      console.error('지도 초기화 오류:', error);
+      logger.error('지도 초기화 오류:', error);
       setMapLoading(false);
     }
   }, [myPosts, activeTab, navigate]);
@@ -494,24 +479,24 @@ const ProfileScreen = () => {
   // 탭 변경 시 지도 초기화
   useEffect(() => {
     if (activeTab === 'map') {
-      console.log('🗺️ 여행지도 탭 활성화');
+      logger.log('🗺️ 나의 기록 지도 탭 활성화');
       setMapLoading(true);
       
       // DOM이 완전히 렌더링된 후 지도 초기화
       const initTimer = setTimeout(() => {
         console.log('⏰ 지도 초기화 타이머 실행');
         if (mapRef.current) {
-          console.log('✅ mapRef 준비됨, 지도 초기화 시작');
+          logger.debug('✅ mapRef 준비됨, 지도 초기화 시작');
           initMap();
         } else {
-          console.log('⚠️ mapRef 아직 준비 안됨, 재시도...');
+          logger.warn('⚠️ mapRef 아직 준비 안됨, 재시도...');
           // mapRef가 아직 준비되지 않았으면 다시 시도
           const retryTimer = setTimeout(() => {
             if (mapRef.current) {
-              console.log('✅ mapRef 재시도 성공, 지도 초기화');
+              logger.log('✅ mapRef 재시도 성공, 지도 초기화');
               initMap();
             } else {
-              console.error('❌ mapRef를 찾을 수 없습니다');
+              logger.error('❌ mapRef를 찾을 수 없습니다');
               setMapLoading(false);
             }
           }, 500);
@@ -525,7 +510,7 @@ const ProfileScreen = () => {
       };
     } else {
       // 다른 탭으로 전환 시 지도 정리
-      console.log('🗑️ 다른 탭으로 전환, 지도 정리');
+      logger.log('🗑️ 다른 탭으로 전환, 지도 정리');
       if (mapInstance.current) {
         // 마커 제거
         markersRef.current.forEach(markerData => {
@@ -537,7 +522,7 @@ const ProfileScreen = () => {
               markerData.marker.setMap(null);
             }
           } catch (error) {
-            console.warn('마커 제거 오류 (무시):', error);
+            logger.warn('마커 제거 오류 (무시):', error);
           }
         });
         markersRef.current = [];
@@ -617,7 +602,7 @@ const ProfileScreen = () => {
     localStorage.setItem('user', JSON.stringify(updatedUser));
     setUser(updatedUser);
     
-    console.log('✅ 대표 뱃지 선택:', badge.name);
+    logger.log('✅ 대표 뱃지 선택:', badge.name);
   };
 
   // 대표 뱃지 제거
@@ -633,21 +618,135 @@ const ProfileScreen = () => {
     localStorage.setItem('user', JSON.stringify(updatedUser));
     setUser(updatedUser);
     
-    console.log('❌ 대표 뱃지 제거');
+    logger.log('❌ 대표 뱃지 제거');
   };
 
-  if (!user) {
+  // 사용자가 없을 때 계정연결하기 화면 표시
+  if (!user || !authUser) {
     return (
-      <div className="flex h-screen w-full items-center justify-center bg-background-light dark:bg-background-dark">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-text-secondary-light dark:text-text-secondary-dark">로딩 중...</p>
+      <div className="screen-layout bg-background-light dark:bg-background-dark">
+        {/* 계정 연결 안내 화면은 스크롤 없이 한 화면에 고정 */}
+        <div className="screen-content" style={{ overflow: 'hidden' }}>
+          {/* 헤더 */}
+          <header className="screen-header bg-white dark:bg-gray-900 flex items-center p-4 justify-between">
+            <button 
+              onClick={() => navigate('/main')}
+              className="flex size-12 shrink-0 items-center justify-center text-text-primary-light dark:text-text-primary-dark hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+            >
+              <span className="material-symbols-outlined text-2xl">arrow_back</span>
+            </button>
+            <h1 className="text-text-primary-light dark:text-text-primary-dark text-base font-semibold">프로필</h1>
+            <div className="w-12"></div>
+          </header>
+
+          {/* 계정연결하기 유도 화면 - 살짝 상단으로 올린 레이아웃 */}
+          <div className="screen-body flex flex-col items-center justify-start px-6 pt-16 pb-8">
+            <div className="w-full max-w-sm text-center">
+              {/* 아이콘 */}
+              <div className="mb-6 flex justify-center">
+                <div className="w-24 h-24 rounded-full bg-primary/10 dark:bg-primary/20 flex items-center justify-center">
+                  <span className="material-symbols-outlined text-primary text-5xl">account_circle</span>
         </div>
+              </div>
+
+              {/* 제목 */}
+              <h2 className="text-2xl font-bold text-text-primary-light dark:text-text-primary-dark mb-2">
+                계정을 연결해주세요
+              </h2>
+              <p className="text-text-secondary-light dark:text-text-secondary-dark text-sm mb-8">
+                계정을 연결하면 기록을 저장하고<br />
+                뱃지를 획득할 수 있어요
+              </p>
+
+              {/* 계정연결하기 버튼 */}
+              <button
+                onClick={() => {
+                  // 소셜로그인 화면으로 이동
+                  sessionStorage.setItem('showLoginScreen', 'true');
+                  navigate('/start');
+                }}
+                className="w-full bg-primary text-white py-4 px-6 rounded-xl font-bold text-base hover:bg-primary/90 transition-colors shadow-lg flex items-center justify-center gap-2 mb-4"
+              >
+                <span className="material-symbols-outlined">link</span>
+                계정연결하기
+              </button>
+
+              {/* 안내 메시지 */}
+              <p className="text-xs text-text-secondary-light dark:text-text-secondary-dark">
+                소셜 로그인으로 간편하게 시작할 수 있어요
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <BottomNavigation />
       </div>
     );
   }
 
   const badgeCount = earnedBadges.length;
+
+  // 로그인되지 않은 경우 로그인 유도 화면 렌더링
+  if (!isAuthenticated) {
+    return (
+      <div className="relative flex h-full w-full flex-col bg-white dark:bg-zinc-900">
+        {/* 헤더 */}
+        <div className="sticky top-0 z-10 flex items-center justify-between bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+          <h1 className="text-lg font-bold text-text-primary-light dark:text-text-primary-dark">프로필</h1>
+        </div>
+
+        {/* 로그인 유도 컨텐츠 */}
+        <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
+          <div className="w-24 h-24 mb-6 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
+            <span className="material-symbols-outlined text-6xl text-gray-400 dark:text-gray-500">
+              person
+            </span>
+          </div>
+          
+          <h2 className="text-xl font-bold text-text-primary-light dark:text-text-primary-dark mb-3">
+            로그인이 필요합니다
+          </h2>
+          
+          <p className="text-sm text-text-secondary-light dark:text-text-secondary-dark mb-6 max-w-sm">
+            로그인하시면 게시물 업로드, 뱃지 획득, 커뮤니티 참여 등 다양한 기능을 사용하실 수 있습니다.
+          </p>
+
+          <button
+            onClick={() => navigate('/start')}
+            className="flex items-center justify-center gap-2 px-6 py-3 bg-primary text-white rounded-full font-semibold hover:bg-primary-dark active:scale-95 transition-all shadow-lg"
+          >
+            <span className="material-symbols-outlined text-xl">login</span>
+            <span>로그인 / 회원가입</span>
+          </button>
+
+          <div className="mt-8 p-4 bg-gray-50 dark:bg-gray-800 rounded-xl">
+            <p className="text-xs text-gray-600 dark:text-gray-400 mb-2 font-semibold">로그인하면 이용 가능:</p>
+            <div className="flex flex-col gap-2 text-left">
+              <div className="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300">
+                <span className="material-symbols-outlined text-base text-primary">check_circle</span>
+                <span>여행 사진 업로드 및 공유</span>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300">
+                <span className="material-symbols-outlined text-base text-primary">check_circle</span>
+                <span>뱃지 획득 및 레벨 시스템</span>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300">
+                <span className="material-symbols-outlined text-base text-primary">check_circle</span>
+                <span>다른 여행자 팔로우 및 소통</span>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300">
+                <span className="material-symbols-outlined text-base text-primary">check_circle</span>
+                <span>맞춤 추천 및 알림</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* 하단 네비게이션 */}
+        <BottomNavigation unreadNotificationCount={0} />
+      </div>
+    );
+  }
 
   return (
     <div className="screen-layout bg-background-light dark:bg-background-dark">
@@ -676,15 +775,15 @@ const ProfileScreen = () => {
           <div className="flex items-center gap-4 mb-4">
             {/* 프로필 사진 */}
             <div className="flex-shrink-0">
-              {user.profileImage ? (
+              {user.profileImage && user.profileImage !== 'default' ? (
                 <img 
                   src={user.profileImage} 
                   alt="Profile" 
-                  className="w-16 h-16 rounded-full object-cover"
+                  className="w-16 h-16 rounded-full object-cover border-2 border-gray-200 dark:border-gray-700"
                 />
               ) : (
-                <div className="w-16 h-16 rounded-full bg-teal-100 dark:bg-teal-900 flex items-center justify-center">
-                  <span className="material-symbols-outlined text-teal-600 dark:text-teal-400 text-4xl">person</span>
+                <div className="w-16 h-16 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
+                  <span className="material-symbols-outlined text-gray-500 dark:text-gray-400 text-4xl">person</span>
                 </div>
               )}
             </div>
@@ -697,8 +796,10 @@ const ProfileScreen = () => {
                 </h2>
                 {/* 대표 뱃지 */}
                 {representativeBadge && (
-                  <div className="flex items-center gap-1 px-2 py-1 bg-gradient-to-r from-primary/20 to-orange-400/20 rounded-full border-2 border-primary/30">
-                    <span style={{ fontSize: '16px' }}>{representativeBadge.icon}</span>
+                  <div className="flex items-center gap-1 px-2 py-1 bg-gradient-to-r from-primary-soft to-accent-soft rounded-full border-2 border-primary/30">
+                    <span className="text-base leading-none" role="img" aria-label={representativeBadge.name}>
+                      {representativeBadge.icon || '🏆'}
+                    </span>
                     <span className="text-xs font-bold text-primary">{representativeBadge.name}</span>
                   </div>
                 )}
@@ -719,7 +820,7 @@ const ProfileScreen = () => {
                   </div>
                   <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                     <div 
-                      className="bg-gradient-to-r from-primary to-orange-400 h-2 rounded-full transition-all duration-500"
+                      className="bg-gradient-to-r from-primary to-accent h-2 rounded-full transition-all duration-500"
                       style={{ width: `${levelInfo.progress}%` }}
                     ></div>
                   </div>
@@ -731,7 +832,7 @@ const ProfileScreen = () => {
           {/* 프로필 편집 버튼 */}
           <button
             onClick={() => {
-              console.log('🔧 프로필 편집 버튼 클릭 → /profile/edit으로 이동');
+              logger.debug('🔧 프로필 편집 버튼 클릭 → /profile/edit으로 이동');
               navigate('/profile/edit');
             }}
             className="w-full bg-gray-100 dark:bg-gray-800 text-text-primary-light dark:text-text-primary-dark py-2.5 px-4 rounded-lg font-medium hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
@@ -742,11 +843,22 @@ const ProfileScreen = () => {
 
         {/* 획득한 뱃지 섹션 */}
         <div className="bg-white dark:bg-gray-900 px-6 py-6">
-          <div className="flex items-center gap-2 mb-6">
-            <span className="material-symbols-outlined text-primary text-xl">workspace_premium</span>
-            <h3 className="text-text-primary-light dark:text-text-primary-dark text-base font-bold">
-              획득한 뱃지
-            </h3>
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-primary text-xl">workspace_premium</span>
+              <h3 className="text-text-primary-light dark:text-text-primary-dark text-base font-bold">
+                획득한 뱃지
+              </h3>
+            </div>
+            {/* 뱃지 모아보기 버튼 - 작게 */}
+            <button
+              onClick={() => navigate('/badges')}
+              className="flex items-center gap-1 px-3 py-1.5 bg-primary/10 hover:bg-primary/20 rounded-full transition-colors"
+            >
+              <span className="text-xs font-semibold text-primary">모아보기</span>
+              <span className="text-xs font-bold text-primary">{badgeCount}</span>
+              <span className="material-symbols-outlined text-primary text-sm">chevron_right</span>
+            </button>
           </div>
 
           {badgeCount === 0 ? (
@@ -763,14 +875,14 @@ const ProfileScreen = () => {
                 아직 획득한 뱃지가 없어요
               </p>
               <p className="text-text-secondary-light dark:text-text-secondary-dark text-xs mb-4">
-                여행 기록을 남기고 뱃지를 획득해보세요!
+                기록을 남기고 뱃지를 획득해보세요!
               </p>
               <button
                 onClick={() => navigate('/upload')}
                 className="w-full bg-primary text-white py-3 px-6 rounded-xl font-semibold hover:bg-primary/90 transition-colors shadow-lg flex items-center justify-center gap-2"
               >
                 <span className="material-symbols-outlined text-lg">add_circle</span>
-                첫 여행 기록하기
+                첫 기록하기
               </button>
             </div>
           ) : (
@@ -780,7 +892,7 @@ const ProfileScreen = () => {
                 onClick={() => setShowBadgeSelector(true)}
                 className="w-full text-left"
               >
-                <div className="flex items-center justify-between p-4 bg-gradient-to-r from-primary/10 to-orange-400/10 rounded-xl border-2 border-primary/30 hover:border-primary/50 transition-all">
+                <div className="flex items-center justify-between p-4 bg-gradient-to-r from-primary-soft to-accent-soft rounded-xl border-2 border-primary/30 hover:border-primary/50 transition-all">
                   <div className="flex items-center gap-3">
                     <span className="material-symbols-outlined text-primary text-2xl">military_tech</span>
                     <div>
@@ -792,32 +904,18 @@ const ProfileScreen = () => {
                   </div>
                   {representativeBadge && (
                     <div className="flex items-center gap-2">
-                      <span style={{ fontSize: '28px' }}>{representativeBadge.icon}</span>
+                      <span className="text-3xl leading-none" role="img" aria-label={representativeBadge.name}>
+                        {representativeBadge.icon || '🏆'}
+                      </span>
                     </div>
                   )}
-                </div>
-              </button>
-
-              {/* 뱃지 모아보기 */}
-              <button
-                onClick={() => navigate('/badges')}
-                className="w-full text-left"
-              >
-                <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-                  <span className="text-text-primary-light dark:text-text-primary-dark font-medium">뱃지 모아보기</span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-primary font-bold">{badgeCount}</span>
-                    <span className="material-symbols-outlined text-text-secondary-light dark:text-text-secondary-dark">
-                      chevron_right
-                    </span>
-                  </div>
                 </div>
               </button>
             </div>
           )}
         </div>
 
-        {/* 여행 기록 탭 */}
+        {/* 기록 탭 */}
         <div className="bg-white dark:bg-gray-900 px-6 py-6 border-t border-gray-100 dark:border-gray-800">
           {/* 탭 전환 */}
           <div className="flex gap-2 mb-6">
@@ -839,7 +937,7 @@ const ProfileScreen = () => {
                   : 'bg-gray-100 dark:bg-gray-800 text-text-secondary-light dark:text-text-secondary-dark hover:bg-gray-200 dark:hover:bg-gray-700'
               }`}
             >
-              🗺️ 여행지도
+              🗺️ 나의 기록 지도
             </button>
             <button
               onClick={() => setActiveTab('timeline')}
@@ -852,27 +950,6 @@ const ProfileScreen = () => {
               📅 타임라인
             </button>
           </div>
-
-          {/* 도움 받은 사람 수 표시 */}
-          {myPosts.length > 0 && (() => {
-            const totalLikes = myPosts.reduce((sum, post) => sum + (post.likes || post.likeCount || 0), 0);
-            return (
-              <div className="mb-4 px-4 py-4 bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/30 dark:to-pink-900/30 rounded-2xl border-2 border-purple-200 dark:border-purple-700 shadow-sm">
-                <div className="flex items-center gap-3">
-                  <div className="flex-shrink-0 w-12 h-12 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center shadow-lg">
-                    <span className="material-symbols-outlined text-white text-2xl">favorite</span>
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">현재 내 사진이</p>
-                    <p className="text-xl font-bold text-purple-700 dark:text-purple-300">
-                      <span className="text-2xl">{totalLikes.toLocaleString()}</span>명에게 도움이 되었습니다
-                    </p>
-                  </div>
-                </div>
-              </div>
-            );
-          })()}
-
 
           {/* 편집 버튼 (내 사진 탭에서만) */}
           {activeTab === 'my' && myPosts.length > 0 && (
@@ -904,7 +981,8 @@ const ProfileScreen = () => {
                 아직 올린 사진이 없어요
               </p>
               <p className="text-gray-400 dark:text-gray-500 text-sm mb-4">
-                첫 번째 여행 사진을 공유해보세요!
+                내 지역의 실시간 사진을 올려<br />
+                나만의 발자취를 만들어보세요!
               </p>
               <button
                 onClick={() => navigate('/upload')}
@@ -930,11 +1008,12 @@ const ProfileScreen = () => {
                       if (isEditMode) {
                         togglePhotoSelection(post.id);
                       } else {
+                        const currentIndex = myPosts.findIndex(p => p.id === post.id);
                         navigate(`/post/${post.id}`, {
                           state: {
                             post: post,
                             allPosts: myPosts,
-                            currentPostIndex: index
+                            currentPostIndex: currentIndex >= 0 ? currentIndex : 0
                           }
                         });
                       }
@@ -990,7 +1069,7 @@ const ProfileScreen = () => {
                     {/* 이미지 밖 하단 텍스트 */}
                     <div className="space-y-1">
                       <p className="text-sm font-semibold text-text-primary-light dark:text-text-primary-dark line-clamp-2">
-                        {post.note || post.location || '여행 기록'}
+                        {post.note || post.location || '기록'}
                       </p>
                       {post.tags && post.tags.length > 0 && (
                         <div className="flex flex-wrap gap-1">
@@ -1008,20 +1087,28 @@ const ProfileScreen = () => {
             </div>
           )}
 
-          {/* 여행 지도 탭 */}
+          {/* 나의 기록 지도 탭 */}
           {activeTab === 'map' && (
             <div>
               {myPosts.length === 0 ? (
                 <div className="text-center py-12">
                   <span className="material-symbols-outlined text-6xl text-gray-300 dark:text-gray-600 mb-4 block">
-                    map
+                    explore
                   </span>
                   <p className="text-text-secondary-light dark:text-text-secondary-dark text-base font-medium mb-2">
-                    아직 여행 기록이 없어요
+                    아직 기록이 없어요
                   </p>
-                  <p className="text-gray-400 dark:text-gray-500 text-sm">
-                    사진을 올리면 여기에 지도로 표시돼요!
+                  <p className="text-gray-400 dark:text-gray-500 text-sm mb-4">
+                    내 지역의 실시간 사진을 올리면<br />
+                    여기에 나의 기록으로 표시돼요!
                   </p>
+                  <button
+                    onClick={() => navigate('/map')}
+                    className="bg-primary text-white py-3 px-6 rounded-full font-semibold hover:bg-primary/90 transition-colors shadow-lg inline-flex items-center gap-2"
+                  >
+                    <span className="material-symbols-outlined">explore</span>
+                    지도에서 시작하기
+                  </button>
                 </div>
               ) : (
                 <div>
@@ -1042,95 +1129,9 @@ const ProfileScreen = () => {
                     )}
                   </div>
 
-                  {/* 오늘의 타이틀 영역 */}
-                  <div className="mb-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <h2 className="text-sm font-semibold text-text-primary-light dark:text-text-primary-dark">
-                        오늘의 타이틀
-                      </h2>
-                    </div>
-                    {dailyTitle ? (
-                      <div className="relative flex items-center gap-3 px-4 py-4 rounded-2xl bg-gradient-to-r from-amber-100 via-orange-100 to-yellow-100 dark:from-amber-900/50 dark:via-orange-900/50 dark:to-yellow-900/50 border-2 border-amber-400 dark:border-amber-500 shadow-lg hover:shadow-xl transition-all animate-pulse">
-                        {/* 후광 효과 */}
-                        <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-amber-400/20 via-orange-400/20 to-yellow-400/20 dark:from-amber-500/30 dark:via-orange-500/30 dark:to-yellow-500/30 blur-xl animate-pulse"></div>
-                        
-                        {/* 특별 배지 */}
-                        <div className="absolute -top-2 -right-2 bg-gradient-to-r from-red-500 to-pink-500 text-white text-[10px] font-bold px-2 py-1 rounded-full shadow-lg animate-bounce">
-                          👑 VIP
-                        </div>
-                        
-                        <div className="relative flex items-center justify-center w-14 h-14 rounded-full bg-gradient-to-br from-amber-400 via-orange-400 to-yellow-400 dark:from-amber-500 dark:via-orange-500 dark:to-yellow-500 shadow-xl ring-4 ring-amber-300/50 dark:ring-amber-400/30">
-                          <span className="text-3xl drop-shadow-lg">{dailyTitle.icon || '👑'}</span>
-                        </div>
-                        <div className="flex flex-col flex-1 relative z-10">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-lg font-extrabold bg-gradient-to-r from-amber-700 to-orange-700 dark:from-amber-300 dark:to-orange-300 bg-clip-text text-transparent">
-                              {dailyTitle.name}
-                            </span>
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-gradient-to-r from-amber-500 to-orange-500 text-white">
-                              {dailyTitle.category || '24시간'}
-                            </span>
-                          </div>
-                          <span className="text-xs text-amber-800/90 dark:text-amber-200/90 font-medium">
-                            {dailyTitle.description || '오늘 하루 동안 유지되는 명예 타이틀입니다.'}
-                          </span>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="px-4 py-3 rounded-2xl bg-gray-50 dark:bg-gray-800/60 border border-dashed border-gray-300 dark:border-gray-600">
-                        <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
-                          아직 획득한 오늘의 타이틀이 없습니다. 오늘 현장 정보를 공유하면 특별한 타이틀을 받을 수 있어요.
-                        </p>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* 타이틀 히스토리 및 통계 */}
-                  {titleStats && titleStats.totalTitles > 0 && (
-                    <div className="mb-4">
-                      <div className="flex items-center justify-between mb-2">
-                        <h2 className="text-sm font-semibold text-text-primary-light dark:text-text-primary-dark">
-                          타이틀 통계
-                        </h2>
-                      </div>
-                      <div className="grid grid-cols-3 gap-2 mb-3">
-                        <div className="px-3 py-2 rounded-xl bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-900/30 dark:to-orange-900/30 border border-amber-200 dark:border-amber-700">
-                          <div className="text-xs text-amber-700 dark:text-amber-300 mb-1">총 획득</div>
-                          <div className="text-lg font-bold text-amber-900 dark:text-amber-200">{titleStats.totalTitles}회</div>
-                        </div>
-                        <div className="px-3 py-2 rounded-xl bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/30 dark:to-pink-900/30 border border-purple-200 dark:border-purple-700">
-                          <div className="text-xs text-purple-700 dark:text-purple-300 mb-1">다양한 타이틀</div>
-                          <div className="text-lg font-bold text-purple-900 dark:text-purple-200">{titleStats.uniqueTitles}종</div>
-                        </div>
-                        <div className="px-3 py-2 rounded-xl bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-900/30 dark:to-cyan-900/30 border border-blue-200 dark:border-blue-700">
-                          <div className="text-xs text-blue-700 dark:text-blue-300 mb-1">최다 획득</div>
-                          <div className="text-sm font-bold text-blue-900 dark:text-blue-200 truncate" title={titleStats.mostEarnedTitle}>
-                            {titleStats.mostEarnedTitle || '-'}
-                          </div>
-                        </div>
-                      </div>
-                      {titleHistory.length > 0 && (
-                        <div className="px-3 py-2 rounded-xl bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700">
-                          <div className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2">최근 획득 타이틀</div>
-                          <div className="space-y-2 max-h-32 overflow-y-auto">
-                            {titleHistory.slice(0, 5).map((item, index) => (
-                              <div key={index} className="flex items-center gap-2 text-xs">
-                                <span className="text-base">{item.title.icon}</span>
-                                <span className="flex-1 font-medium text-gray-700 dark:text-gray-300 truncate">{item.title.name}</span>
-                                <span className="text-gray-500 dark:text-gray-500 text-[10px]">
-                                  {new Date(item.date).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
                   {/* 지역별 사진 수 */}
                   <div className="space-y-2">
-                    <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">📍 방문한 지역</h3>
+                    <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">📍 지역</h3>
                     {Object.entries(
                       myPosts.reduce((acc, post) => {
                         const location = post.location || '기타';
@@ -1171,7 +1172,7 @@ const ProfileScreen = () => {
                     event_note
                   </span>
                   <p className="text-text-secondary-light dark:text-text-secondary-dark text-base font-medium mb-2">
-                    아직 여행 기록이 없어요
+                    아직 기록이 없어요
                   </p>
                   <p className="text-gray-400 dark:text-gray-500 text-sm">
                     사진을 올리면 타임라인으로 정리돼요!
@@ -1207,10 +1208,19 @@ const ProfileScreen = () => {
 
                         {/* 사진 그리드 */}
                         <div className="grid grid-cols-3 gap-2 mb-4">
-                          {posts.map((post, index) => (
+                          {posts.map((post, index) => {
+                            const allPosts = myPosts;
+                            const currentIndex = allPosts.findIndex(p => p.id === post.id);
+                            return (
                             <div
                               key={post.id || index}
-                              onClick={() => navigate(`/post/${post.id}`)}
+                                onClick={() => navigate(`/post/${post.id}`, {
+                                  state: {
+                                    post: post,
+                                    allPosts: allPosts,
+                                    currentPostIndex: currentIndex >= 0 ? currentIndex : 0
+                                  }
+                                })}
                               className="cursor-pointer group"
                             >
                               <div className="aspect-square relative overflow-hidden rounded-lg">
@@ -1238,7 +1248,8 @@ const ProfileScreen = () => {
                                 {post.location}
                               </p>
                             </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       </div>
                     ))}
@@ -1285,15 +1296,17 @@ const ProfileScreen = () => {
                     onClick={() => selectRepresentativeBadge(badge)}
                     className={`p-4 rounded-xl border-2 transition-all ${
                       representativeBadge?.name === badge.name
-                        ? 'bg-gradient-to-br from-primary/20 to-orange-400/20 border-primary shadow-lg'
+                        ? 'bg-gradient-to-br from-primary/20 to-accent/20 border-primary shadow-lg'
                         : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:border-primary/50'
                     }`}
                   >
                     <div className="flex flex-col items-center gap-2">
-                      <span style={{ fontSize: '48px' }}>{badge.icon}</span>
+                      <span className="text-5xl leading-none" role="img" aria-label={badge.name}>
+                        {badge.icon || '🏆'}
+                      </span>
                       <p className="text-sm font-bold text-center">{badge.name}</p>
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                        badge.difficulty === '상' ? 'bg-purple-500 text-white' :
+                        badge.difficulty === '상' ? 'bg-primary-dark text-white' :
                         badge.difficulty === '중' ? 'bg-blue-500 text-white' :
                         'bg-green-500 text-white'
                       }`}>

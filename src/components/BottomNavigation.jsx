@@ -8,10 +8,15 @@ const BottomNavigation = React.memo(() => {
   // 현재 활성화된 탭 확인 (useCallback)
   const isActive = useCallback((path) => {
     if (path === '/main') {
-      return location.pathname === '/main' || location.pathname === '/';
+      return location.pathname === '/main' || 
+             location.pathname === '/' ||
+             location.pathname.startsWith('/magazine');
     }
     if (path === '/search') {
       return location.pathname.startsWith('/search') || location.pathname.startsWith('/region');
+    }
+    if (path === '/upload') {
+      return location.pathname === '/upload';
     }
     if (path === '/map') {
       return location.pathname === '/map';
@@ -39,7 +44,14 @@ const BottomNavigation = React.memo(() => {
     <nav 
       className="flex-shrink-0 flex h-20 items-center justify-around border-t border-border-light dark:border-border-dark bg-background-light dark:bg-background-dark"
       style={{
-        paddingBottom: 'env(safe-area-inset-bottom, 0px)'
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        width: '100%',
+        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+        boxShadow: '0 -2px 10px rgba(0, 0, 0, 0.05)',
+        zIndex: 50
       }}
     >
       <button 
@@ -62,12 +74,19 @@ const BottomNavigation = React.memo(() => {
       </button>
       <button 
         onClick={() => navigate('/upload')}
-        className="flex flex-col items-center gap-1 text-text-subtle-light dark:text-text-subtle-dark"
+        className="flex flex-col items-center gap-1 relative"
+        style={{
+          background: '#00BCD4',
+          borderRadius: '50%',
+          width: '56px',
+          height: '56px',
+          justifyContent: 'center',
+          alignItems: 'center',
+          boxShadow: '0 4px 12px rgba(0, 188, 212, 0.3)',
+          marginTop: '-8px'
+        }}
       >
-        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-white hover:bg-primary/90 transition-colors">
-          <span className="material-symbols-outlined !text-2xl">add</span>
-        </div>
-        <span className="text-xs font-bold text-text-subtle-light dark:text-text-subtle-dark">업로드</span>
+        <span className="material-symbols-outlined" style={{ color: 'white', fontSize: '28px' }}>add</span>
       </button>
       <button 
         onClick={() => navigate('/map')}
