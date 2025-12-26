@@ -30,8 +30,9 @@
 - [빠른 배포 가이드](./QUICK_DEPLOY.md) 참고
 - Netlify 대안
 
-**방법 3: GitHub Pages**
-- [GitHub Pages 설정 가이드](./GITHUB_PAGES_SETUP.md) 참고
+**방법 3: GitHub Pages (직접 설정)**
+- [간단 가이드](./GITHUB_PAGES_SIMPLE.md) - 5분 안에 직접 설정하는 방법
+- [상세 가이드](./GITHUB_PAGES_SETUP.md) - 더 자세한 설명
 
 ---
 
