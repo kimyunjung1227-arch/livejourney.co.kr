@@ -16,13 +16,23 @@
 
 ---
 
+## 🌐 라이브 데모
+
+GitHub Pages로 배포된 앱을 바로 확인할 수 있습니다:
+
+🔗 **https://kimyunjung1227-arch.github.io/app/**
+
+> ⚠️ **참고**: GitHub Pages 설정이 완료되지 않았다면 [GitHub Pages 설정 가이드](./GITHUB_PAGES_SETUP.md)를 참고하세요.
+
+---
+
 ## 🚀 실행하기
 
 ### 1. 저장소 클론 (다른 사람이 사용하는 경우)
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/REPO_NAME.git
-cd REPO_NAME
+git clone https://github.com/kimyunjung1227-arch/app.git
+cd app
 ```
 
 ### 2. 의존성 설치
