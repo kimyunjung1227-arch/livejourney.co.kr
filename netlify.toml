@@ -1,8 +1,7 @@
 # Netlify 배포 설정
 [build]
-  base = "web"
   publish = "dist"
-  command = "npm run build"
+  command = "npm install && npm run build"
 
 # 환경 변수
 [build.environment]
