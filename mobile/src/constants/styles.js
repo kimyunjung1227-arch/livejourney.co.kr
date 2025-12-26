@@ -1,9 +1,11 @@
+import { Platform } from 'react-native';
+
 // 색상 상수 (웹 Tailwind와 완전히 동일)
 export const COLORS = {
-  // Primary (웹과 동일)
-  primary: '#ff6b35',
-  primaryDark: '#e85d22',
-  primaryLight: '#ff8c5a',
+  // Primary (웹과 동일 - Live Blue)
+  primary: '#00BCD4',           // Live Blue - 신뢰, 실시간, 스마트
+  primaryDark: '#0097A7',       // Hover/Active 용 약간 더 딥한 블루
+  primaryLight: '#E0F7FA',      // 배경/하이라이트용 소프트 블루
   
   // Background (웹과 동일)
   background: '#F9FAFB',
@@ -102,34 +104,49 @@ export const SPACING = {
   xxl: 48,
 };
 
+// 기본 폰트 패밀리 (웹과 동일하게 Noto Sans KR 우선, 없으면 시스템 폰트)
+// 나중에 expo-font로 Noto Sans KR을 로드하면 이 값을 업데이트하면 됩니다
+export const FONT_FAMILY = Platform.select({
+  ios: 'System', // iOS는 시스템 폰트 사용 (나중에 expo-font로 Noto Sans KR 추가 가능)
+  android: 'System', // Android는 시스템 폰트 사용 (나중에 expo-font로 Noto Sans KR 추가 가능)
+  default: 'System',
+});
+
 // 타이포그래피 (기본값 - 반응형은 필요시 getResponsiveFontSize 사용)
+// 폰트: 웹과 동일하게 Noto Sans KR 우선 사용 (현재는 시스템 폰트, 나중에 expo-font로 변경 가능)
 export const TYPOGRAPHY = {
   h1: {
     fontSize: 32,
     fontWeight: 'bold',
     lineHeight: 40,
+    fontFamily: FONT_FAMILY,
   },
   h2: {
     fontSize: 24,
     fontWeight: 'bold',
     lineHeight: 32,
+    fontFamily: FONT_FAMILY,
   },
   h3: {
     fontSize: 20,
     fontWeight: '600',
     lineHeight: 28,
+    fontFamily: FONT_FAMILY,
   },
   body: {
     fontSize: 16,
     lineHeight: 24,
+    fontFamily: FONT_FAMILY,
   },
   bodySmall: {
     fontSize: 14,
     lineHeight: 20,
+    fontFamily: FONT_FAMILY,
   },
   caption: {
     fontSize: 12,
     lineHeight: 16,
+    fontFamily: FONT_FAMILY,
   },
 };
 

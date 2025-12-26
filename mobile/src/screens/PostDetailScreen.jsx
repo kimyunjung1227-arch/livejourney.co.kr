@@ -21,8 +21,10 @@ import { COLORS, SPACING, TYPOGRAPHY } from '../constants/styles';
 
 import { getTimeAgo } from '../utils/timeUtils';
 import { toggleLike, isPostLiked, addComment } from '../utils/socialInteractions';
+import { toggleInterestPlace, isInterestPlace } from '../utils/interestPlaces';
 import { ScreenLayout, ScreenContent, ScreenHeader, ScreenBody } from '../components/ScreenLayout';
-import { BADGES } from '../utils/badgeSystem';
+import { BADGES, getEarnedBadgesForUser } from '../utils/badgeSystem';
+import { getUserLevel } from '../utils/levelSystem';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -55,6 +57,7 @@ const PostDetailScreen = () => {
 
   const [post, setPost] = useState(passedPost);
   const [loading, setLoading] = useState(!passedPost);
+  const [isFavorited, setIsFavorited] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [currentPostIndexState, setCurrentPostIndexState] = useState(currentPostIndex || 0);
   const [liked, setLiked] = useState(false);
@@ -64,12 +67,18 @@ const PostDetailScreen = () => {
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [showHeartAnimation, setShowHeartAnimation] = useState(false);
   const [representativeBadge, setRepresentativeBadge] = useState(null);
+  const [userBadges, setUserBadges] = useState([]);
+  const [authorLevelInfo, setAuthorLevelInfo] = useState(null);
   
   // 하트 애니메이션 값
   const heartScale = useRef(new Animated.Value(0)).current;
   const heartOpacity = useRef(new Animated.Value(0)).current;
   const pulseScale = useRef(new Animated.Value(0)).current;
   const pulseOpacity = useRef(new Animated.Value(0)).current;
+  
+  // 댓글 입력창 ref
+  const commentInputRef = useRef(null);
+  const commentInputSectionRef = useRef(null);
 
   // 슬라이드 가능한 게시물 목록
   const slideablePosts = useMemo(() => {
@@ -84,6 +93,26 @@ const PostDetailScreen = () => {
     const images = post?.images || (post?.image ? [post.image] : []);
     const videos = post?.videos || [];
     return [...images.map(img => ({ type: 'image', url: img })), ...videos.map(vid => ({ type: 'video', url: vid }))];
+  }, [post]);
+
+  // 게시물 작성자 ID를 일관된 방식으로 계산 (다른 화면과 동일한 로직)
+  const postAuthorId = useMemo(() => {
+    if (!post) return null;
+    let authorId = post.userId;
+    
+    if (!authorId && typeof post.user === 'string') {
+      authorId = post.user;
+    }
+    
+    if (!authorId && post.user && typeof post.user === 'object') {
+      authorId = post.user.id || post.user.userId;
+    }
+    
+    if (!authorId) {
+      authorId = post.user;
+    }
+    
+    return authorId ? String(authorId) : null;
   }, [post]);
 
   // 대표 뱃지 로드
@@ -110,8 +139,18 @@ const PostDetailScreen = () => {
         await AsyncStorage.setItem(`representativeBadge_${userId}`, JSON.stringify(mockRepBadge));
         setRepresentativeBadge(mockRepBadge);
       }
+      
+      // 사용자의 모든 뱃지 로드 (사진 상세에서는 대표 뱃지만 사용)
+      const badges = await getEarnedBadgesForUser(userId);
+      setUserBadges(badges || []);
+      
+      // 레벨 정보 로드 (작성자 기준)
+      // 현재 레벨 시스템은 로컬 전체 기준이라, 작성자/뷰어 구분은 없지만
+      // UI 상으로는 "작성자의 레벨"처럼 표시
+      const levelInfo = await getUserLevel();
+      setAuthorLevelInfo(levelInfo);
     } catch (error) {
-      console.error('대표 뱃지 로드 실패:', error);
+      console.error('뱃지 로드 실패:', error);
     }
   }, []);
 
@@ -140,10 +179,11 @@ const PostDetailScreen = () => {
         setLikeCount(currentPost.likes || 0);
         setComments([...(currentPost.comments || []), ...(currentPost.qnaList || [])]);
         
-        // 대표 뱃지 로드
-        const postUserId = currentPost.userId || 
-                          (typeof currentPost.user === 'string' ? currentPost.user : currentPost.user?.id) ||
-                          currentPost.user;
+        // 대표 뱃지 / 작성자 정보 로드
+        const postUserId =
+          currentPost.userId ||
+          (typeof currentPost.user === 'string' ? currentPost.user : currentPost.user?.id) ||
+          currentPost.user;
         if (postUserId) {
           await loadRepresentativeBadge(postUserId);
         }
@@ -313,6 +353,13 @@ const PostDetailScreen = () => {
     fetchPost();
   }, [fetchPost]);
 
+  // 초기 즐겨찾기 상태 확인
+  useEffect(() => {
+    if (post) {
+      isInterestPlace(post.location || post.placeName).then(setIsFavorited);
+    }
+  }, [post]);
+
   if (loading) {
     return (
       <ScreenLayout>
@@ -335,7 +382,17 @@ const PostDetailScreen = () => {
 
   const locationText = post?.location || post?.title || '여행지';
   const detailedLocationText = post?.detailedLocation || post?.placeName || null;
-  const userName = post?.user || post?.userId || '여행자';
+  // 작성자 이름을 일관된 방식으로 계산
+  let userName = '여행자';
+  if (post?.user) {
+    if (typeof post.user === 'string') {
+      userName = post.user;
+    } else if (typeof post.user === 'object') {
+      userName = post.user.username || post.user.name || post.user.id || '여행자';
+    }
+  } else if (post?.userId) {
+    userName = String(post.userId);
+  }
   const userBadge = post?.badge || '여행러버';
   const timeText = post?.time || (post?.timestamp ? getTimeAgo(post.timestamp) : '방금 전');
   const categoryName = post?.categoryName || null;
@@ -451,9 +508,8 @@ const PostDetailScreen = () => {
             <TouchableOpacity
               style={styles.authorInfo}
               onPress={() => {
-                const postUserId = post?.userId;
-                if (postUserId) {
-                  navigation.navigate('UserProfile', { userId: postUserId });
+                if (postAuthorId) {
+                  navigation.navigate('UserProfile', { userId: postAuthorId, username: userName });
                 }
               }}
             >
@@ -474,9 +530,14 @@ const PostDetailScreen = () => {
                     </View>
                   )}
                 </View>
-                {!representativeBadge && (
-                  <Text style={styles.authorBadge}>🎖️ {userBadge}</Text>
-                )}
+                {/* 작성자 레벨 표시 */}
+                <View style={styles.authorLevelRow}>
+                  <Text style={styles.authorLevelText}>
+                    {authorLevelInfo
+                      ? `Lv. ${authorLevelInfo.level} ${authorLevelInfo.title}`
+                      : 'Lv. 1 여행 입문자'}
+                  </Text>
+                </View>
               </View>
             </TouchableOpacity>
           </View>
@@ -548,7 +609,7 @@ const PostDetailScreen = () => {
             </View>
           )}
 
-          {/* 좋아요/댓글 */}
+          {/* 좋아요/관심/댓글 */}
           <View style={styles.actionsSection}>
             <TouchableOpacity style={styles.actionButton} onPress={handleLike}>
               {liked ? (
@@ -566,10 +627,19 @@ const PostDetailScreen = () => {
               )}
               <Text style={styles.actionText}>{likeCount}</Text>
             </TouchableOpacity>
-            <View style={styles.actionButton}>
+            
+            <TouchableOpacity 
+              style={styles.actionButton} 
+              onPress={() => {
+                // 댓글 입력창으로 포커스 (스크롤은 자동으로 됨)
+                setTimeout(() => {
+                  commentInputRef.current?.focus();
+                }, 100);
+              }}
+            >
               <Ionicons name="chatbubble-outline" size={28} color={COLORS.text} />
               <Text style={styles.actionText}>{comments.length}</Text>
-            </View>
+            </TouchableOpacity>
         </View>
 
           {/* 댓글 섹션 */}
@@ -617,15 +687,18 @@ const PostDetailScreen = () => {
           )}
 
           {/* 댓글 입력 */}
-          <View style={styles.commentInputSection}>
+          <View ref={commentInputSectionRef} style={styles.commentInputSection}>
             <View style={styles.commentInputContainer}>
               <TextInput
+                ref={commentInputRef}
                 style={styles.commentInput}
                 placeholder="댓글을 입력하세요..."
                 value={commentText}
                 onChangeText={setCommentText}
                 multiline
                 placeholderTextColor={COLORS.textSecondary}
+                editable={true}
+                selectTextOnFocus={false}
               />
               <TouchableOpacity
                 style={[styles.commentSubmitButton, !commentText.trim() && styles.commentSubmitButtonDisabled]}
@@ -821,6 +894,13 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: COLORS.primary,
   },
+  authorLevelRow: {
+    marginTop: 4,
+  },
+  authorLevelText: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+  },
   representativeBadgeIconInPost: {
     fontSize: 16,
   },
@@ -834,6 +914,37 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.primary,
     fontWeight: '600',
+  },
+  userBadgesContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+    marginTop: 4,
+    flexWrap: 'wrap',
+  },
+  userBadgeItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 12,
+    backgroundColor: COLORS.borderLight,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  userBadgeItemRepresentative: {
+    backgroundColor: COLORS.primary + '20',
+    borderColor: COLORS.primary,
+  },
+  userBadgeIcon: {
+    fontSize: 12,
+  },
+  userBadgeName: {
+    fontSize: 9,
+    fontWeight: '600',
+    color: COLORS.primary,
+    maxWidth: 50,
   },
   infoCard: {
     margin: SPACING.md,

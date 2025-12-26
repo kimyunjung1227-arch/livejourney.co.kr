@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import LiveJourneyLogo from '../components/LiveJourneyLogo';
 
@@ -370,37 +370,65 @@ const StartScreen = () => {
 
   // 메인 시작 화면
   return (
-    <div className="relative flex h-full w-full flex-col overflow-y-auto bg-background-light dark:bg-background-dark text-zinc-900 dark:text-zinc-50">
-      <div className="flex flex-col items-center justify-start px-6 py-6 min-h-full pb-8">
-        <div className="w-full max-w-sm text-center flex-1 flex flex-col justify-center">
-          {/* 앱 로고 영역 */}
-          <div className="flex flex-col items-center justify-center mb-8">
-            <LiveJourneyLogo size={112} showText={true} />
-            <p className="mt-4 text-[#1c140d] dark:text-zinc-300 text-base font-normal leading-normal">
-              가장 현명한 여행을 지금 바로 시작하세요.
+    <div className="fixed inset-0 flex items-center justify-center bg-black/40 dark:bg-black/60 z-50 p-4">
+      {/* 뒤로가기 버튼 - 배경 클릭으로 닫기 */}
+      <div 
+        className="absolute inset-0"
+        onClick={() => navigate(-1)}
+      ></div>
+
+      {/* 절반 크기 로그인 카드 */}
+      <div 
+        className="relative w-full max-w-md bg-white dark:bg-gray-900 rounded-2xl shadow-2xl overflow-hidden animate-slide-up flex flex-col"
+        style={{
+          animation: 'slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
+          maxHeight: '85vh'
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* 헤더 */}
+        <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
+          <button 
+            onClick={() => navigate(-1)}
+            className="flex h-10 w-10 items-center justify-center text-text-primary-light dark:text-text-primary-dark hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+          >
+            <span className="material-symbols-outlined text-xl">close</span>
+          </button>
+          <h2 className="text-base font-bold text-text-primary-light dark:text-text-primary-dark">로그인</h2>
+          <div className="w-10"></div>
+        </div>
+
+        {/* 컨텐츠 영역 */}
+        <div className="flex-1 overflow-y-auto px-6 py-6">
+          <div className="w-full text-center">
+            {/* 기능 안내 문구 */}
+            <div className="mb-5 p-4 bg-primary/5 dark:bg-primary/10 rounded-lg border border-primary/20">
+              <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+                💡 <span className="font-semibold">계정을 연결하고</span> 뱃지, 기록 등<br />
+                다양한 기능들을 사용해보세요
             </p>
           </div>
 
-          {/* 소셜 로그인 버튼들 */}
-          <div className="flex flex-col w-full gap-3 mb-4">
+            {/* 소셜 로그인 버튼들 - 크기 절반으로 축소 */}
+            <div className="flex flex-col w-full gap-2 mb-3">
             {/* 테스터 계정 버튼 */}
             <button 
               onClick={handleTesterLogin}
               disabled={loading}
-              className="flex cursor-pointer items-center justify-center gap-3 overflow-hidden rounded-xl h-14 px-5 bg-gradient-to-r from-primary to-primary-dark text-white text-sm font-bold leading-normal tracking-[0.015em] hover:from-primary-dark hover:to-primary-dark active:scale-95 transition-all shadow-lg disabled:opacity-50"
+              className="flex cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-lg h-11 px-4 bg-gradient-to-r from-primary to-primary-dark text-white text-xs font-semibold leading-normal tracking-[0.015em] hover:from-primary-dark hover:to-primary-dark active:scale-95 transition-all shadow-md disabled:opacity-50"
               style={{ touchAction: 'manipulation' }}
             >
-              <span className="material-symbols-outlined text-lg">bug_report</span>
+              <span className="material-symbols-outlined text-base">bug_report</span>
               <span className="truncate">테스터 계정으로 시작하기</span>
             </button>
 
             <button 
               onClick={() => handleSocialLogin('Google')}
               disabled={loading}
-              className="flex cursor-pointer items-center justify-center gap-3 overflow-hidden rounded-xl h-14 px-5 bg-white text-[#1F1F1F] text-sm font-bold leading-normal tracking-[0.015em] border-2 border-zinc-300 dark:border-zinc-600 hover:bg-zinc-50 active:bg-zinc-100 transition-all shadow-md disabled:opacity-50"
+              className="flex cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-lg h-11 px-4 bg-white text-[#1F1F1F] text-xs font-semibold leading-normal tracking-[0.015em] border border-zinc-300 dark:border-zinc-600 hover:bg-zinc-50 active:bg-zinc-100 transition-all shadow-sm disabled:opacity-50"
               style={{ touchAction: 'manipulation' }}
             >
-              <svg className="w-5 h-5" viewBox="0 0 24 24">
+              <svg className="w-4 h-4" viewBox="0 0 24 24">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
                 <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
                 <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
@@ -412,10 +440,10 @@ const StartScreen = () => {
             <button 
               onClick={() => handleSocialLogin('Kakao')}
               disabled={loading}
-              className="flex cursor-pointer items-center justify-center gap-3 overflow-hidden rounded-xl h-14 px-5 bg-[#FEE500] text-[#000000] text-sm font-bold leading-normal tracking-[0.015em] hover:bg-[#fdd835] active:bg-[#fbc02d] transition-all shadow-md disabled:opacity-50"
+              className="flex cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-lg h-11 px-4 bg-[#FEE500] text-[#000000] text-xs font-semibold leading-normal tracking-[0.015em] hover:bg-[#fdd835] active:bg-[#fbc02d] transition-all shadow-sm disabled:opacity-50"
               style={{ touchAction: 'manipulation' }}
             >
-              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 3c5.799 0 10.5 3.664 10.5 8.185 0 4.52-4.701 8.184-10.5 8.184a13.5 13.5 0 0 1-1.727-.11l-4.408 2.883c-.501.265-.678.236-.472-.413l.892-3.678c-2.88-1.46-4.785-3.99-4.785-6.866C1.5 6.665 6.201 3 12 3zm5.907 8.06l1.47-1.424a.472.472 0 0 0-.656-.678l-1.928 1.866V9.282a.472.472 0 0 0-.944 0v2.557a.471.471 0 0 0 0 .222V13.5a.472.472 0 0 0 .944 0v-1.363l.427-.413 1.428 2.033a.472.472 0 1 0 .773-.543l-1.514-2.155zm-2.958 1.924h-1.46V9.297a.472.472 0 0 0-.943 0v4.159c0 .26.21.472.471.472h1.932a.472.472 0 1 0 0-.944zm-5.857-1.092l.696-1.707.638 1.707H9.092zm2.523.488l.002-.016a.469.469 0 0 0-.127-.32l-1.046-2.8a.69.69 0 0 0-.627-.474.69.69 0 0 0-.627.474l-1.149 2.79a.472.472 0 0 0 .874.338l.228-.546h2.013l.251.611a.472.472 0 1 0 .874-.338l-.002-.016.336-.103zm-4.055.418a.512.512 0 0 1-.234-.234.487.487 0 0 1-.046-.308v-3.168a.472.472 0 0 0-.944 0v3.168c0 .27.063.533.184.765a1.427 1.427 0 0 0 1.163.695c.26 0 .472-.212.472-.472a.472.472 0 0 0-.472-.472h-.123v.026z"/>
               </svg>
               <span className="truncate">카카오로 계속하기</span>
@@ -424,19 +452,19 @@ const StartScreen = () => {
             <button 
               onClick={() => handleSocialLogin('Naver')}
               disabled={loading}
-              className="flex cursor-pointer items-center justify-center gap-3 overflow-hidden rounded-xl h-14 px-5 bg-[#03C75A] text-white text-sm font-bold leading-normal tracking-[0.015em] hover:bg-[#02b350] active:bg-[#02a047] transition-all shadow-md disabled:opacity-50"
+              className="flex cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-lg h-11 px-4 bg-[#03C75A] text-white text-xs font-semibold leading-normal tracking-[0.015em] hover:bg-[#02b350] active:bg-[#02a047] transition-all shadow-sm disabled:opacity-50"
               style={{ touchAction: 'manipulation' }}
             >
-              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M16.273 12.845L7.376 0H0v24h7.726V11.156L16.624 24H24V0h-7.727v12.845z"/>
               </svg>
               <span className="truncate">네이버로 계속하기</span>
             </button>
           </div>
 
-          <div className="flex items-center gap-4 my-3">
+          <div className="flex items-center gap-3 my-2">
             <div className="flex-grow h-px bg-zinc-300 dark:bg-zinc-600"></div>
-            <p className="text-zinc-500 dark:text-zinc-400 text-xs font-medium leading-normal">또는</p>
+            <p className="text-zinc-500 dark:text-zinc-400 text-[10px] font-medium leading-normal">또는</p>
             <div className="flex-grow h-px bg-zinc-300 dark:bg-zinc-600"></div>
           </div>
 
@@ -445,28 +473,29 @@ const StartScreen = () => {
             <button 
               onClick={handleEmailClick}
               disabled={loading}
-              className="flex w-full cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-xl h-12 px-5 bg-white dark:bg-gray-800 text-primary dark:text-white text-sm font-bold leading-normal tracking-[0.015em] border-2 border-primary hover:bg-primary/5 active:bg-primary/10 transition-all shadow-md disabled:opacity-50"
+              className="flex w-full cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-lg h-10 px-4 bg-white dark:bg-gray-800 text-primary dark:text-white text-xs font-semibold leading-normal tracking-[0.015em] border border-primary hover:bg-primary/5 active:bg-primary/10 transition-all shadow-sm disabled:opacity-50"
               style={{ touchAction: 'manipulation' }}
             >
-              <span className="material-symbols-outlined text-lg">mail</span>
+              <span className="material-symbols-outlined text-base">mail</span>
               <span className="truncate">이메일로 가입/로그인</span>
             </button>
           </div>
 
           {/* 에러 메시지 */}
           {error && (
-            <div className="mt-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 p-3 rounded-xl text-sm font-medium text-center">
+            <div className="mt-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 p-2.5 rounded-lg text-xs font-medium text-center">
               {error}
             </div>
           )}
 
           {/* 로딩 상태 */}
           {loading && (
-            <div className="mt-4 flex items-center justify-center gap-2 text-primary dark:text-primary-soft">
-              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-current"></div>
-              <span className="text-sm font-medium">로그인 중...</span>
+              <div className="mt-3 flex items-center justify-center gap-2 text-primary dark:text-primary-soft">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current"></div>
+                <span className="text-xs font-medium">로그인 중...</span>
             </div>
           )}
+          </div>
         </div>
       </div>
     </div>

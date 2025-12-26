@@ -1,4 +1,5 @@
 // 알림 관리 유틸리티
+import { logger } from './logger';
 
 const NOTIFICATIONS_KEY = 'notifications';
 
@@ -42,7 +43,7 @@ export const getNotifications = () => {
     const notifications = localStorage.getItem(NOTIFICATIONS_KEY);
     return notifications ? JSON.parse(notifications) : [];
   } catch (error) {
-    console.error('알림 불러오기 실패:', error);
+    logger.error('알림 불러오기 실패:', error);
     return [];
   }
 };
@@ -75,10 +76,10 @@ export const addNotification = (notification) => {
     window.dispatchEvent(new Event('notificationUpdate'));
     window.dispatchEvent(new Event('notificationCountChanged'));
     
-    console.log('✅ 알림 추가:', newNotification.title);
+    logger.log('✅ 알림 추가:', newNotification.title);
     return newNotification;
   } catch (error) {
-    console.error('알림 추가 실패:', error);
+    logger.error('알림 추가 실패:', error);
     return null;
   }
 };
@@ -97,7 +98,7 @@ export const markNotificationAsRead = (notificationId) => {
     
     return true;
   } catch (error) {
-    console.error('알림 읽음 처리 실패:', error);
+    logger.error('알림 읽음 처리 실패:', error);
     return false;
   }
 };
@@ -112,10 +113,10 @@ export const markAllNotificationsAsRead = () => {
     // 알림 카운트 업데이트 이벤트 발생
     window.dispatchEvent(new Event('notificationCountChanged'));
     
-    console.log('✅ 모든 알림 읽음 처리');
+    logger.log('✅ 모든 알림 읽음 처리');
     return true;
   } catch (error) {
-    console.error('모든 알림 읽음 처리 실패:', error);
+    logger.error('모든 알림 읽음 처리 실패:', error);
     return false;
   }
 };
@@ -132,7 +133,7 @@ export const deleteNotification = (notificationId) => {
     
     return true;
   } catch (error) {
-    console.error('알림 삭제 실패:', error);
+    logger.error('알림 삭제 실패:', error);
     return false;
   }
 };
@@ -143,7 +144,7 @@ export const getUnreadCount = () => {
     const notifications = getNotifications();
     return notifications.filter(n => !n.read).length;
   } catch (error) {
-    console.error('읽지 않은 알림 개수 조회 실패:', error);
+    logger.error('읽지 않은 알림 개수 조회 실패:', error);
     return 0;
   }
 };
@@ -157,10 +158,10 @@ export const clearAllNotifications = () => {
     window.dispatchEvent(new Event('notificationUpdate'));
     window.dispatchEvent(new Event('notificationCountChanged'));
     
-    console.log('✅ 모든 알림 삭제');
+    logger.log('✅ 모든 알림 삭제');
     return true;
   } catch (error) {
-    console.error('모든 알림 삭제 실패:', error);
+    logger.error('모든 알림 삭제 실패:', error);
     return false;
   }
 };

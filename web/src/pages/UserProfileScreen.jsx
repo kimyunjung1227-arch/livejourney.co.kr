@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import BottomNavigation from '../components/BottomNavigation';
 import { getEarnedBadgesForUser, BADGES } from '../utils/badgeSystem';
+import { getUserLevel } from '../utils/levelSystem';
 
 const UserProfileScreen = () => {
   const navigate = useNavigate();
@@ -18,6 +19,7 @@ const UserProfileScreen = () => {
   });
   const [loading, setLoading] = useState(true);
   const [showAllBadges, setShowAllBadges] = useState(false);
+  const [levelInfo, setLevelInfo] = useState(null);
 
   useEffect(() => {
     if (!userId) {
@@ -25,15 +27,40 @@ const UserProfileScreen = () => {
       return;
     }
 
+    // userId가 변경되면 상태 완전 초기화
+    setLoading(true);
+    setUser(null);
+    setUserPosts([]);
+    setEarnedBadges([]);
+    setRepresentativeBadge(null);
+    setStats({ posts: 0, likes: 0, comments: 0 });
+    setShowAllBadges(false);
+
     // 해당 사용자의 정보 찾기 (게시물에서)
     const uploadedPosts = JSON.parse(localStorage.getItem('uploadedPosts') || '[]');
     
-    // userId 매칭 (여러 형태 지원)
+    // userId 매칭 (일관된 로직 - PostDetailScreen과 동일)
     const userPost = uploadedPosts.find(p => {
-      const postUserId = p.userId || 
-                        (typeof p.user === 'string' ? p.user : p.user?.id) ||
-                        p.user;
-      return postUserId === userId;
+      // userId 추출 로직 (PostDetailScreen과 동일)
+      let postUserId = p.userId;
+      
+      // p.user가 문자열인 경우
+      if (!postUserId && typeof p.user === 'string') {
+        postUserId = p.user;
+      }
+      
+      // p.user가 객체인 경우
+      if (!postUserId && p.user && typeof p.user === 'object') {
+        postUserId = p.user.id || p.user.userId;
+      }
+      
+      // 그 외의 경우
+      if (!postUserId) {
+        postUserId = p.user;
+      }
+      
+      // 문자열 비교를 위해 모두 문자열로 변환
+      return String(postUserId) === String(userId);
     });
     
     if (userPost) {
@@ -41,9 +68,9 @@ const UserProfileScreen = () => {
                         (typeof userPost.user === 'string' ? userPost.user : userPost.user?.id) ||
                         userPost.user;
       const foundUser = {
-        id: userId,
+        id: String(userId), // 일관성을 위해 문자열로 변환
         username: (typeof userPost.user === 'string' ? userPost.user : userPost.user?.username) || 
-                 postUserId || 
+                 String(postUserId) || 
                  '사용자',
         profileImage: null
       };
@@ -51,32 +78,14 @@ const UserProfileScreen = () => {
     } else {
       // 사용자 정보를 찾을 수 없으면 기본값
       setUser({
-        id: userId,
+        id: String(userId),
         username: '사용자',
         profileImage: null
       });
     }
 
-    // 뱃지 로드
-    let badges = getEarnedBadgesForUser(userId);
-    
-    // 개발 단계: 획득한 뱃지가 없으면 임의로 몇 개 추가
-    if (!badges || badges.length === 0) {
-      const allBadges = [
-        { name: '첫 여행 기록', icon: '🎯', description: '첫 번째 여행 사진을 업로드했습니다!' },
-        { name: '여행 입문자', icon: '🌱', description: '3개의 여행 기록을 남겼습니다.' },
-        { name: '첫 좋아요', icon: '❤️', description: '첫 번째 좋아요를 받았습니다!' },
-        { name: '여행 탐험가', icon: '🧭', description: '10개의 여행 기록을 남긴 진정한 탐험가!' },
-        { name: '사진 수집가', icon: '📸', description: '25개의 여행 사진을 업로드했습니다.' },
-        { name: '인기 여행자', icon: '⭐', description: '50개의 좋아요를 받았습니다!' },
-        { name: '지역 전문가', icon: '🗺️', description: '5개 이상의 지역을 방문했습니다.' },
-        { name: '댓글 마스터', icon: '💬', description: '10개의 댓글을 작성했습니다.' },
-        { name: '여행 애호가', icon: '✈️', description: '다양한 여행지를 방문했습니다.' },
-      ];
-      // userId를 기반으로 일관된 뱃지 선택 (3-7개)
-      const badgeCount = 3 + (userId ? userId.toString().charCodeAt(0) % 5 : 0);
-      badges = allBadges.slice(0, badgeCount);
-    }
+    // 뱃지 로드 - 실제 구현된 뱃지 시스템 사용
+    const badges = getEarnedBadgesForUser(userId) || [];
     setEarnedBadges(badges);
     
     // 대표 뱃지 로드
@@ -97,12 +106,28 @@ const UserProfileScreen = () => {
       setRepresentativeBadge(repFromEarned);
     }
 
-    // 해당 사용자의 게시물 로드 (여러 형태 지원)
+    // 해당 사용자의 게시물 로드 (일관된 로직)
     const posts = uploadedPosts.filter(post => {
-      const postUserId = post.userId || 
-                        (typeof post.user === 'string' ? post.user : post.user?.id) ||
-                        post.user;
-      return postUserId === userId;
+      // userId 추출 로직 (PostDetailScreen과 동일)
+      let postUserId = post.userId;
+      
+      // post.user가 문자열인 경우
+      if (!postUserId && typeof post.user === 'string') {
+        postUserId = post.user;
+      }
+      
+      // post.user가 객체인 경우
+      if (!postUserId && post.user && typeof post.user === 'object') {
+        postUserId = post.user.id || post.user.userId;
+      }
+      
+      // 그 외의 경우
+      if (!postUserId) {
+        postUserId = post.user;
+      }
+      
+      // 문자열 비교를 위해 모두 문자열로 변환
+      return String(postUserId) === String(userId);
     });
     setUserPosts(posts);
     
@@ -120,7 +145,22 @@ const UserProfileScreen = () => {
       comments: totalComments,
     });
     
+    // 레벨 정보 로드 (현재는 전역 경험치 기준)
+    const level = getUserLevel();
+    setLevelInfo(level);
+    
     setLoading(false);
+    
+    // cleanup 함수: userId가 변경될 때 이전 상태 완전 초기화
+    return () => {
+      setLoading(true);
+      setUser(null);
+      setUserPosts([]);
+      setEarnedBadges([]);
+      setRepresentativeBadge(null);
+      setStats({ posts: 0, likes: 0, comments: 0 });
+      setShowAllBadges(false);
+    };
   }, [userId, navigate]);
 
   if (loading || !user) {
@@ -199,7 +239,15 @@ const UserProfileScreen = () => {
                     </button>
                   )}
                 </div>
-                
+
+                {/* 레벨 표시 */}
+                <div className="mt-0.5">
+                  <p className="text-xs text-text-secondary-light dark:text-text-secondary-dark">
+                    {levelInfo
+                      ? `Lv. ${levelInfo.level} ${levelInfo.title}`
+                      : 'Lv. 1 여행 입문자'}
+                  </p>
+                </div>
               </div>
             </div>
           </div>
@@ -250,11 +298,12 @@ const UserProfileScreen = () => {
                     <div
                       key={post.id || index}
                       onClick={() => {
+                        const currentIndex = userPosts.findIndex(p => p.id === post.id);
                         navigate(`/post/${post.id}`, { 
                           state: { 
                             post: post,
                             allPosts: userPosts,
-                            currentPostIndex: index
+                            currentPostIndex: currentIndex >= 0 ? currentIndex : 0
                           } 
                         });
                       }}
@@ -316,7 +365,7 @@ const UserProfileScreen = () => {
       {/* 뱃지 모두보기 모달 */}
       {showAllBadges && (
         <div 
-          className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center"
+          className="fixed inset-0 bg-black/50 z-[200] flex items-end justify-center"
           onClick={() => setShowAllBadges(false)}
         >
           <div 

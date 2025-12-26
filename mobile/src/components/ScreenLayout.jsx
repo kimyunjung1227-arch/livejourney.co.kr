@@ -15,7 +15,7 @@ export const ScreenLayout = ({ children, style }) => {
   );
 };
 
-export const ScreenContent = ({ children, style, scrollable = true, refreshControl }) => {
+export const ScreenContent = ({ children, style, scrollable = true, refreshControl, onScroll }) => {
   if (scrollable) {
     return (
       <ScrollView 
@@ -23,6 +23,8 @@ export const ScreenContent = ({ children, style, scrollable = true, refreshContr
         contentContainerStyle={styles.screenContentContainer}
         showsVerticalScrollIndicator={false}
         refreshControl={refreshControl}
+        onScroll={onScroll}
+        scrollEventThrottle={16}
       >
         {children}
       </ScrollView>
@@ -63,6 +65,7 @@ const styles = StyleSheet.create({
   },
   screenContentContainer: {
     flexGrow: 1,
+    paddingBottom: 100, // 하단 네비게이션 바(80px) + 여유 공간(20px)
   },
   screenHeader: {
     backgroundColor: COLORS.backgroundLight,
@@ -76,7 +79,8 @@ const styles = StyleSheet.create({
     zIndex: 20,
   },
   screenBody: {
-    paddingBottom: 80, // BottomNavigation 높이
+    paddingBottom: 100, // 하단 네비게이션 바(80px) + 여유 공간(20px)
+    flex: 1, // 랜딩페이지: flex: 1
   },
 });
 

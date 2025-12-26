@@ -64,11 +64,11 @@ const PasswordChangeScreen = () => {
           <div className="flex items-center p-4 justify-between">
             <button 
               onClick={() => navigate('/settings')}
-              className="flex size-12 shrink-0 items-center justify-center text-text-light dark:text-text-dark hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+              className="flex size-12 shrink-0 items-center justify-center text-black dark:text-white hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
             >
               <span className="material-symbols-outlined text-2xl">arrow_back</span>
             </button>
-            <h1 className="text-text-light dark:text-text-dark text-lg font-bold leading-tight tracking-[-0.015em] flex-1 text-center">
+            <h1 className="text-black dark:text-white text-lg font-bold leading-tight tracking-[-0.015em] flex-1 text-center">
               비밀번호 변경
             </h1>
             <div className="size-12 shrink-0"></div>
@@ -81,12 +81,12 @@ const PasswordChangeScreen = () => {
             <div className="flex flex-col gap-6">
               {/* 현재 비밀번호 */}
               <label className="flex flex-col min-w-40 flex-1">
-                <p className="text-text-light dark:text-text-dark text-base font-medium leading-normal pb-2">
+                <p className="text-black dark:text-white text-base font-medium leading-normal pb-2">
                   현재 비밀번호
                 </p>
                 <div className="flex w-full flex-1 items-stretch rounded-lg">
                   <input 
-                    className="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-text-light dark:text-text-dark focus:outline-0 focus:ring-2 focus:ring-primary/50 border border-border-light dark:border-border-dark bg-card-light dark:bg-card-dark focus:border-primary h-14 placeholder:text-text-secondary-light dark:placeholder:text-text-secondary-dark p-[15px] rounded-r-none border-r-0 pr-2 text-base font-normal leading-normal" 
+                    className="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-black dark:text-white focus:outline-0 focus:ring-2 focus:ring-primary/50 border border-border-light dark:border-border-dark bg-card-light dark:bg-card-dark focus:border-primary h-14 placeholder:text-gray-400 dark:placeholder:text-gray-500 p-[15px] rounded-r-none border-r-0 pr-2 text-base font-normal leading-normal" 
                     placeholder="현재 비밀번호 입력" 
                     type={showPassword.current ? 'text' : 'password'}
                     name="currentPassword"
@@ -96,7 +96,7 @@ const PasswordChangeScreen = () => {
                   <button 
                     onClick={() => togglePasswordVisibility('current')}
                     aria-label="Toggle password visibility" 
-                    className="text-text-secondary-light dark:text-text-secondary-dark flex border border-border-light dark:border-border-dark bg-card-light dark:bg-card-dark items-center justify-center pr-[15px] rounded-r-lg border-l-0 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                    className="text-black/70 dark:text-white/70 flex border border-border-light dark:border-border-dark bg-card-light dark:bg-card-dark items-center justify-center pr-[15px] rounded-r-lg border-l-0 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                   >
                     <span className="material-symbols-outlined text-2xl">
                       {showPassword.current ? 'visibility' : 'visibility_off'}
@@ -107,12 +107,12 @@ const PasswordChangeScreen = () => {
 
               {/* 새 비밀번호 */}
               <label className="flex flex-col min-w-40 flex-1">
-                <p className="text-text-light dark:text-text-dark text-base font-medium leading-normal pb-2">
+                <p className="text-black dark:text-white text-base font-medium leading-normal pb-2">
                   새 비밀번호
                 </p>
                 <div className="flex w-full flex-1 items-stretch rounded-lg">
                   <input 
-                    className="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-text-light dark:text-text-dark focus:outline-0 focus:ring-2 focus:ring-primary/50 border border-border-light dark:border-border-dark bg-card-light dark:bg-card-dark focus:border-primary h-14 placeholder:text-text-secondary-light dark:placeholder:text-text-secondary-dark p-[15px] rounded-r-none border-r-0 pr-2 text-base font-normal leading-normal" 
+                    className="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-black dark:text-white focus:outline-0 focus:ring-2 focus:ring-primary/50 border border-border-light dark:border-border-dark bg-card-light dark:bg-card-dark focus:border-primary h-14 placeholder:text-gray-400 dark:placeholder:text-gray-500 p-[15px] rounded-r-none border-r-0 pr-2 text-base font-normal leading-normal" 
                     placeholder="새 비밀번호 입력" 
                     type={showPassword.new ? 'text' : 'password'}
                     name="newPassword"
@@ -122,7 +122,7 @@ const PasswordChangeScreen = () => {
                   <button 
                     onClick={() => togglePasswordVisibility('new')}
                     aria-label="Toggle password visibility" 
-                    className="text-text-secondary-light dark:text-text-secondary-dark flex border border-border-light dark:border-border-dark bg-card-light dark:bg-card-dark items-center justify-center pr-[15px] rounded-r-lg border-l-0 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                    className="text-black/70 dark:text-white/70 flex border border-border-light dark:border-border-dark bg-card-light dark:bg-card-dark items-center justify-center pr-[15px] rounded-r-lg border-l-0 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                   >
                     <span className="material-symbols-outlined text-2xl">
                       {showPassword.new ? 'visibility' : 'visibility_off'}
@@ -133,12 +133,12 @@ const PasswordChangeScreen = () => {
 
               {/* 새 비밀번호 확인 */}
               <label className="flex flex-col min-w-40 flex-1">
-                <p className="text-text-light dark:text-text-dark text-base font-medium leading-normal pb-2">
+                <p className="text-black dark:text-white text-base font-medium leading-normal pb-2">
                   새 비밀번호 확인
                 </p>
                 <div className="flex w-full flex-1 items-stretch rounded-lg">
                   <input 
-                    className="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-text-light dark:text-text-dark focus:outline-0 focus:ring-2 focus:ring-primary/50 border border-border-light dark:border-border-dark bg-card-light dark:bg-card-dark focus:border-primary h-14 placeholder:text-text-secondary-light dark:placeholder:text-text-secondary-dark p-[15px] rounded-r-none border-r-0 pr-2 text-base font-normal leading-normal" 
+                    className="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-black dark:text-white focus:outline-0 focus:ring-2 focus:ring-primary/50 border border-border-light dark:border-border-dark bg-card-light dark:bg-card-dark focus:border-primary h-14 placeholder:text-gray-400 dark:placeholder:text-gray-500 p-[15px] rounded-r-none border-r-0 pr-2 text-base font-normal leading-normal" 
                     placeholder="새 비밀번호 다시 입력" 
                     type={showPassword.confirm ? 'text' : 'password'}
                     name="confirmPassword"
@@ -148,7 +148,7 @@ const PasswordChangeScreen = () => {
                   <button 
                     onClick={() => togglePasswordVisibility('confirm')}
                     aria-label="Toggle password visibility" 
-                    className="text-text-secondary-light dark:text-text-secondary-dark flex border border-border-light dark:border-border-dark bg-card-light dark:bg-card-dark items-center justify-center pr-[15px] rounded-r-lg border-l-0 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                    className="text-black/70 dark:text-white/70 flex border border-border-light dark:border-border-dark bg-card-light dark:bg-card-dark items-center justify-center pr-[15px] rounded-r-lg border-l-0 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                   >
                     <span className="material-symbols-outlined text-2xl">
                       {showPassword.confirm ? 'visibility' : 'visibility_off'}
@@ -163,7 +163,8 @@ const PasswordChangeScreen = () => {
           <div className="mt-auto pb-4">
             <button 
               onClick={handleSave}
-              className="flex w-full items-center justify-center rounded-lg bg-[#FF7A00] h-14 text-white text-base font-bold leading-normal shadow-md hover:bg-opacity-90 transition-colors"
+              className="flex w-full items-center justify-center rounded-lg bg-primary h-14 text-white text-base font-bold leading-normal shadow-md hover:bg-primary/90 transition-colors"
+              style={{ backgroundColor: '#00BCD4' }}
             >
               저장
             </button>

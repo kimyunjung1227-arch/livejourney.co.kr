@@ -29,6 +29,7 @@ import { checkAndAwardTitles } from '../utils/dailyTitleSystem';
 import { gainExp } from '../utils/levelSystem';
 import { checkNewBadges, awardBadge } from '../utils/badgeSystem';
 import { getBadgeCongratulationMessage, getBadgeDifficultyEffects } from '../utils/badgeMessages';
+import { checkAndNotifyInterestPlace } from '../utils/interestPlaces';
 import { ScreenLayout, ScreenContent, ScreenHeader, ScreenBody } from '../components/ScreenLayout';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -654,98 +655,69 @@ const UploadScreen = () => {
                   onPress={() => setShowPhotoOptions(true)}
                   activeOpacity={0.9}
                 >
-                  <Ionicons name="add-circle" size={64} color={COLORS.primary} />
-                  <Text style={styles.addPhotoText}>사진 추가</Text>
+                  <Ionicons name="add-circle" size={48} color={COLORS.primary} />
+                  <Text style={styles.addPhotoText}>사진 또는 동영상 추가</Text>
+                  <Text style={styles.addPhotoSubtext}>최대 10개까지</Text>
                 </TouchableOpacity>
               ) : (
-                <View style={styles.photoContainer}>
-                  {/* 첫 번째 사진을 크게 강조 */}
-                  <View style={styles.mainPhotoContainer}>
-                    <Image 
-                      source={{ uri: formData.images[0] || formData.videos[0] }} 
-                      style={styles.mainPhoto} 
-                      resizeMode="cover" 
-                    />
-                    <TouchableOpacity
-                      style={styles.removeMainPhotoButton}
-                      onPress={() => setFormData(prev => ({
-                        ...prev,
-                        images: prev.images.filter((_, i) => i !== 0),
-                        imageFiles: prev.imageFiles.filter((_, i) => i !== 0)
-                      }))}
-                    >
-                      <Ionicons name="close" size={18} color="white" />
-                    </TouchableOpacity>
-                  </View>
-                  
-                  {/* 나머지 사진들 (2개 이상일 때만 표시) */}
-                  {(formData.images.length > 1 || formData.videos.length > 0) && (
-                    <View style={styles.photoGrid}>
-                      {formData.images.slice(1).map((image, index) => (
-                        <View key={index + 1} style={styles.photoItem}>
-                          <Image source={{ uri: image }} style={styles.photoImage} resizeMode="cover" />
-                          <TouchableOpacity
-                            style={styles.removePhotoButton}
-                            onPress={() => setFormData(prev => ({
-                              ...prev,
-                              images: prev.images.filter((_, i) => i !== index + 1),
-                              imageFiles: prev.imageFiles.filter((_, i) => i !== index + 1)
-                            }))}
-                          >
-                            <Ionicons name="close" size={14} color="white" />
-                          </TouchableOpacity>
-                        </View>
-                      ))}
-                      {formData.videos.map((video, index) => (
-                        <View key={`video-${index}`} style={styles.photoItem}>
-                          <View style={styles.videoPlaceholder}>
-                            <Ionicons name="videocam" size={24} color={COLORS.textSubtle} />
-                          </View>
-                          <TouchableOpacity
-                            style={styles.removePhotoButton}
-                            onPress={() => setFormData(prev => ({
-                              ...prev,
-                              videos: prev.videos.filter((_, i) => i !== index),
-                              videoFiles: prev.videoFiles.filter((_, i) => i !== index)
-                            }))}
-                          >
-                            <Ionicons name="close" size={14} color="white" />
-                          </TouchableOpacity>
-                        </View>
-                      ))}
-                      {(formData.images.length + formData.videos.length) < 10 && (
-                        <TouchableOpacity
-                          style={styles.addMoreButton}
-                          onPress={() => setShowPhotoOptions(true)}
-                          activeOpacity={0.9}
-                        >
-                          <Ionicons name="add" size={24} color={COLORS.primary} />
-                        </TouchableOpacity>
-                      )}
+                <ScrollView 
+                  horizontal 
+                  showsHorizontalScrollIndicator={true}
+                  style={styles.photoScrollView}
+                  contentContainerStyle={styles.photoScrollContent}
+                  bounces={false}
+                >
+                  {formData.images.map((image, index) => (
+                    <View key={index} style={styles.photoItem}>
+                      <Image source={{ uri: image }} style={styles.photoImage} resizeMode="cover" />
+                      <TouchableOpacity
+                        style={styles.removePhotoButton}
+                        onPress={() => setFormData(prev => ({
+                          ...prev,
+                          images: prev.images.filter((_, i) => i !== index),
+                          imageFiles: prev.imageFiles.filter((_, i) => i !== index)
+                        }))}
+                      >
+                        <Ionicons name="close" size={12} color="white" />
+                      </TouchableOpacity>
                     </View>
-                  )}
-                  
-                  {/* 사진이 1개일 때 추가 버튼 */}
-                  {formData.images.length === 1 && formData.videos.length === 0 && (
+                  ))}
+                  {formData.videos.map((video, index) => (
+                    <View key={`video-${index}`} style={styles.photoItem}>
+                      <View style={styles.videoPlaceholder}>
+                        <Ionicons name="videocam" size={20} color={COLORS.textSubtle} />
+                      </View>
+                      <TouchableOpacity
+                        style={styles.removePhotoButton}
+                        onPress={() => setFormData(prev => ({
+                          ...prev,
+                          videos: prev.videos.filter((_, i) => i !== index),
+                          videoFiles: prev.videoFiles.filter((_, i) => i !== index)
+                        }))}
+                      >
+                        <Ionicons name="close" size={12} color="white" />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                  {(formData.images.length + formData.videos.length) < 10 && (
                     <TouchableOpacity
-                      style={styles.addMoreButtonLarge}
+                      style={styles.addMoreButton}
                       onPress={() => setShowPhotoOptions(true)}
                       activeOpacity={0.9}
                     >
-                      <Ionicons name="add" size={32} color={COLORS.primary} />
-                      <Text style={styles.addMoreButtonText}>사진 추가</Text>
+                      <Ionicons name="add" size={20} color={COLORS.primary} />
                     </TouchableOpacity>
                   )}
-                </View>
+                </ScrollView>
               )}
             </View>
 
             {/* 위치 태그 */}
             <View style={styles.section}>
               <View style={styles.labelRow}>
-                <Text style={styles.label}>위치 태그</Text>
+                <Text style={styles.label}>📍 어디에서 찍었나요?</Text>
                 {loadingLocation && (
-                  <Text style={styles.loadingText}>현재 위치 감지 중...</Text>
+                  <Text style={styles.loadingText}>위치 감지 중...</Text>
                 )}
               </View>
               <View style={styles.locationInputRow}>
@@ -769,7 +741,7 @@ const UploadScreen = () => {
             {/* 해시태그 */}
             <View style={styles.section}>
               <View style={styles.labelRow}>
-                <Text style={styles.label}>해시태그</Text>
+                <Text style={styles.label}>🏷️ 태그 추가</Text>
                 {loadingAITags && (
                   <Text style={styles.loadingText}>AI 분석 중...</Text>
                 )}
@@ -870,7 +842,7 @@ const UploadScreen = () => {
 
             {/* 개인 노트 */}
             <View style={styles.section}>
-              <Text style={styles.label}>개인 노트</Text>
+              <Text style={styles.label}>✍️ 이 순간의 이야기 (선택사항)</Text>
               <TextInput
                 style={styles.noteInput}
                 placeholder="내용을 입력하세요"
@@ -878,31 +850,40 @@ const UploadScreen = () => {
                 value={formData.note}
                 onChangeText={(text) => setFormData(prev => ({ ...prev, note: text }))}
                 multiline
-                numberOfLines={5}
+                numberOfLines={3}
                 textAlignVertical="top"
               />
             </View>
+
+            {/* 업로드 버튼 */}
+            <View style={styles.uploadButtonContainer}>
+              <TouchableOpacity
+                style={[
+                  styles.uploadButton,
+                  (uploading || formData.images.length === 0 || !formData.location.trim()) && styles.uploadButtonDisabled
+                ]}
+                onPress={handleSubmit}
+                disabled={uploading || formData.images.length === 0 || !formData.location.trim()}
+                activeOpacity={0.8}
+              >
+                {uploading ? (
+                  <>
+                    <ActivityIndicator size="small" color="white" style={{ marginRight: 8 }} />
+                    <Text style={styles.uploadButtonText}>업로드 중...</Text>
+                  </>
+                ) : (
+                  <Text style={styles.uploadButtonText}>📤 여행 기록 업로드하기</Text>
+                )}
+              </TouchableOpacity>
+              {(formData.images.length === 0 || !formData.location.trim()) && (
+                <Text style={styles.uploadHint}>
+                  {formData.images.length === 0 ? '사진을 추가해주세요' : '위치를 입력해주세요'}
+                </Text>
+              )}
+            </View>
           </View>
         </ScreenBody>
-
-        {/* 업로드 버튼 */}
-        <View style={styles.footer}>
-          <TouchableOpacity
-            style={[
-              styles.uploadButton,
-              (uploading || formData.images.length === 0) && styles.uploadButtonDisabled
-            ]}
-            onPress={handleSubmit}
-            disabled={uploading || formData.images.length === 0}
-          >
-            <Text style={[
-              styles.uploadButtonText,
-              (uploading || formData.images.length === 0) && styles.uploadButtonTextDisabled
-            ]}>
-              {uploading ? '업로드 중..' : '업로드'}
-            </Text>
-          </TouchableOpacity>
-        </View>
+          </ScreenContent>
 
         {/* 사진 선택 모달 */}
         <Modal
@@ -1183,69 +1164,53 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: SPACING.md, // p-4 = 16px
+    paddingBottom: SPACING.xl + 100, // 하단 네비게이션 바 공간 확보
     gap: SPACING.lg, // space-y-6 = 24px
   },
   section: {
-    marginBottom: SPACING.lg,
+    marginBottom: SPACING.md,
   },
   addPhotoButton: {
-    paddingHorizontal: SPACING.lg, // px-6 = 24px
-    paddingVertical: 80, // py-20 = 80px
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: 48,
     borderWidth: 2,
-    borderColor: COLORS.border, // border-subtle-light
+    borderColor: COLORS.border,
     borderStyle: 'dashed',
-    borderRadius: 12, // rounded-lg
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    gap: SPACING.md, // gap-4 = 16px
+    gap: SPACING.sm,
   },
   addPhotoText: {
-    fontSize: 18, // text-lg = 18px
+    fontSize: 16,
     fontWeight: 'bold',
-    color: COLORS.text, // text-text-light
+    color: COLORS.text,
   },
-  photoContainer: {
-    gap: 12, // space-y-3 = 12px (웹과 동일)
+  addPhotoSubtext: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginTop: 2,
+    textAlign: 'center',
   },
-  mainPhotoContainer: {
-    width: '100%',
-    aspectRatio: 4 / 3, // aspect-[4/3] (웹과 동일)
-    borderRadius: 12, // rounded-xl (웹과 동일)
-    overflow: 'hidden',
-    position: 'relative',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 5, // shadow-lg (웹과 동일)
-    borderWidth: 2,
-    borderColor: COLORS.primary + '33', // border-primary/20 (웹과 동일)
+  photoScrollView: {
+    marginHorizontal: -SPACING.md,
+    maxHeight: 120,
   },
-  mainPhoto: {
-    width: '100%',
-    height: '100%',
-  },
-  removeMainPhotoButton: {
-    position: 'absolute',
-    top: 8, // top-2 = 8px (웹과 동일)
-    right: 8, // right-2 = 8px (웹과 동일)
-    backgroundColor: 'rgba(0,0,0,0.7)', // bg-black/70 (웹과 동일)
-    borderRadius: 999, // rounded-full (웹과 동일)
-    padding: 8, // p-2 = 8px (웹과 동일)
-  },
-  photoGrid: {
+  photoScrollContent: {
+    paddingHorizontal: SPACING.md,
+    paddingRight: SPACING.md,
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8, // gap-2 = 8px (웹과 동일)
+    alignItems: 'center',
   },
   photoItem: {
-    width: (SCREEN_WIDTH - SPACING.md * 2 - 8 * 3) / 4, // grid-cols-4 (웹과 동일)
-    aspectRatio: 1, // aspect-square (웹과 동일)
-    borderRadius: 12, // rounded-lg (웹과 동일)
+    width: 100,
+    height: 100,
+    borderRadius: 4,
     overflow: 'hidden',
     position: 'relative',
     borderWidth: 1,
-    borderColor: COLORS.border, // border-subtle-light (웹과 동일)
+    borderColor: COLORS.border,
+    marginRight: 8,
   },
   photoImage: {
     width: '100%',
@@ -1265,37 +1230,31 @@ const styles = StyleSheet.create({
   },
   removePhotoButton: {
     position: 'absolute',
-    top: 4, // top-1 = 4px (웹과 동일)
-    right: 4, // right-1 = 4px (웹과 동일)
-    backgroundColor: 'rgba(0,0,0,0.6)', // bg-black/60 (웹과 동일)
-    borderRadius: 999, // rounded-full (웹과 동일)
-    padding: 4, // p-1 = 4px (웹과 동일)
+    top: 2,
+    right: 2,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    borderRadius: 999,
+    padding: 3,
   },
   addMoreButton: {
-    width: (SCREEN_WIDTH - SPACING.md * 2 - 8 * 3) / 4, // grid-cols-4 (웹과 동일)
-    aspectRatio: 1, // aspect-square (웹과 동일)
+    width: 100,
+    height: 100,
     borderWidth: 2,
-    borderColor: COLORS.border, // border-subtle-light (웹과 동일)
+    borderColor: COLORS.border,
     borderStyle: 'dashed',
-    borderRadius: 12, // rounded-lg (웹과 동일)
+    borderRadius: 4,
     justifyContent: 'center',
     alignItems: 'center',
+    marginLeft: 0,
   },
-  addMoreButtonLarge: {
-    width: '100%',
-    aspectRatio: 4 / 3, // aspect-[4/3] (웹과 동일)
-    borderWidth: 2,
-    borderColor: COLORS.border, // border-subtle-light (웹과 동일)
-    borderStyle: 'dashed',
-    borderRadius: 12, // rounded-xl (웹과 동일)
-    justifyContent: 'center',
+  photoCountContainer: {
+    marginTop: SPACING.sm,
     alignItems: 'center',
-    gap: 8, // gap-2 = 8px (웹과 동일)
   },
-  addMoreButtonText: {
-    fontSize: 14, // text-sm = 14px (웹과 동일)
-    fontWeight: '500', // font-medium (웹과 동일)
-    color: COLORS.textSubtle, // text-text-subtle-light (웹과 동일)
+  photoCountText: {
+    fontSize: 12,
+    color: COLORS.textSubtle,
+    textAlign: 'center',
   },
   labelRow: {
     flexDirection: 'row',
@@ -1319,23 +1278,23 @@ const styles = StyleSheet.create({
   },
   locationInput: {
     flex: 1,
-    height: 56, // h-14 = 56px
+    height: 48,
     borderWidth: 1,
-    borderColor: COLORS.border, // border-subtle-light
-    borderRadius: 12, // rounded-lg
-    paddingHorizontal: SPACING.md, // p-4 = 16px
-    fontSize: 16, // text-base = 16px
-    fontWeight: 'normal', // font-normal
-    color: COLORS.text, // text-text-light
-    backgroundColor: COLORS.backgroundLight, // bg-background-light
+    borderColor: COLORS.border,
+    borderRadius: 12,
+    paddingHorizontal: SPACING.md,
+    fontSize: 15,
+    fontWeight: 'normal',
+    color: COLORS.text,
+    backgroundColor: COLORS.backgroundLight,
   },
   locationButton: {
-    width: 56, // w-14 = 56px
-    height: 56, // h-14 = 56px
-    borderRadius: 12, // rounded-lg
-    backgroundColor: COLORS.primary + '1A', // bg-primary/10
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: COLORS.primary + '1A',
     borderWidth: 1,
-    borderColor: COLORS.border, // border-subtle-light
+    borderColor: COLORS.border,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1346,21 +1305,21 @@ const styles = StyleSheet.create({
   },
   tagInput: {
     flex: 1,
-    height: 56, // h-14 = 56px
+    height: 48,
     borderWidth: 1,
-    borderColor: COLORS.border, // border-subtle-light
-    borderRadius: 12, // rounded-lg
-    paddingHorizontal: SPACING.md, // p-4 = 16px
-    fontSize: 16, // text-base = 16px
-    fontWeight: 'normal', // font-normal
-    color: COLORS.text, // text-text-light
-    backgroundColor: COLORS.backgroundLight, // bg-background-light
+    borderColor: COLORS.border,
+    borderRadius: 12,
+    paddingHorizontal: SPACING.md,
+    fontSize: 15,
+    fontWeight: 'normal',
+    color: COLORS.text,
+    backgroundColor: COLORS.backgroundLight,
   },
   addTagButton: {
-    paddingHorizontal: 20, // px-5 = 20px
-    height: 56, // h-14 = 56px
-    borderRadius: 12, // rounded-lg
-    backgroundColor: COLORS.primary, // bg-primary
+    paddingHorizontal: 16,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: COLORS.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1391,10 +1350,10 @@ const styles = StyleSheet.create({
     gap: SPACING.md,
     marginTop: SPACING.md,
     padding: SPACING.md,
-    backgroundColor: COLORS.primary + '10',
-    borderRadius: 16,
-    borderWidth: 2,
-    borderColor: COLORS.primary + '30',
+    backgroundColor: COLORS.primary + '08',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.primary + '20',
   },
   aiCategoryEmoji: {
     fontSize: 32,
@@ -1465,13 +1424,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     borderRadius: 999,
-    backgroundColor: COLORS.primary + '10',
-    borderWidth: 2,
-    borderColor: COLORS.primary + '30',
+    backgroundColor: COLORS.primary + '08',
+    borderWidth: 1,
+    borderColor: COLORS.primary + '20',
   },
   autoTagText: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '500',
     color: COLORS.primary,
   },
   autoTagsNote: {
@@ -1507,21 +1466,20 @@ const styles = StyleSheet.create({
   },
   noteInput: {
     width: '100%',
-    minHeight: 120,
+    minHeight: 80,
     borderWidth: 1,
     borderColor: COLORS.border,
     borderRadius: 12,
     padding: SPACING.md,
-    ...TYPOGRAPHY.body,
+    fontSize: 15,
+    fontWeight: 'normal',
     color: COLORS.text,
     backgroundColor: COLORS.backgroundLight,
     marginTop: SPACING.sm,
   },
-  footer: {
-    padding: SPACING.md,
-    backgroundColor: COLORS.backgroundLight,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
+  uploadButtonContainer: {
+    marginTop: SPACING.lg,
+    paddingBottom: SPACING.xl,
   },
   uploadButton: {
     width: '100%',
@@ -1530,17 +1488,32 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
     justifyContent: 'center',
     alignItems: 'center',
+    flexDirection: 'row',
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
   },
   uploadButtonDisabled: {
     backgroundColor: COLORS.border,
+    shadowOpacity: 0,
+    elevation: 0,
   },
   uploadButtonText: {
     ...TYPOGRAPHY.h3,
     fontWeight: 'bold',
     color: COLORS.backgroundLight,
+    fontSize: 16,
   },
   uploadButtonTextDisabled: {
     color: COLORS.textSubtle,
+  },
+  uploadHint: {
+    fontSize: 12,
+    color: COLORS.textSubtle,
+    textAlign: 'center',
+    marginTop: SPACING.xs,
   },
   modalOverlay: {
     flex: 1,

@@ -343,7 +343,8 @@ const StartScreen = () => {
         <View style={styles.welcomeContainer}>
           <LiveJourneyLogo size={180} showText={true} />
           <Text style={styles.missionText}>
-            당신의 모든 여정이 스마트하고{'\n'}즐거워 지는 것을 목표로 합니다
+            당신의 여정 속 불확실성을{'\n'}
+            실시간 확신과 즐거움으로 바꿉니다
           </Text>
         </View>
 
@@ -554,11 +555,11 @@ const styles = StyleSheet.create({
     gap: SPACING.lg, // gap-6 = 24px (웹과 동일)
   },
   missionText: {
-    fontSize: 20, // text-xl = 20px (웹과 동일)
+    fontSize: 18, // 살짝 줄여 두 줄에 안정적으로 표시
     fontWeight: 'bold',
     color: 'black', // text-black (웹과 동일)
     textAlign: 'center',
-    lineHeight: 28, // leading-relaxed (웹과 동일)
+    lineHeight: 26, // 폰트 축소에 맞춰 라인 높이도 약간 축소
     maxWidth: 384, // max-w-sm = 384px (웹과 동일)
     marginTop: SPACING.sm, // mt-2 = 8px (웹과 동일)
     paddingHorizontal: SPACING.md, // px-4 = 16px (웹과 동일)

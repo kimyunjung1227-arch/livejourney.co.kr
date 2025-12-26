@@ -71,16 +71,16 @@ const PersonalInfoEditScreen = () => {
           onClick={() => navigate('/settings')}
           className="flex size-12 shrink-0 items-center justify-center cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
         >
-          <span className="material-symbols-outlined text-2xl text-content-light dark:text-content-dark">
+          <span className="material-symbols-outlined text-2xl text-black dark:text-white">
             arrow_back
           </span>
         </button>
-        <h1 className="text-lg font-bold leading-tight tracking-[-0.015em] text-content-light dark:text-content-dark">
+        <h1 className="text-lg font-bold leading-tight tracking-[-0.015em] text-black dark:text-white">
           개인 정보 수정
         </h1>
         <button 
           onClick={handleSave}
-          className="flex size-12 shrink-0 items-center justify-end text-base font-bold text-primary hover:text-primary/80 transition-colors"
+          className="flex size-12 shrink-0 items-center justify-end text-base font-bold text-black dark:text-white hover:text-black/80 dark:hover:text-white/80 transition-colors"
         >
           저장
         </button>
@@ -93,13 +93,13 @@ const PersonalInfoEditScreen = () => {
           {/* 이름 */}
           <div className="flex flex-col gap-2">
             <label 
-              className="text-sm font-medium text-content-light dark:text-content-dark" 
+              className="text-sm font-medium text-black dark:text-white" 
               htmlFor="name"
             >
               이름
             </label>
             <input 
-              className="w-full rounded-lg border border-border-light bg-surface-light p-3 text-content-light placeholder:text-gray-400 focus:border-primary focus:ring-1 focus:ring-primary dark:border-border-dark dark:bg-surface-dark dark:text-content-dark dark:placeholder:text-gray-500 transition-all" 
+              className="w-full rounded-lg border border-border-light bg-surface-light p-3 text-black placeholder:text-gray-400 focus:border-primary focus:ring-1 focus:ring-primary dark:border-border-dark dark:bg-surface-dark dark:text-white dark:placeholder:text-gray-500 transition-all" 
               id="name"
               name="name"
               placeholder="이름을 입력하세요" 
@@ -112,13 +112,13 @@ const PersonalInfoEditScreen = () => {
           {/* 이메일 */}
           <div className="flex flex-col gap-2">
             <label 
-              className="text-sm font-medium text-content-light dark:text-content-dark" 
+              className="text-sm font-medium text-black dark:text-white" 
               htmlFor="email"
             >
               이메일
             </label>
             <input 
-              className="w-full rounded-lg border border-border-light bg-surface-light p-3 text-content-light placeholder:text-gray-400 focus:border-primary focus:ring-1 focus:ring-primary dark:border-border-dark dark:bg-surface-dark dark:text-content-dark dark:placeholder:text-gray-500 transition-all" 
+              className="w-full rounded-lg border border-border-light bg-surface-light p-3 text-black placeholder:text-gray-400 focus:border-primary focus:ring-1 focus:ring-primary dark:border-border-dark dark:bg-surface-dark dark:text-white dark:placeholder:text-gray-500 transition-all" 
               id="email"
               name="email"
               placeholder="이메일을 입력하세요" 
@@ -126,7 +126,7 @@ const PersonalInfoEditScreen = () => {
               value={formData.email}
               onChange={handleInputChange}
             />
-            <p className="text-xs text-subtle-light dark:text-subtle-dark">
+            <p className="text-xs text-black/70 dark:text-white/70">
               이메일 변경 시, 재인증이 필요합니다.
             </p>
           </div>
@@ -134,14 +134,14 @@ const PersonalInfoEditScreen = () => {
           {/* 휴대폰 번호 */}
           <div className="flex flex-col gap-2">
             <label 
-              className="text-sm font-medium text-content-light dark:text-content-dark" 
+              className="text-sm font-medium text-black dark:text-white" 
               htmlFor="phone"
             >
               휴대폰 번호
             </label>
             <div className="flex items-center gap-2">
               <input 
-                className="w-full flex-grow rounded-lg border border-border-light bg-surface-light p-3 text-content-light placeholder:text-gray-400 focus:border-primary focus:ring-1 focus:ring-primary dark:border-border-dark dark:bg-surface-dark dark:text-content-dark dark:placeholder:text-gray-500 transition-all" 
+                className="w-full flex-grow rounded-lg border border-border-light bg-surface-light p-3 text-black placeholder:text-gray-400 focus:border-primary focus:ring-1 focus:ring-primary dark:border-border-dark dark:bg-surface-dark dark:text-white dark:placeholder:text-gray-500 transition-all" 
                 id="phone"
                 name="phone"
                 placeholder="휴대폰 번호를 입력하세요" 
@@ -151,7 +151,7 @@ const PersonalInfoEditScreen = () => {
               />
               <button 
                 onClick={handleVerifyPhone}
-                className="flex-shrink-0 rounded-lg bg-surface-subtle-light px-4 py-3 text-sm font-medium text-content-light dark:bg-surface-subtle-dark dark:text-content-dark hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                className="flex-shrink-0 rounded-lg bg-surface-subtle-light px-4 py-3 text-sm font-medium text-black dark:bg-surface-subtle-dark dark:text-white hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
               >
                 인증
               </button>
@@ -164,14 +164,14 @@ const PersonalInfoEditScreen = () => {
 
         {/* 추가 정보 섹션 */}
         <div className="flex flex-col gap-4 p-4">
-          <h2 className="text-sm font-medium text-subtle-light dark:text-subtle-dark">
+          <h2 className="text-lg font-bold text-black dark:text-white">
             기본 정보
           </h2>
 
           {/* 성별 */}
           <div className="flex flex-col gap-2">
             <label 
-              className="text-sm font-medium text-content-light dark:text-content-dark"
+              className="text-sm font-medium text-black dark:text-white"
             >
               성별
             </label>
@@ -181,7 +181,7 @@ const PersonalInfoEditScreen = () => {
                 className={`rounded-lg border py-3 text-center font-medium transition-all ${
                   formData.gender === 'male'
                     ? 'border-primary bg-primary/10 text-primary font-bold dark:bg-primary/20'
-                    : 'border-border-light bg-surface-light text-content-light dark:border-border-dark dark:bg-surface-dark dark:text-content-dark'
+                    : 'border-border-light bg-surface-light text-black dark:border-border-dark dark:bg-surface-dark dark:text-white'
                 }`}
               >
                 남성
@@ -191,7 +191,7 @@ const PersonalInfoEditScreen = () => {
                 className={`rounded-lg border py-3 text-center font-medium transition-all ${
                   formData.gender === 'female'
                     ? 'border-primary bg-primary/10 text-primary font-bold dark:bg-primary/20'
-                    : 'border-border-light bg-surface-light text-content-light dark:border-border-dark dark:bg-surface-dark dark:text-content-dark'
+                    : 'border-border-light bg-surface-light text-black dark:border-border-dark dark:bg-surface-dark dark:text-white'
                 }`}
               >
                 여성
@@ -202,21 +202,21 @@ const PersonalInfoEditScreen = () => {
           {/* 생년월일 */}
           <div className="flex flex-col gap-2">
             <label 
-              className="text-sm font-medium text-content-light dark:text-content-dark" 
+              className="text-sm font-medium text-black dark:text-white" 
               htmlFor="birthdate"
             >
               생년월일
             </label>
             <div className="relative">
               <input 
-                className="w-full rounded-lg border border-border-light bg-surface-light p-3 pr-10 text-content-light placeholder:text-gray-400 focus:border-primary focus:ring-1 focus:ring-primary dark:border-border-dark dark:bg-surface-dark dark:text-content-dark dark:placeholder:text-gray-500 transition-all" 
+                className="w-full rounded-lg border border-border-light bg-surface-light p-3 pr-10 text-black placeholder:text-gray-400 focus:border-primary focus:ring-1 focus:ring-primary dark:border-border-dark dark:bg-surface-dark dark:text-white dark:placeholder:text-gray-500 transition-all" 
                 id="birthdate"
                 name="birthdate"
                 type="text" 
                 value={formData.birthdate}
                 onChange={handleInputChange}
               />
-              <span className="material-symbols-outlined pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-subtle-light dark:text-subtle-dark">
+              <span className="material-symbols-outlined pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-black/70 dark:text-white/70">
                 calendar_today
               </span>
             </div>

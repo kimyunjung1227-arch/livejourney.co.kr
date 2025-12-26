@@ -24,23 +24,23 @@ export const uploadImage = async (file) => {
     });
     return response.data;
   } catch (error) {
-    // 백엔드 실패 시 로컬 처리 (Base64)
-    console.log('⚠️ 백엔드 없음 - 로컬에서 이미지 처리');
-    try {
-      const base64 = await fileToBase64(file);
-      return {
-        success: true,
-        url: base64, // Base64 이미지 URL
-        analysis: {
-          category: 'general',
-          categoryName: '일반',
-          labels: []
-        }
-      };
-    } catch (base64Error) {
-      console.error('이미지 변환 실패:', base64Error);
-      throw base64Error;
-    }
+    // 백엔드 실패 시 임시 URL 반환 (Base64는 용량이 너무 커서 사용 안 함)
+    console.log('⚠️ 백엔드 없음 - 임시 URL 반환');
+    console.warn('💡 이미지가 서버에 업로드되지 않았습니다. 백엔드 서버를 확인해주세요.');
+    
+    // Blob URL 생성 (메모리에만 존재, localStorage에 저장되지 않음)
+    const blobUrl = URL.createObjectURL(file);
+    
+    return {
+      success: true,
+      url: blobUrl, // Blob URL (임시)
+      isTemporary: true, // 임시 URL임을 표시
+      analysis: {
+        category: 'general',
+        categoryName: '일반',
+        labels: []
+      }
+    };
   }
 };
 

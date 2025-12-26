@@ -16,13 +16,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, TYPOGRAPHY } from '../constants/styles';
 import { getUserDailyTitle } from '../utils/dailyTitleSystem';
 import { getEarnedBadgesForUser, BADGES } from '../utils/badgeSystem';
+import { getUserLevel } from '../utils/levelSystem';
 import PostGridItem from '../components/PostGridItem';
 import { ScreenLayout, ScreenContent, ScreenHeader, ScreenBody } from '../components/ScreenLayout';
 
 const UserProfileScreen = () => {
   const navigation = useNavigation();
   const route = useRoute();
-  const { userId } = route.params || {};
+  const { userId, username: passedUsername } = route.params || {};
   
   const [user, setUser] = useState(null);
   const [userPosts, setUserPosts] = useState([]);
@@ -36,6 +37,7 @@ const UserProfileScreen = () => {
   });
   const [loading, setLoading] = useState(true);
   const [showAllBadges, setShowAllBadges] = useState(false);
+  const [levelInfo, setLevelInfo] = useState(null);
 
   useEffect(() => {
     if (!userId) {
@@ -49,6 +51,14 @@ const UserProfileScreen = () => {
     try {
       setLoading(true);
       
+      // userId가 변경되면 상태 초기화
+      setUser(null);
+      setUserPosts([]);
+      setEarnedBadges([]);
+      setRepresentativeBadge(null);
+      setStats({ posts: 0, likes: 0, comments: 0 });
+      setDailyTitle(null);
+      
       // 해당 사용자의 정보 찾기 (게시물에서)
       const uploadedPostsJson = await AsyncStorage.getItem('uploadedPosts');
       const uploadedPosts = uploadedPostsJson ? JSON.parse(uploadedPostsJson) : [];
@@ -61,16 +71,27 @@ const UserProfileScreen = () => {
         return postUserId === userId;
       });
       
-      if (userPost) {
-        const postUserId = userPost.userId || 
-                          (typeof userPost.user === 'string' ? userPost.user : userPost.user?.id) ||
-                          userPost.user;
+      // 사진 상세화면에서 넘어온 사용자 이름이 있다면,
+      // 그 이름을 최우선으로 사용해서 프로필 화면에서도 항상 동일하게 보여준다.
+      if (passedUsername) {
+        setUser({
+          id: userId,
+          username: passedUsername,
+          profileImage: null,
+        });
+      } else if (userPost) {
+        const postUserId =
+          userPost.userId ||
+          (typeof userPost.user === 'string' ? userPost.user : userPost.user?.id) ||
+          userPost.user;
+        const resolvedUsername =
+          (typeof userPost.user === 'string' ? userPost.user : userPost.user?.username) ||
+          postUserId ||
+          '사용자';
         const foundUser = {
           id: userId,
-          username: (typeof userPost.user === 'string' ? userPost.user : userPost.user?.username) || 
-                   postUserId || 
-                   '사용자',
-          profileImage: null
+          username: resolvedUsername,
+          profileImage: null,
         };
         setUser(foundUser);
       } else {
@@ -78,13 +99,17 @@ const UserProfileScreen = () => {
         setUser({
           id: userId,
           username: '사용자',
-          profileImage: null
+          profileImage: null,
         });
       }
 
       // 24시간 타이틀 로드
       const title = await getUserDailyTitle(userId);
       setDailyTitle(title);
+      
+      // 레벨 정보 로드 (현재는 전역 경험치 기준, 작성자/뷰어 구분 없이 표시)
+      const userLevelInfo = await getUserLevel();
+      setLevelInfo(userLevelInfo);
       
       // 대표 뱃지 로드 (먼저 설정)
       const repBadgeJson = await AsyncStorage.getItem(`representativeBadge_${userId}`);
@@ -227,43 +252,52 @@ const UserProfileScreen = () => {
                 <Ionicons name="person" size={40} color={COLORS.textSubtle} />
               )}
             </View>
-            <View style={styles.profileInfoContainer}>
-              {/* 프로필 이름, 대표 뱃지, 획득 뱃지 숫자를 한 줄에 가로 배치 */}
-              <View style={styles.profileInfoRow}>
-                <Text style={styles.username}>{user.username || '사용자'}</Text>
+              <View style={styles.profileInfoContainer}>
+                {/* 프로필 이름, 대표 뱃지, 획득 뱃지 숫자를 한 줄에 가로 배치 */}
+                <View style={styles.profileInfoRow}>
+                  <Text style={styles.username}>{user.username || '사용자'}</Text>
+                  
+                  {/* 대표 뱃지 */}
+                  {representativeBadge && (
+                    <View style={styles.representativeBadgeWithName}>
+                      <Text style={styles.representativeBadgeIconWithName}>
+                        {representativeBadge.icon}
+                      </Text>
+                      <Text style={styles.representativeBadgeName} numberOfLines={1}>
+                        {representativeBadge.name}
+                      </Text>
+                    </View>
+                  )}
+                  
+                  {/* 획득한 뱃지 개수 표시 */}
+                  {earnedBadges && earnedBadges.length > (representativeBadge ? 1 : 0) && (
+                    <TouchableOpacity
+                      style={styles.badgeCountButton}
+                      onPress={() => setShowAllBadges(true)}
+                    >
+                      <Text style={styles.badgeCountText}>
+                        +{earnedBadges.length - (representativeBadge ? 1 : 0)}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                {/* 레벨 표시 */}
+                <View style={styles.levelRow}>
+                  <Text style={styles.levelText}>
+                    {levelInfo
+                      ? `Lv. ${levelInfo.level} ${levelInfo.title}`
+                      : 'Lv. 1 여행 입문자'}
+                  </Text>
+                </View>
                 
-                {/* 대표 뱃지 */}
-                {representativeBadge && (
-                  <View style={styles.representativeBadgeWithName}>
-                    <Text style={styles.representativeBadgeIconWithName}>
-                      {representativeBadge.icon}
-                    </Text>
-                    <Text style={styles.representativeBadgeName} numberOfLines={1}>
-                      {representativeBadge.name}
-                    </Text>
+                {dailyTitle && (
+                  <View style={styles.titleBadge}>
+                    <Text style={styles.titleIcon}>{dailyTitle.icon}</Text>
+                    <Text style={styles.titleText}>{dailyTitle.name}</Text>
                   </View>
                 )}
-                
-                {/* 획득한 뱃지 개수 표시 */}
-                {earnedBadges && earnedBadges.length > (representativeBadge ? 1 : 0) && (
-                  <TouchableOpacity
-                    style={styles.badgeCountButton}
-                    onPress={() => setShowAllBadges(true)}
-                  >
-                    <Text style={styles.badgeCountText}>
-                      +{earnedBadges.length - (representativeBadge ? 1 : 0)}
-                    </Text>
-                  </TouchableOpacity>
-                )}
               </View>
-              
-              {dailyTitle && (
-                <View style={styles.titleBadge}>
-                  <Text style={styles.titleIcon}>{dailyTitle.icon}</Text>
-                  <Text style={styles.titleText}>{dailyTitle.name}</Text>
-                </View>
-              )}
-            </View>
           </View>
 
           {/* 통계 정보 */}
@@ -319,7 +353,7 @@ const UserProfileScreen = () => {
           <SafeAreaView style={styles.modalSafeArea}>
             <View style={styles.modalContent}>
               <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>획득한 뱃지</Text>
+                <Text style={styles.modalTitle}>대표 뱃지</Text>
                 <TouchableOpacity
                   onPress={() => setShowAllBadges(false)}
                   style={styles.modalCloseButton}
@@ -333,30 +367,30 @@ const UserProfileScreen = () => {
                 showsVerticalScrollIndicator={true}
               >
                 <View style={styles.allBadgesGrid}>
-                  {earnedBadges.map((badge, index) => {
-                    const isRepresentative = representativeBadge?.name === badge.name;
-                    return (
-                      <View
-                        key={`all-badge-${index}-${badge.name}`}
-                        style={styles.allBadgeItem}
-                      >
-                        <View style={[
-                          styles.allBadgeIconContainer,
-                          isRepresentative && styles.allBadgeIconContainerRepresentative
-                        ]}>
-                          <Text style={styles.allBadgeIcon}>{badge.icon || '🏆'}</Text>
-                        </View>
-                        <Text style={styles.allBadgeName} numberOfLines={2}>
-                          {badge.name}
-                        </Text>
-                        {isRepresentative && (
-                          <View style={styles.representativeLabel}>
-                            <Text style={styles.representativeLabelText}>대표</Text>
-                          </View>
-                        )}
+                  {representativeBadge ? (
+                    <View style={styles.allBadgeItem}>
+                      <View style={[styles.allBadgeIconContainer, styles.allBadgeIconContainerRepresentative]}>
+                        <Text style={styles.allBadgeIcon}>{representativeBadge.icon || '🏆'}</Text>
                       </View>
-                    );
-                  })}
+                      <Text style={styles.allBadgeName} numberOfLines={2}>
+                        {representativeBadge.name}
+                      </Text>
+                      <View style={styles.representativeLabel}>
+                        <Text style={styles.representativeLabelText}>대표</Text>
+                      </View>
+                    </View>
+                  ) : earnedBadges.length > 0 ? (
+                    <View style={styles.allBadgeItem}>
+                      <View style={styles.allBadgeIconContainer}>
+                        <Text style={styles.allBadgeIcon}>{earnedBadges[0].icon || '🏆'}</Text>
+                      </View>
+                      <Text style={styles.allBadgeName} numberOfLines={2}>
+                        {earnedBadges[0].name}
+                      </Text>
+                    </View>
+                  ) : (
+                    <Text style={styles.emptyText}>아직 대표 뱃지가 없습니다</Text>
+                  )}
                 </View>
               </ScrollView>
             </View>
@@ -445,6 +479,13 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
     flexWrap: 'wrap',
     marginBottom: SPACING.xs,
+  },
+  levelRow: {
+    marginTop: 2,
+  },
+  levelText: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
   },
   username: {
     ...TYPOGRAPHY.h3,

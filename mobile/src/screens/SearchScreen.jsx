@@ -14,6 +14,7 @@ import {
 import { useNavigation, useRoute } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, TYPOGRAPHY } from '../constants/styles';
 import { getRegionDefaultImage, getRegionDisplayImage } from '../utils/regionDefaultImages';
 import { filterRecentPosts } from '../utils/timeUtils';
@@ -101,18 +102,95 @@ const SearchScreen = () => {
     { id: 68, name: '서귀포', image: getRegionDefaultImage('서귀포'), keywords: ['바다', '섬', '폭포', '정방폭포', '천지연', '감귤', '자연'] }
   ], []);
 
-  // 추천 지역 계산 (사진이 많은 순으로 정렬)
+  // 계절별 추천 지역 (사진이 많은 순 + 계절 가중치)
   const topRegions = useMemo(() => {
-    const regionsWithPhotos = Object.entries(regionRepresentativePhotos)
-      .filter(([_, photo]) => photo.hasUploadedPhoto && photo.count > 0)
-      .sort((a, b) => b[1].count - a[1].count)
-      .map(([regionName, photo]) => ({
-        name: regionName,
-        ...photo
-      }));
+    // 현재 계절 감지
+    const month = new Date().getMonth() + 1;
+    let currentSeason = '';
+    let seasonRegions = [];
     
-    return regionsWithPhotos;
-  }, [regionRepresentativePhotos]);
+    if (month >= 3 && month <= 5) {
+      // 봄: 벚꽃, 꽃
+      currentSeason = '봄';
+      seasonRegions = ['진해', '여수', '제주', '서울', '부산', '창원', '거제'];
+    } else if (month >= 6 && month <= 8) {
+      // 여름: 바다, 해변
+      currentSeason = '여름';
+      seasonRegions = ['부산', '제주', '강릉', '속초', '여수', '통영', '거제', '포항'];
+    } else if (month >= 9 && month <= 11) {
+      // 가을: 단풍
+      currentSeason = '가을';
+      seasonRegions = ['설악산', '속초', '내장산', '정읍', '오대산', '평창', '가평', '춘천'];
+    } else {
+      // 겨울: 눈, 스키
+      currentSeason = '겨울';
+      seasonRegions = ['평창', '태백', '설악산', '속초', '강릉', '제주', '대관령'];
+    }
+    
+    // 사진이 있는 지역들
+    const allRegionsWithPhotos = Object.entries(regionRepresentativePhotos)
+      .filter(([_, photo]) => photo.hasUploadedPhoto && photo.count > 0)
+      .map(([regionName, photo]) => {
+        // 계절 가중치 계산 (계절 추천 지역이면 가중치 추가)
+        const seasonBonus = seasonRegions.includes(regionName) ? photo.count * 0.5 : 0;
+        const weightedScore = photo.count + seasonBonus;
+        
+        return {
+        name: regionName,
+          ...photo,
+          weightedScore
+        };
+      });
+    
+    // 가중치 순으로 정렬
+    allRegionsWithPhotos.sort((a, b) => b.weightedScore - a.weightedScore);
+    
+    // 상위 4개 선택
+    const topRegionsWithPhotos = allRegionsWithPhotos.slice(0, 4).map(({ weightedScore, ...region }) => region);
+    
+    // 사진이 있는 지역이 4개 미만이면 계절별 기본 지역으로 채우기
+    if (topRegionsWithPhotos.length < 4) {
+      const usedRegionNames = new Set(topRegionsWithPhotos.map(r => r.name));
+      const defaultRegions = seasonRegions
+        .filter(regionName => !usedRegionNames.has(regionName))
+        .slice(0, 4 - topRegionsWithPhotos.length)
+        .map(regionName => {
+          const region = recommendedRegions.find(r => r.name === regionName);
+          return {
+            name: regionName,
+            image: region?.image || getRegionDefaultImage(regionName),
+            category: '추천 장소',
+            detailedLocation: `${regionName}의 아름다운 풍경`,
+            count: 0,
+            time: null,
+            hasUploadedPhoto: false
+          };
+        });
+      
+      // 기본 지역도 없으면 전체 지역에서 선택
+      if (defaultRegions.length < 4 - topRegionsWithPhotos.length) {
+        const remainingCount = 4 - topRegionsWithPhotos.length - defaultRegions.length;
+        const additionalRegions = recommendedRegions
+          .filter(r => !usedRegionNames.has(r.name) && !defaultRegions.some(d => d.name === r.name))
+          .slice(0, remainingCount)
+          .map(region => ({
+            name: region.name,
+            image: getRegionDefaultImage(region.name),
+            category: '추천 장소',
+            detailedLocation: `${region.name}의 아름다운 풍경`,
+            count: 0,
+            time: null,
+            hasUploadedPhoto: false
+          }));
+        
+        return [...topRegionsWithPhotos, ...defaultRegions, ...additionalRegions].slice(0, 4);
+      }
+      
+      return [...topRegionsWithPhotos, ...defaultRegions].slice(0, 4);
+    }
+    
+    return topRegionsWithPhotos;
+  }, [regionRepresentativePhotos, recommendedRegions]);
 
   // 한글 초성 추출 함수
   const getChosung = useCallback((str) => {
@@ -285,6 +363,18 @@ const SearchScreen = () => {
     );
   }, []);
 
+  // 개별 최근 검색어 삭제
+  const handleDeleteRecentSearch = useCallback((searchToDelete, event) => {
+    // 이벤트 전파 중지 (버튼 클릭 시 지역 이동 방지)
+    if (event) {
+      event.stopPropagation();
+    }
+    
+    const updatedSearches = recentSearches.filter(search => search !== searchToDelete);
+    setRecentSearches(updatedSearches);
+    AsyncStorage.setItem('recentSearches', JSON.stringify(updatedSearches));
+  }, [recentSearches]);
+
   const handleRegionClick = useCallback((regionName) => {
     navigation.navigate('RegionDetail', {
       regionName: regionName,
@@ -325,7 +415,7 @@ const SearchScreen = () => {
 
   return (
     <ScreenLayout>
-      <ScreenContent>
+      <ScreenContent scrollable={false}>
         {/* 헤더 - 웹과 동일한 구조 */}
         <ScreenHeader>
           <View style={styles.headerContent}>
@@ -333,16 +423,14 @@ const SearchScreen = () => {
               style={styles.backButton}
               onPress={() => navigation.goBack()}
             >
-              <Ionicons name="arrow-back" size={24} color={COLORS.textPrimaryLight} />
+              <Ionicons name="arrow-back" size={24} color={COLORS.text} />
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>LiveJourney</Text>
+            <Text style={styles.headerTitle}>지역 검색</Text>
             <View style={styles.headerPlaceholder} />
           </View>
         </ScreenHeader>
 
-        {/* 메인 컨텐츠 - 웹과 동일한 구조 */}
-        <ScreenBody>
-          {/* 검색창 + 결과 영역 - 웹과 동일한 구조 */}
+        {/* 검색창 - 헤더 바로 아래 */}
           <View style={styles.searchContainer}>
             <View style={styles.searchInputWrapper}>
               <View style={styles.searchIconContainer}>
@@ -350,8 +438,8 @@ const SearchScreen = () => {
               </View>
               <TextInput
                 style={styles.searchInput}
-                placeholder="지역 검색 (예: ㄱ, ㅅ, 서울, 부산)"
-                placeholderTextColor="#9e7147" // placeholder:text-[#9e7147]
+                placeholder="제주"
+                placeholderTextColor="#9e7147"
                 value={searchQuery}
                 onChangeText={handleSearchInput}
                 onSubmitEditing={handleSearch}
@@ -386,87 +474,23 @@ const SearchScreen = () => {
           )}
         </View>
 
-        {/* 추천 지역 */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>추천 지역</Text>
-          
-          {topRegions.length === 0 ? (
-            <View style={styles.emptySection}>
-              <Ionicons name="compass-outline" size={64} color={COLORS.textSubtle} />
-              <Text style={styles.emptyTitle}>아직 추천할 지역이 없어요</Text>
-              <Text style={styles.emptySubtitle}>
-                사진이 올라오면 인기 지역을 추천해드릴게요
-              </Text>
-            </View>
-          ) : (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.recommendedScroll}
-            >
-              {topRegions.map((region) => {
-                const displayImage = region.image;
-                
-                return (
-                  <TouchableOpacity
-                    key={region.name}
-                    style={styles.regionCard}
-                    onPress={() => handleRegionClick(region.name)}
-                    activeOpacity={0.9}
-                  >
-                    <Image
-                      source={{ uri: displayImage }}
-                      style={styles.regionImage}
-                      resizeMode="cover"
-                    />
-                    {/* 그라데이션 오버레이 - 웹 버전과 동일 */}
-                    <View style={styles.gradientOverlayTop} />
-                    <View style={styles.gradientOverlayMiddle} />
-                    <View style={styles.gradientOverlayBottom} />
-                    
-                    {/* 좌측하단: 지역 정보 - 웹 버전과 동일 */}
-                    <View style={styles.regionInfoContainer}>
-                      <View style={styles.regionInfoGradient} />
-                      <View style={styles.regionInfo}>
-                        <Text style={styles.regionName}>{region.name}</Text>
-                        {region.detailedLocation && (
-                          <Text style={styles.regionLocation}>{region.detailedLocation}</Text>
-                        )}
-                        {region.time && (
-                          <Text style={styles.regionTime}>{region.time}</Text>
-                        )}
-                      </View>
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          )}
-        </View>
-
-        {/* 최근 검색 지역 */}
+        {/* 메인 컨텐츠 */}
+        <ScreenBody>
+        {/* 최근 검색한 지역 - 추천 지역 위에 배치 */}
+        {recentSearches.length > 0 && (
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>최근 검색지역</Text>
-            {recentSearches.length > 0 && (
+              <Text style={styles.sectionTitle}>최근 검색한 지역</Text>
               <TouchableOpacity onPress={handleClearRecentSearches}>
                 <Text style={styles.clearButton}>지우기</Text>
               </TouchableOpacity>
-            )}
           </View>
-
-          {recentSearches.length === 0 ? (
-            <View style={styles.emptyRecent}>
-              <Text style={styles.emptyRecentText}>최근 검색한 지역이 없습니다.</Text>
-            </View>
-          ) : (
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.recentScroll}
             >
               {recentSearches.map((search, index) => {
-                // 인덱스에 따라 다른 보조 컬러 적용
                 const secondaryColors = [
                   COLORS.secondary2,  // Green
                   COLORS.secondary5,  // Cyan
@@ -504,11 +528,59 @@ const SearchScreen = () => {
                     ]}>
                       {search}
                     </Text>
+                    <TouchableOpacity
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        handleDeleteRecentSearch(search);
+                      }}
+                      style={styles.deleteButton}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Ionicons name="close-circle" size={18} color={COLORS.textSubtle} />
+                    </TouchableOpacity>
                   </TouchableOpacity>
                 );
               })}
             </ScrollView>
+          </View>
           )}
+
+        {/* 추천 지역 - 2x2 그리드로 표시 */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>추천 지역</Text>
+          
+          <View style={styles.recommendedGrid}>
+            {topRegions.map((region, index) => {
+              const displayImage = region.image;
+              
+              return (
+                <TouchableOpacity
+                  key={`${region.name}-${index}`}
+                  style={styles.regionGridCard}
+                  onPress={() => handleRegionClick(region.name)}
+                  activeOpacity={0.9}
+                >
+                  <Image
+                    source={{ uri: displayImage }}
+                    style={styles.regionGridImage}
+                    resizeMode="cover"
+                  />
+                  {/* 그라데이션 오버레이 - 랜딩 페이지와 동일 */}
+                  <LinearGradient
+                    colors={['transparent', 'rgba(0,0,0,0.7)']}
+                    style={styles.regionGridOverlay}
+                    start={{ x: 0, y: 0.5 }}
+                    end={{ x: 0, y: 1 }}
+                  />
+                  
+                  {/* 하단 지역명 */}
+                  <View style={styles.regionGridInfo}>
+                    <Text style={styles.regionGridName}>{region.name}</Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
         </View>
         </ScreenBody>
       </ScreenContent>
@@ -553,11 +625,11 @@ const styles = StyleSheet.create({
     borderRadius: 8, // rounded-lg
   },
   headerTitle: {
-    fontSize: 20, // text-xl = 20px (웹과 동일)
+    fontSize: 18, // 이미지에 맞게 조정
     fontWeight: 'bold',
-    color: '#1c140d', // text-[#1c140d] (웹과 동일)
-    letterSpacing: -0.3, // tracking-[-0.015em] = -0.3px (웹과 동일)
-    lineHeight: 24, // leading-tight (웹과 동일)
+    color: '#1c140d', // text-[#1c140d]
+    letterSpacing: -0.3,
+    lineHeight: 22,
     flex: 1,
     textAlign: 'center',
   },
@@ -566,9 +638,10 @@ const styles = StyleSheet.create({
   },
   searchContainer: {
     paddingHorizontal: SPACING.md, // px-4 = 16px
-    paddingVertical: 12, // py-3 = 12px
+    paddingTop: 0, // 헤더 바로 아래에 붙이기
+    paddingBottom: 16, // pb-4 = 16px
     backgroundColor: COLORS.backgroundLight, // bg-white
-    position: 'relative', // sticky positioning을 위한 relative
+    position: 'relative',
     zIndex: 30,
   },
   searchInputWrapper: {
@@ -671,24 +744,25 @@ const styles = StyleSheet.create({
     marginTop: SPACING.xs, // mt-1 = 4px
   },
   section: {
-    paddingTop: SPACING.lg,
-    paddingHorizontal: SPACING.md,
+    paddingTop: 20,
+    paddingHorizontal: SPACING.lg, // 여백 증가
+    paddingBottom: SPACING.md,
   },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'baseline',
-    marginBottom: SPACING.md,
+    alignItems: 'center',
+    marginBottom: SPACING.sm,
+    paddingHorizontal: SPACING.md,
   },
   sectionTitle: {
-    fontSize: 22, // text-[22px] = 22px
+    fontSize: 18, // 이미지에 맞게 조정
     fontWeight: 'bold',
     color: COLORS.text, // text-[#1c140d]
-    letterSpacing: -0.33, // tracking-[-0.015em] = -0.33px
-    lineHeight: 26.4, // leading-tight
-    paddingHorizontal: SPACING.md, // px-4 = 16px
-    paddingBottom: SPACING.sm, // pb-3 = 12px
-    paddingTop: 20, // pt-5 = 20px
+    letterSpacing: -0.3,
+    lineHeight: 22,
+    paddingBottom: 12, // pb-3 = 12px
+    paddingHorizontal: 0, // 섹션에서 이미 padding 있음
   },
   clearButton: {
     fontSize: 14,
@@ -826,11 +900,14 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
   },
   recentSearchButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
     borderRadius: 999,
     backgroundColor: COLORS.borderLight,
     marginRight: SPACING.sm,
+    gap: 6,
   },
   recentSearchButtonActive: {
     // backgroundColor와 borderColor는 동적으로 설정됨
@@ -844,6 +921,59 @@ const styles = StyleSheet.create({
   recentSearchTextActive: {
     // color는 동적으로 설정됨
     fontWeight: '600',
+  },
+  deleteButton: {
+    marginLeft: 4,
+    padding: 2,
+  },
+  // 추천 지역 2x2 그리드 스타일 (랜딩 페이지와 동일)
+  recommendedGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12, // 랜딩 페이지와 동일: gap: 12px
+    paddingHorizontal: 0, // 섹션에서 이미 padding 있음
+    paddingVertical: SPACING.sm,
+  },
+  regionGridCard: {
+    width: (SCREEN_WIDTH - SPACING.lg * 2 - 12) / 2, // 2열 그리드 (gap 12px 반영)
+    height: (SCREEN_WIDTH - SPACING.lg * 2 - 12) / 2, // 정사각형
+    borderRadius: 12, // 랜딩 페이지와 동일: border-radius: 12px
+    overflow: 'hidden',
+    position: 'relative',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 2, // box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1)
+  },
+  regionGridImage: {
+    width: '100%',
+    height: '100%',
+  },
+  regionGridOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: '100%', // 그라데이션이 전체 높이에 적용되도록
+    zIndex: 1,
+  },
+  regionGridInfo: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingVertical: 12, // 랜딩 페이지와 동일: padding: 12px
+    paddingHorizontal: 12,
+    zIndex: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  regionGridName: {
+    fontSize: 14, // 랜딩 페이지와 동일: font-size: 14px
+    fontWeight: '700', // 랜딩 페이지와 동일: font-weight: 700
+    color: 'white',
+    textAlign: 'center',
   },
 });
 

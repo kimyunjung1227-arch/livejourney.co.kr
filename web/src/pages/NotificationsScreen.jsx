@@ -54,7 +54,19 @@ const NotificationsScreen = () => {
       loadNotifications();
     }
     
-    // 알림 타입에 따라 이동
+    // SOS 요청 알림인 경우 해당 위치로 이동
+    if (notification.data && notification.data.type === 'sos_request' && notification.data.sosRequest) {
+      const sosRequest = notification.data.sosRequest;
+      navigate('/map', {
+        state: {
+          sosLocation: sosRequest.coordinates,
+          sosRequest: sosRequest
+        }
+      });
+      return;
+    }
+    
+    // 일반 알림은 link로 이동
     if (notification.link) {
       navigate(notification.link);
     }
@@ -99,9 +111,9 @@ const NotificationsScreen = () => {
         <button
           onClick={() => setShowMarkAllReadModal(true)}
           disabled={allNotifications.filter(n => !n.read).length === 0}
-          className="flex size-12 shrink-0 items-center justify-end cursor-pointer text-content-light dark:text-content-dark hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex size-12 shrink-0 items-center justify-end cursor-pointer text-content-light dark:text-content-dark rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <span className="material-symbols-outlined" style={{ fontSize: '24px' }}>done_all</span>
+          <span className="material-symbols-outlined" style={{ fontSize: '24px' }}>check</span>
         </button>
       </header>
 
@@ -208,7 +220,7 @@ const NotificationsScreen = () => {
 
       {/* 모두 읽음 확인 모달 */}
       {showMarkAllReadModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-sm bg-white dark:bg-gray-800 rounded-2xl shadow-2xl overflow-hidden animate-scale-up">
             <div className="p-6">
               <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">

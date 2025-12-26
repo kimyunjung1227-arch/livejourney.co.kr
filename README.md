@@ -1,5 +1,7 @@
 # 🗺️ LiveJourney - 실시간 여행 정보 공유 플랫폼
 
+**사명**: 과거의 정보가 아닌, 지금 당신의 눈 앞에 펼쳐진 여정(Journey)을 가장 스마트하고 즐겁게 완성합니다.
+
 지금 이 순간의 여행지 모습을 실시간으로 공유하고 탐험하세요! ✨
 
 ## ✨ 주요 기능
@@ -23,15 +25,42 @@ cd backend
 
 **소셜 로그인 API 키 설정**이 필요하면 `SOCIAL_LOGIN_SETUP_GUIDE.md`를 참고하세요.
 
-### 2. 웹 앱 실행 (개발 모드)
+### 2. 모바일 앱 실행 (메인)
+
+#### 방법 A: Android Studio로 독립적인 네이티브 앱 실행 (권장)
+
+**완전히 독립적인 앱으로 실행됩니다 (Expo Go 불필요!)**
+
+```bash
+# 배치 파일 실행
+mobile\start.bat
+# 또는
+mobile\RUN_ANDROID_STUDIO.bat
+```
+
+그 다음 Android Studio에서 `Run` → `Run 'app'` 클릭
+
+📖 **자세한 가이드**: [mobile/ANDROID_STUDIO_QUICK_START.md](./mobile/ANDROID_STUDIO_QUICK_START.md)
+
+#### 방법 B: Expo Go로 빠르게 확인
+
+```bash
+cd mobile
+npm install
+npm start
+```
+→ Expo 개발 서버 시작 (Expo Go 앱 필요)
+
+### 3. 웹 앱 실행 (개발 확인용)
 ```bash
 cd web
 npm install
 npm run dev
 ```
-→ http://localhost:3000 접속
+→ http://localhost:5173 접속
+⚠️ **주의**: 웹 앱은 개발 진행사항 확인용이며, 실제 서비스는 모바일 앱입니다.
 
-### 3. 백엔드 서버 실행 (선택 사항)
+### 4. 백엔드 서버 실행 (선택 사항)
 ```bash
 cd backend
 npm install
@@ -39,26 +68,19 @@ npm run dev
 ```
 → http://localhost:5000 에서 API 서버 실행
 
-### 웹 앱 빌드 (배포용)
-```bash
-cd web
-npm run build
-```
-→ `web/dist` 폴더에 빌드 파일 생성
-
 ## 📱 배포하기
 
-자세한 배포 방법은 [DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md) 참고
+### 모바일 앱 배포 (메인)
+- **Android**: `cd mobile && npm run android` (APK/AAB 생성)
+- **iOS**: `cd mobile && npm run ios` (Mac만, IPA 생성)
+- 자세한 배포 방법은 [DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md) 참고
 
-### 웹 배포 (5분)
+### 랜딩 페이지 배포
 1. https://app.netlify.com/drop 접속
-2. `web/dist` 폴더 업로드
+2. `landing-page` 폴더 업로드
 3. 생성된 URL 공유
 
-### APK 배포 (10분)
-1. 웹 배포 후 URL 복사
-2. https://www.websitetoapk.com 에서 APK 생성
-3. APK 다운로드 및 공유
+⚠️ **중요**: 웹 앱은 개발 확인용이므로 배포하지 않습니다.
 
 ## 🛠 기술 스택
 
@@ -72,11 +94,24 @@ npm run build
 
 ```
 mvp1/
-├── web/              # 웹 앱 (메인)
-├── backend/          # API 서버
-├── app/              # 모바일 앱
+├── mobile/           # 📱 모바일 앱 (메인 - 실제 서비스)
+├── web/              # 💻 웹 앱 (개발 확인용)
+├── backend/          # 🖥️ API 서버 (공통)
+├── landing-page/     # 🌐 랜딩 페이지
 └── assets/           # 공유 리소스
 ```
+
+### 📱 모바일 앱 (메인)
+- **React Native + Expo** 기반 네이티브 앱
+- Android/iOS 스토어 배포 대상
+- 실제 사용자를 위한 완성도 높은 서비스
+
+### 💻 웹 앱 (개발 확인용)
+- **React + Vite** 기반 웹 애플리케이션
+- 개발 진행사항을 빠르게 확인하기 위한 도구
+- 실제 사용자에게 배포하지 않음
+
+자세한 내용은 [프로젝트 구조 가이드](./PROJECT_STRUCTURE.md)를 참고하세요.
 
 ## 💰 포인트 시스템
 
@@ -112,10 +147,12 @@ mvp1/
 
 ## 📚 문서
 
-- **[📖 통합 가이드](./PROJECT_GUIDE.md)** - 모든 정보가 여기에!
+- **[📁 프로젝트 구조](./PROJECT_STRUCTURE.md)** - 앱과 웹의 역할 구분
 - [빠른 시작](./QUICK_START.md) - 개발 환경 설정
 - [배포 가이드](./EASY_DEPLOY_GUIDE.md) - 무료 배포 방법
 - [API 문서](./backend/API_DOCUMENTATION.md) - 백엔드 API
+- [모바일 앱 README](./mobile/README.md) - 메인 앱 상세 정보
+- [웹 앱 README](./web/README.md) - 개발 확인용 웹 앱 정보
 
 ## 📄 라이선스
 

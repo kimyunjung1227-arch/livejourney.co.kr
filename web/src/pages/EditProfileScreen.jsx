@@ -17,10 +17,13 @@ const EditProfileScreen = () => {
     level: 'Lv. 5 Traveler'
   });
 
+  // 기본 프로필 이미지
+  const DEFAULT_PROFILE_IMAGE = 'default';
+  
   const [profileImage, setProfileImage] = useState(
     savedUser?.profileImage || 
     user?.profileImage || 
-    'https://lh3.googleusercontent.com/aida-public/AB6AXuB6XnFZs9TYicuAnZGOg-cj4K-jL5_LTQb74gsRA4Z3I27oGeCYCtXH4KrLqJjzP6t8WpPEoi1k8g9k2KifmSJCOz4k7eKOEfdgnld33u3KCtvfgnW0Y4L0H0oRTEl1yG8RRQJr-7jV-yAGqzT4DOrxzN4Jct2BywpRlbgw-8iyONLlspeX0uZ8TEadcHPGhqiNkeFGLt_-khsW6dRV5WiVwQX1cbwN52tI8JblHBEJvGEduxXcZceLxO2GbO-OA30iGr0DO-LUg7me'
+    DEFAULT_PROFILE_IMAGE
   );
   const [showImageOptions, setShowImageOptions] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
@@ -78,7 +81,7 @@ const EditProfileScreen = () => {
   };
 
   const handleDefaultImage = () => {
-    setProfileImage('https://lh3.googleusercontent.com/aida-public/AB6AXuB6XnFZs9TYicuAnZGOg-cj4K-jL5_LTQb74gsRA4Z3I27oGeCYCtXH4KrLqJjzP6t8WpPEoi1k8g9k2KifmSJCOz4k7eKOEfdgnld33u3KCtvfgnW0Y4L0H0oRTEl1yG8RRQJr-7jV-yAGqzT4DOrxzN4Jct2BywpRlbgw-8iyONLlspeX0uZ8TEadcHPGhqiNkeFGLt_-khsW6dRV5WiVwQX1cbwN52tI8JblHBEJvGEduxXcZceLxO2GbO-OA30iGr0DO-LUg7me');
+    setProfileImage(DEFAULT_PROFILE_IMAGE);
     setShowImageOptions(false);
   };
 
@@ -149,7 +152,7 @@ const EditProfileScreen = () => {
   };
 
   return (
-    <div className="flex h-full w-full flex-col bg-background-light dark:bg-background-dark">
+    <div className="flex h-full w-full flex-col bg-gray-50 dark:bg-gray-900">
       {/* 숨겨진 파일 입력 */}
       <input
         ref={fileInputRef}
@@ -161,14 +164,14 @@ const EditProfileScreen = () => {
 
       <div className="flex-1 overflow-y-auto overflow-x-hidden">
         {/* 헤더 */}
-        <header className="sticky top-0 z-10 flex items-center justify-between bg-surface-light/80 dark:bg-surface-dark/80 backdrop-blur-sm p-4 pb-2 border-b border-border-light dark:border-border-dark">
+        <header className="sticky top-0 z-10 flex items-center justify-between bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm p-4 pb-2 border-b border-gray-200 dark:border-gray-800">
         <button 
           onClick={handleCancel}
           className="flex size-12 shrink-0 items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
         >
-          <span className="material-symbols-outlined text-content-light dark:text-content-dark">close</span>
+          <span className="material-symbols-outlined text-gray-900 dark:text-gray-100">close</span>
         </button>
-        <h1 className="text-lg font-bold text-content-light dark:text-content-dark">프로필 편집</h1>
+        <h1 className="text-lg font-bold text-gray-900 dark:text-gray-100">프로필 편집</h1>
         <button 
           onClick={handleSave}
           className="flex h-12 items-center justify-center px-4 text-primary font-bold hover:text-primary/80 transition-colors"
@@ -180,12 +183,18 @@ const EditProfileScreen = () => {
         {/* 메인 콘텐츠 */}
         <main className="flex-grow pb-4">
         {/* 프로필 사진 섹션 */}
-        <div className="flex flex-col items-center justify-center py-8 bg-surface-light dark:bg-surface-dark">
+        <div className="flex flex-col items-center justify-center py-8 bg-white dark:bg-gray-900">
           <div className="relative">
-            <div 
-              className="aspect-square w-32 h-32 rounded-full bg-cover bg-center bg-no-repeat"
-              style={{ backgroundImage: `url("${profileImage}")` }}
-            ></div>
+            {profileImage === DEFAULT_PROFILE_IMAGE ? (
+              <div className="w-32 h-32 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
+                <span className="material-symbols-outlined text-gray-500 dark:text-gray-400 text-7xl">person</span>
+              </div>
+            ) : (
+              <div 
+                className="w-32 h-32 rounded-full bg-cover bg-center bg-no-repeat border-4 border-white dark:border-gray-800 shadow-lg"
+                style={{ backgroundImage: `url("${profileImage}")` }}
+              ></div>
+            )}
             <button 
               onClick={handleImageChange}
               className="absolute bottom-0 right-0 flex items-center justify-center w-10 h-10 rounded-full bg-primary text-white shadow-lg hover:bg-primary/90 transition-colors"
@@ -205,11 +214,11 @@ const EditProfileScreen = () => {
         <div className="h-2 bg-background-light dark:bg-background-dark"></div>
 
         {/* 입력 폼 섹션 */}
-        <div className="bg-surface-light dark:bg-surface-dark">
+        <div className="bg-white dark:bg-gray-900">
           <div className="px-4 py-4 space-y-6">
             {/* 닉네임 */}
             <div className="space-y-2">
-              <label className="block text-sm font-semibold text-content-light dark:text-content-dark">
+              <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200">
                 닉네임
               </label>
               <input
@@ -217,14 +226,14 @@ const EditProfileScreen = () => {
                 name="username"
                 value={formData.username}
                 onChange={handleInputChange}
-                className="w-full px-4 py-3 rounded-lg border border-border-light dark:border-border-dark bg-background-light dark:bg-background-dark text-content-light dark:text-content-dark placeholder:text-subtle-light dark:placeholder:text-subtle-dark focus:outline-none focus:ring-2 focus:ring-primary transition-all"
+                className="w-full px-4 py-3 rounded-lg border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all"
                 placeholder="닉네임을 입력하세요"
               />
             </div>
 
             {/* 이메일 */}
             <div className="space-y-2">
-              <label className="block text-sm font-semibold text-content-light dark:text-content-dark">
+              <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200">
                 이메일
               </label>
               <input
@@ -232,27 +241,27 @@ const EditProfileScreen = () => {
                 name="email"
                 value={formData.email}
                 onChange={handleInputChange}
-                className="w-full px-4 py-3 rounded-lg border border-border-light dark:border-border-dark bg-background-light dark:bg-background-dark text-content-light dark:text-content-dark placeholder:text-subtle-light dark:placeholder:text-subtle-dark focus:outline-none focus:ring-2 focus:ring-primary transition-all"
+                className="w-full px-4 py-3 rounded-lg border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all"
                 placeholder="이메일을 입력하세요"
               />
             </div>
 
             {/* 레벨 (읽기 전용) */}
             <div className="space-y-2">
-              <label className="block text-sm font-semibold text-content-light dark:text-content-dark">
+              <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200">
                 레벨
               </label>
-              <div className="w-full px-4 py-3 rounded-lg border border-border-light dark:border-border-dark bg-surface-subtle-light dark:bg-surface-subtle-dark text-subtle-light dark:text-subtle-dark">
+              <div className="w-full px-4 py-3 rounded-lg border-2 border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300">
                 {formData.level}
               </div>
-              <p className="text-xs text-subtle-light dark:text-subtle-dark">
+              <p className="text-xs text-gray-500 dark:text-gray-400">
                 레벨은 활동을 통해 자동으로 올라갑니다
               </p>
             </div>
 
             {/* 자기소개 */}
             <div className="space-y-2">
-              <label className="block text-sm font-semibold text-content-light dark:text-content-dark">
+              <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200">
                 자기소개
               </label>
               <textarea
@@ -260,10 +269,10 @@ const EditProfileScreen = () => {
                 value={formData.bio}
                 onChange={handleInputChange}
                 rows="4"
-                className="w-full px-4 py-3 rounded-lg border border-border-light dark:border-border-dark bg-background-light dark:bg-background-dark text-content-light dark:text-content-dark placeholder:text-subtle-light dark:placeholder:text-subtle-dark focus:outline-none focus:ring-2 focus:ring-primary transition-all resize-none"
+                className="w-full px-4 py-3 rounded-lg border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all resize-none"
                 placeholder="자기소개를 입력하세요"
               />
-              <p className="text-xs text-subtle-light dark:text-subtle-dark text-right">
+              <p className="text-xs text-gray-500 dark:text-gray-400 text-right">
                 {formData.bio.length} / 150
               </p>
             </div>

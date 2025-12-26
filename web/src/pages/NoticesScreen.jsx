@@ -50,11 +50,11 @@ const NoticesScreen = () => {
         <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-border-light bg-surface-light/80 dark:border-border-dark dark:bg-surface-dark/80 backdrop-blur-sm px-4">
         <button
           onClick={() => navigate('/settings')}
-          className="flex size-12 shrink-0 items-center justify-center cursor-pointer text-content-light dark:text-content-dark hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+          className="flex size-12 shrink-0 items-center justify-center cursor-pointer text-black dark:text-white hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
         >
           <span className="material-symbols-outlined text-2xl">arrow_back</span>
         </button>
-        <h1 className="text-lg font-bold leading-tight tracking-[-0.015em] text-content-light dark:text-content-dark">공지사항</h1>
+        <h1 className="text-lg font-bold leading-tight tracking-[-0.015em] text-black dark:text-white">공지사항</h1>
         <div className="flex size-12 shrink-0 items-center justify-end"></div>
       </header>
 
@@ -68,20 +68,20 @@ const NoticesScreen = () => {
             >
               <div className="flex-grow text-left">
                 <div className="flex items-center gap-2">
-                  <p className="text-base font-bold leading-normal text-content-light dark:text-content-dark">
+                  <p className="text-base font-bold leading-normal text-black dark:text-white">
                     {notice.title}
                   </p>
                   {notice.isNew && (
-                    <span className="inline-block rounded bg-primary/10 px-1.5 py-0.5 text-xs font-bold text-primary dark:bg-primary/20">
+                    <span className="inline-block rounded bg-black/10 dark:bg-white/10 px-1.5 py-0.5 text-xs font-bold text-black dark:text-white">
                       NEW
                     </span>
                   )}
                 </div>
-                <p className="mt-1 text-sm font-normal leading-normal text-subtle-light dark:text-subtle-dark">
+                <p className="mt-1 text-sm font-normal leading-normal text-black/70 dark:text-white/70">
                   {notice.date}
                 </p>
               </div>
-              <span className="material-symbols-outlined text-subtle-light dark:text-subtle-dark">
+              <span className="material-symbols-outlined text-black/70 dark:text-white/70">
                 chevron_right
               </span>
             </button>

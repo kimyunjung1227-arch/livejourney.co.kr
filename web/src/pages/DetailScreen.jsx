@@ -1,16 +1,17 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import BottomNavigation from '../components/BottomNavigation';
-import { filterRecentPosts } from '../utils/timeUtils';
+import { filterRecentPosts, getTimeAgo } from '../utils/timeUtils';
 
 const DetailScreen = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState(searchParams.get('filter') || 'realtime');
-  const [selectedCategory, setSelectedCategory] = useState('자연');
+  const [selectedTag, setSelectedTag] = useState(null);
   const [displayedItems, setDisplayedItems] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [popularTags, setPopularTags] = useState([]);
   const loadMoreRef = useRef(null);
   const pageRef = useRef(0);
   
@@ -24,8 +25,31 @@ const DetailScreen = () => {
   const [hashtagStartX, setHashtagStartX] = useState(0);
   const [hashtagScrollLeft, setHashtagScrollLeft] = useState(0);
   
-  // 카테고리 목록 (메모이제이션)
-  const categories = useMemo(() => ['자연', '힐링', '액티비티', '맛집', '카페'], []);
+  // 모든 게시물에서 태그 수집 및 인기 태그 계산
+  const extractPopularTags = useCallback((posts) => {
+    const tagCountMap = new Map();
+    
+    posts.forEach(post => {
+      const tags = post.tags || [];
+      tags.forEach(tag => {
+        // 태그에서 # 제거하고 정규화
+        const cleanTag = typeof tag === 'string' ? tag.replace(/^#+/, '').trim() : String(tag).replace(/^#+/, '').trim();
+        
+        // 빈 문자열 제외, 최소 2글자 이상만
+        if (cleanTag && cleanTag.length >= 2) {
+          tagCountMap.set(cleanTag, (tagCountMap.get(cleanTag) || 0) + 1);
+        }
+      });
+    });
+    
+    // 빈도수 기준으로 정렬하고 상위 10개 추출
+    const sortedTags = Array.from(tagCountMap.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([tag]) => tag);
+    
+    return sortedTags;
+  }, []);
 
   // 해시태그 드래그 핸들러
   const handleHashtagDragStart = useCallback((e) => {
@@ -80,11 +104,20 @@ const DetailScreen = () => {
       case 'crowded':
         return crowdedData;
       case 'recommended':
-        return recommendedData.filter(item => item.category === selectedCategory);
+        if (!selectedTag) {
+          return recommendedData;
+        }
+        return recommendedData.filter(item => {
+          const tags = item.tags || [];
+          return tags.some(tag => {
+            const cleanTag = typeof tag === 'string' ? tag.replace(/^#+/, '').trim() : String(tag).replace(/^#+/, '').trim();
+            return cleanTag === selectedTag;
+          });
+        });
       default:
         return realtimeData;
     }
-  }, [activeTab, selectedCategory, realtimeData, crowdedData, recommendedData]);
+  }, [activeTab, selectedTag, realtimeData, crowdedData, recommendedData]);
 
   // 시간을 숫자로 변환하는 함수 (정렬용)
   const timeToMinutes = (timeLabel) => {
@@ -110,50 +143,81 @@ const DetailScreen = () => {
       return;
     }
     
-    const realtimeFormatted = posts.slice(0, 100).map((post) => ({
-      id: `realtime-${post.id}`,
-      images: post.images || [],
-      videos: post.videos || [],
-      image: post.images?.[0] || post.videos?.[0] || '',
-      title: post.location,
-      location: post.location,
-      detailedLocation: post.detailedLocation || post.placeName || post.location,
-      time: post.timeLabel || '방금',
-      user: post.user || '여행자',
-      badge: post.categoryName || '여행러버',
-      weather: '맑음',
-      category: post.category,
-      categoryName: post.categoryName,
-      aiLabels: post.aiLabels,
-      tags: post.tags || post.aiLabels || [],
-      note: post.note || post.content,
-      likes: post.likes || post.likeCount || 0
-    }));
-    
-    const crowdedFormatted = posts
-      .filter((_, idx) => idx % 2 === 0)
-      .slice(0, 80)
-      .map((post) => ({
-        id: `crowded-${post.id}`,
+    const realtimeFormatted = posts.slice(0, 100).map((post) => {
+      // timestamp 기반으로 동적 시간 계산
+      const dynamicTime = getTimeAgo(post.timestamp || post.createdAt || post.time);
+      
+      return {
+        id: post.id,
         images: post.images || [],
         videos: post.videos || [],
         image: post.images?.[0] || post.videos?.[0] || '',
         title: post.location,
         location: post.location,
-        detailedLocation: post.detailedLocation || post.placeName || post.location,
-        badge: '인기',
-        time: post.timeLabel || '방금',
+        detailedLocation: post.detailedLocation || post.location,
+        placeName: post.placeName || post.location,
+        time: dynamicTime,
+        timeLabel: dynamicTime,
+        timestamp: post.timestamp || post.createdAt || post.time,
         user: post.user || '여행자',
-        weather: '맑음',
+        userId: post.userId,
+        badge: post.categoryName || '여행러버',
         category: post.category,
         categoryName: post.categoryName,
-        aiLabels: post.aiLabels,
-        tags: post.tags || post.aiLabels || [],
-        note: post.note || post.content,
-        likes: post.likes || post.likeCount || 0
-      }));
+        content: post.note || `${post.location}의 아름다운 순간!`,
+        note: post.note,
+        tags: post.tags || [],
+        coordinates: post.coordinates,
+        likes: post.likes || 0,
+        comments: post.comments || [],
+        questions: post.questions || [],
+        qnaList: [],
+        aiLabels: post.aiLabels
+      };
+    });
     
-    const recommendedFormatted = posts.slice(0, 100).map((post, idx) => {
+    // 1시간 이내 게시물만 필터링 (인기 섹션)
+    const oneHourAgo = Date.now() - (60 * 60 * 1000);
+    const crowdedFormatted = posts
+      .filter(post => {
+        const postTime = new Date(post.timestamp || post.createdAt || post.time).getTime();
+        return postTime > oneHourAgo;
+      })
+      .slice(0, 150)
+      .map((post) => {
+        const dynamicTime = getTimeAgo(post.timestamp || post.createdAt || post.time);
+        
+        return {
+          id: post.id,
+          images: post.images || [],
+          videos: post.videos || [],
+          image: post.images?.[0] || post.videos?.[0] || '',
+          title: post.location,
+          location: post.location,
+          detailedLocation: post.detailedLocation || post.location,
+          placeName: post.placeName || post.location,
+          badge: '인기',
+          category: post.category || '자연',
+          categoryName: post.categoryName,
+          time: dynamicTime,
+          timeLabel: dynamicTime,
+          timestamp: post.timestamp || post.createdAt || post.time,
+          user: post.user || '여행자',
+          userId: post.userId,
+          content: post.note || `${post.location}의 인기 명소!`,
+          note: post.note,
+          tags: post.tags || [],
+          coordinates: post.coordinates,
+          likes: post.likes || 0,
+          comments: post.comments || [],
+          questions: post.questions || [],
+          aiLabels: post.aiLabels
+        };
+      });
+    
+    const recommendedFormatted = posts.slice(0, 200).map((post, idx) => {
+      const dynamicTime = getTimeAgo(post.timestamp || post.createdAt || post.time);
+      
       let assignedCategory = '자연';
       if (post.category === 'food') {
         assignedCategory = idx % 2 === 0 ? '맛집' : '카페';
@@ -166,23 +230,30 @@ const DetailScreen = () => {
       }
       
       return {
-        id: `recommended-${post.id}`,
+        id: post.id,
         images: post.images || [],
         videos: post.videos || [],
         image: post.images?.[0] || post.videos?.[0] || '',
         title: post.location,
         location: post.location,
-        detailedLocation: post.detailedLocation || post.placeName || post.location,
+        detailedLocation: post.detailedLocation || post.location,
+        placeName: post.placeName || post.location,
         badge: '추천',
         category: assignedCategory,
-        tags: post.tags || post.aiLabels || [assignedCategory],
-        time: post.timeLabel || '방금',
-        user: post.user || '여행자',
-        weather: '맑음',
         categoryName: post.categoryName,
-        aiLabels: post.aiLabels,
-        note: post.note || post.content,
-        likes: post.likes || post.likeCount || 0
+        tags: post.tags || [assignedCategory],
+        time: dynamicTime,
+        timeLabel: dynamicTime,
+        timestamp: post.timestamp || post.createdAt || post.time,
+        user: post.user || '여행자',
+        userId: post.userId,
+        content: post.note || `${post.location} 추천!`,
+        note: post.note,
+        coordinates: post.coordinates,
+        likes: post.likes || 0,
+        comments: post.comments || [],
+        questions: post.questions || [],
+        aiLabels: post.aiLabels
       };
     });
     
@@ -190,12 +261,18 @@ const DetailScreen = () => {
     setCrowdedData(crowdedFormatted);
     setRecommendedData(recommendedFormatted);
     
+    // 추천 섹션에서 사용할 인기 태그 추출
+    const allRecommendedPosts = [...realtimeFormatted, ...crowdedFormatted, ...recommendedFormatted];
+    const tags = extractPopularTags(allRecommendedPosts);
+    setPopularTags(tags);
+    
     console.log('📊 DetailScreen 데이터 로드:', {
       realtime: realtimeFormatted.length,
       crowded: crowdedFormatted.length,
-      recommended: recommendedFormatted.length
+      recommended: recommendedFormatted.length,
+      popularTags: tags.length
     });
-  }, []);
+  }, [getTimeAgo, extractPopularTags]);
 
   // 더 많은 아이템 로드 (useCallback)
   const loadMoreItems = useCallback(() => {
@@ -230,7 +307,7 @@ const DetailScreen = () => {
     // 사용자가 새로고침할 때만 데이터 갱신
   }, [loadAllData]);
 
-  // 탭 또는 카테고리 변경 시에만 스크롤 초기화
+  // 탭 또는 태그 변경 시에만 스크롤 초기화
   useEffect(() => {
     pageRef.current = 0;
     setDisplayedItems([]);
@@ -238,7 +315,7 @@ const DetailScreen = () => {
     
     // 즉시 사진 로드 (지연 제거)
     loadMoreItems();
-  }, [activeTab, selectedCategory, loadMoreItems]);
+  }, [activeTab, selectedTag, loadMoreItems]);
   
   // 데이터 업데이트 시 현재 표시된 아이템 자동 갱신 (스크롤 유지)
   useEffect(() => {
@@ -325,8 +402,14 @@ const DetailScreen = () => {
           </div>
         </div>
 
-        {activeTab === 'recommended' && (
+        {activeTab === 'recommended' && popularTags.length > 0 && (
           <div className="w-full bg-background-light dark:bg-background-dark border-b border-zinc-200 dark:border-zinc-800">
+            <div className="px-4 pt-3 pb-2">
+              <p className="text-xs text-text-subtle-light dark:text-text-subtle-dark mb-2 font-medium flex items-center gap-1">
+                <span className="material-symbols-outlined text-sm">local_fire_department</span>
+                사람들이 많이 찾는 태그
+              </p>
+            </div>
             <div 
               ref={hashtagScrollRef}
               onMouseDown={handleHashtagDragStart}
@@ -336,20 +419,31 @@ const DetailScreen = () => {
               onTouchStart={handleHashtagDragStart}
               onTouchMove={handleHashtagDragMove}
               onTouchEnd={handleHashtagDragEnd}
-              className="flex gap-2 px-4 py-3 overflow-x-auto [-ms-scrollbar-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden scroll-smooth cursor-grab active:cursor-grabbing select-none"
+              className="flex gap-2 px-4 pb-3 overflow-x-auto [-ms-scrollbar-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden scroll-smooth cursor-grab active:cursor-grabbing select-none"
               style={{ WebkitOverflowScrolling: 'touch' }}
             >
-              {categories.map((category) => (
+              <button
+                onClick={() => setSelectedTag(null)}
+                className={`flex-shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition-all duration-300 select-none flex items-center gap-1.5 ${
+                  selectedTag === null
+                    ? 'bg-primary text-white scale-105 shadow-md'
+                    : 'bg-card-light dark:bg-card-dark text-text-light dark:text-text-dark ring-1 ring-inset ring-black/10 dark:ring-white/10 hover:bg-primary/10 hover:scale-105'
+                }`}
+              >
+                <span className="material-symbols-outlined text-base">explore</span>
+                전체
+              </button>
+              {popularTags.map((tag) => (
                 <button
-                  key={category}
-                  onClick={() => setSelectedCategory(category)}
-                  className={`flex-shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
-                    selectedCategory === category
-                      ? 'bg-primary text-white'
-                      : 'bg-card-light dark:bg-card-dark text-text-light dark:text-text-dark ring-1 ring-inset ring-black/10 dark:ring-white/10 hover:bg-primary/10'
+                  key={tag}
+                  onClick={() => setSelectedTag(tag)}
+                  className={`flex-shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition-all duration-300 select-none ${
+                    selectedTag === tag
+                      ? 'bg-primary/20 text-primary scale-105 shadow-md border-2 border-primary/30'
+                      : 'bg-card-light dark:bg-card-dark text-text-light dark:text-text-dark ring-1 ring-inset ring-black/10 dark:ring-white/10 hover:bg-primary/10 hover:scale-105 border-2 border-transparent'
                   }`}
                 >
-                  #{category}
+                  #{tag}
                 </button>
               ))}
             </div>
@@ -361,18 +455,33 @@ const DetailScreen = () => {
         {displayedItems.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 px-4">
             <span className="material-symbols-outlined text-7xl text-gray-300 dark:text-gray-600 mb-4">
-              {activeTab === 'realtime' ? 'update' : activeTab === 'crowded' ? 'people' : 'recommend'}
+              {activeTab === 'realtime' ? 'update' : activeTab === 'crowded' ? 'people' : (selectedTag ? 'search_off' : 'recommend')}
             </span>
             <p className="text-base font-medium text-gray-500 dark:text-gray-400 mb-2 text-center">
               {activeTab === 'realtime' && '아직 지금 이곳의 모습이 올라오지 않았어요'}
               {activeTab === 'crowded' && '아직 어디가 붐비는지 정보가 없어요'}
-              {activeTab === 'recommended' && '추천 장소가 아직 없어요'}
+              {activeTab === 'recommended' && selectedTag && (
+                <>
+                  <span className="font-bold text-primary">#{selectedTag}</span> 태그로 추천된 장소가 없어요
+                </>
+              )}
+              {activeTab === 'recommended' && !selectedTag && '추천 장소가 아직 없어요'}
             </p>
             <p className="text-sm text-gray-400 dark:text-gray-500 text-center mb-4 max-w-xs">
               {activeTab === 'realtime' && '지금 보고 있는 장소와 분위기, 날씨가 보이도록 한 장만 남겨 주세요'}
               {activeTab === 'crowded' && '지금 있는 곳의 상황과 느낌을 남겨 주면 다른 사람들의 선택에 도움이 돼요'}
-              {activeTab === 'recommended' && '첫 번째로 추천 장소를 공유해보세요!'}
+              {activeTab === 'recommended' && selectedTag && '다른 태그를 선택하거나 전체를 확인해보세요'}
+              {activeTab === 'recommended' && !selectedTag && '첫 번째로 추천 장소를 공유해보세요!'}
             </p>
+            {activeTab === 'recommended' && selectedTag ? (
+              <button
+                onClick={() => setSelectedTag(null)}
+                className="bg-primary text-white px-6 py-3 rounded-full font-semibold hover:bg-primary/90 transition-colors shadow-lg flex items-center gap-2"
+              >
+                <span className="material-symbols-outlined">explore</span>
+                전체 보기
+              </button>
+            ) : (
             <button
               onClick={() => navigate('/upload')}
               className="bg-primary text-white px-6 py-3 rounded-full font-semibold hover:bg-primary/90 transition-colors shadow-lg flex items-center gap-2"
@@ -380,6 +489,7 @@ const DetailScreen = () => {
               <span className="material-symbols-outlined">add_a_photo</span>
               첫 사진 올리기
             </button>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-4 p-4">

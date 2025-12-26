@@ -104,3 +104,30 @@ Write-Host "이제 GitHub Issues에 업로드할 수 있습니다!`n" -Foregroun
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

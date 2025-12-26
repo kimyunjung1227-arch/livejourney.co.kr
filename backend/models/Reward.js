@@ -1,102 +1,199 @@
 const mongoose = require('mongoose');
 
-// 뱃지 정의
+/**
+ * 라이브저니 뱃지 시스템 v3.0
+ * 단순하고 명확한 달성 기준만!
+ */
+
 const BADGES = {
-  '첫 여행 기록': {
-    name: '첫 여행 기록',
-    description: '첫 번째 여행 사진을 업로드했어요!',
-    icon: '🎯',
-    gradient: 'from-blue-400 to-cyan-400',
-    condition: { type: 'postCount', value: 1 },
-    points: 50
+  // 시작 단계
+  '첫 걸음': {
+    name: '첫 걸음',
+    description: '첫 번째 여행 사진을 올렸어요!',
+    icon: '🌱',
+    category: '시작',
+    difficulty: 1,
+    gradient: 'from-green-400 to-emerald-500',
+    condition: { type: 'postCount', value: 1 }
   },
-  '여행 탐험가': {
-    name: '여행 탐험가',
-    description: '10개의 여행 기록을 남겼어요!',
-    icon: '🗺️',
-    gradient: 'from-green-400 to-emerald-400',
-    condition: { type: 'postCount', value: 10 },
-    points: 100
+  
+  '여행 시작': {
+    name: '여행 시작',
+    description: '3개의 여행 기록을 남겼어요',
+    icon: '🎒',
+    category: '시작',
+    difficulty: 1,
+    gradient: 'from-blue-400 to-cyan-500',
+    condition: { type: 'postCount', value: 3 }
   },
-  '여행 마스터': {
-    name: '여행 마스터',
-    description: '50개의 여행 기록을 달성했어요!',
-    icon: '⭐',
-    gradient: 'from-yellow-400 to-orange-400',
-    condition: { type: 'postCount', value: 50 },
-    points: 500
+  
+  '첫 좋아요': {
+    name: '첫 좋아요',
+    description: '다른 사람이 내 사진을 좋아해줬어요!',
+    icon: '💖',
+    category: '시작',
+    difficulty: 1,
+    gradient: 'from-pink-400 to-rose-500',
+    condition: { type: 'likesReceived', value: 1 }
   },
-  '여행 전문가': {
-    name: '여행 전문가',
-    description: '100개의 여행 기록! 정말 대단해요!',
-    icon: '👑',
-    gradient: 'from-purple-400 to-pink-400',
-    condition: { type: 'postCount', value: 100 },
-    points: 1000
+  
+  // 활동 단계
+  '여행 애호가': {
+    name: '여행 애호가',
+    description: '10개의 여행 기록을 남겼어요',
+    icon: '✈️',
+    category: '활동',
+    difficulty: 2,
+    gradient: 'from-sky-400 to-blue-500',
+    condition: { type: 'postCount', value: 10 }
   },
+  
+  '사진 수집가': {
+    name: '사진 수집가',
+    description: '25개의 여행 사진을 모았어요',
+    icon: '📷',
+    category: '활동',
+    difficulty: 2,
+    gradient: 'from-purple-400 to-violet-500',
+    condition: { type: 'postCount', value: 25 }
+  },
+  
   '인기 여행자': {
     name: '인기 여행자',
-    description: '좋아요를 100개 받았어요!',
-    icon: '❤️',
-    gradient: 'from-rose-400 to-red-400',
-    condition: { type: 'likesReceived', value: 100 },
-    points: 200
+    description: '좋아요를 50개 받았어요!',
+    icon: '⭐',
+    category: '활동',
+    difficulty: 2,
+    gradient: 'from-yellow-400 to-orange-500',
+    condition: { type: 'likesReceived', value: 50 }
   },
-  '소통왕': {
-    name: '소통왕',
-    description: '댓글을 50개 작성했어요!',
-    icon: '💬',
-    gradient: 'from-indigo-400 to-blue-400',
-    condition: { type: 'commentCount', value: 50 },
-    points: 150
+  
+  // 전문가 단계
+  '여행 전문가': {
+    name: '여행 전문가',
+    description: '50개의 여행 기록! 진정한 여행 전문가예요',
+    icon: '🏆',
+    category: '전문가',
+    difficulty: 3,
+    gradient: 'from-amber-400 to-yellow-600',
+    condition: { type: 'postCount', value: 50 }
   },
+  
+  '슈퍼 인기': {
+    name: '슈퍼 인기',
+    description: '좋아요를 100개나 받았어요!',
+    icon: '🌟',
+    category: '전문가',
+    difficulty: 3,
+    gradient: 'from-yellow-500 to-amber-600',
+    condition: { type: 'likesReceived', value: 100 }
+  },
+  
   '지역 탐험가': {
     name: '지역 탐험가',
-    description: '5개 이상의 지역을 여행했어요!',
-    icon: '🌏',
-    gradient: 'from-teal-400 to-cyan-400',
-    condition: { type: 'regionCount', value: 5 },
-    points: 300
+    description: '5개 이상의 다른 지역을 방문했어요',
+    icon: '🗺️',
+    category: '전문가',
+    difficulty: 3,
+    gradient: 'from-teal-400 to-cyan-600',
+    condition: { type: 'regionCount', value: 5 }
   },
-  '전국 일주': {
-    name: '전국 일주',
-    description: '10개 이상의 지역을 방문했어요!',
-    icon: '🎊',
-    gradient: 'from-fuchsia-400 to-purple-400',
-    condition: { type: 'regionCount', value: 10 },
-    points: 800
+  
+  // 마스터 단계
+  '여행 마스터': {
+    name: '여행 마스터',
+    description: '100개의 여행 기록! 정말 대단해요!',
+    icon: '👑',
+    category: '마스터',
+    difficulty: 4,
+    gradient: 'from-purple-500 to-pink-600',
+    condition: { type: 'postCount', value: 100 }
   },
-  '개화 전문가': {
-    name: '개화 전문가',
-    description: '꽃 사진을 20개 올렸어요!',
-    icon: '🌸',
-    gradient: 'from-pink-400 to-rose-400',
-    condition: { type: 'categoryCount', category: 'bloom', value: 20 },
-    points: 200
+  
+  '전국 정복자': {
+    name: '전국 정복자',
+    description: '10개 이상의 지역을 모두 방문했어요!',
+    icon: '🌍',
+    category: '마스터',
+    difficulty: 4,
+    gradient: 'from-green-500 to-teal-600',
+    condition: { type: 'regionCount', value: 10 }
   },
-  '맛집 헌터': {
-    name: '맛집 헌터',
-    description: '맛집 사진을 20개 올렸어요!',
-    icon: '🍜',
-    gradient: 'from-amber-400 to-orange-400',
-    condition: { type: 'categoryCount', category: 'food', value: 20 },
-    points: 200
+  
+  '메가 스타': {
+    name: '메가 스타',
+    description: '좋아요를 500개나 받았어요! 슈퍼스타!',
+    icon: '🌠',
+    category: '마스터',
+    difficulty: 4,
+    gradient: 'from-yellow-400 via-orange-500 to-red-600',
+    condition: { type: 'likesReceived', value: 500 }
   },
-  '랜드마크 마니아': {
-    name: '랜드마크 마니아',
-    description: '명소 사진을 20개 올렸어요!',
-    icon: '🏛️',
-    gradient: 'from-slate-400 to-zinc-400',
-    condition: { type: 'categoryCount', category: 'landmark', value: 20 },
-    points: 200
+  
+  // 지역 특화 뱃지
+  '내 지역 알리미': {
+    name: '내 지역 알리미',
+    description: '한 지역에서 30개 이상 게시했어요! 지역 홍보 대사!',
+    icon: '📍',
+    category: '지역',
+    difficulty: 3,
+    gradient: 'from-red-400 to-pink-500',
+    condition: { type: 'regionMaxPosts', value: 30 }
   },
-  '성실한 여행자': {
-    name: '성실한 여행자',
-    description: '7일 연속 접속했어요!',
-    icon: '📅',
-    gradient: 'from-lime-400 to-green-400',
-    condition: { type: 'consecutiveDays', value: 7 },
-    points: 100
+  
+  '도시 홍보대사': {
+    name: '도시 홍보대사',
+    description: '한 지역에서 50개 이상! 이제 그 지역의 전문가예요',
+    icon: '🏙️',
+    category: '지역',
+    difficulty: 4,
+    gradient: 'from-cyan-400 to-blue-600',
+    condition: { type: 'regionMaxPosts', value: 50 }
+  },
+  
+  // 숨겨진 뱃지
+  '행운아': {
+    name: '행운아',
+    description: '게시물 하나가 좋아요 100개를 받았어요!',
+    icon: '🍀',
+    category: '숨김',
+    difficulty: 4,
+    gradient: 'from-green-400 via-emerald-500 to-teal-600',
+    hidden: true,
+    condition: { type: 'singlePostLikes', value: 100 }
+  },
+  
+  '신속 게시자': {
+    name: '신속 게시자',
+    description: '하루에 게시물을 5개 올렸어요!',
+    icon: '⚡',
+    category: '숨김',
+    difficulty: 3,
+    gradient: 'from-yellow-300 to-orange-500',
+    hidden: true,
+    condition: { type: 'dailyPosts', value: 5 }
+  },
+  
+  '전설의 여행자': {
+    name: '전설의 여행자',
+    description: '200개의 여행 기록! 당신은 전설입니다!',
+    icon: '🦄',
+    category: '숨김',
+    difficulty: 5,
+    gradient: 'from-pink-400 via-purple-500 to-indigo-600',
+    hidden: true,
+    condition: { type: 'postCount', value: 200 }
+  },
+  
+  '도시 탐험가': {
+    name: '도시 탐험가',
+    description: '한 지역에서 20개 이상 게시! 숨겨진 명소를 찾았어요',
+    icon: '🌃',
+    category: '숨김',
+    difficulty: 3,
+    gradient: 'from-indigo-400 to-purple-600',
+    hidden: true,
+    condition: { type: 'regionMaxPosts', value: 20 }
   }
 };
 
@@ -116,57 +213,52 @@ const rewardSchema = new mongoose.Schema({
   badgeData: {
     type: mongoose.Schema.Types.Mixed,
     default: {}
-  },
-  pointsAwarded: {
-    type: Number,
-    default: 0
-  },
-  isNotified: {
-    type: Boolean,
-    default: false
   }
 }, {
   timestamps: true
 });
 
-// 인덱스
-rewardSchema.index({ user: 1, badgeName: 1 }, { unique: true }); // 중복 획득 방지
+rewardSchema.index({ user: 1, badgeName: 1 }, { unique: true });
 rewardSchema.index({ createdAt: -1 });
 
-// 뱃지 확인 및 지급 정적 메서드
+// 뱃지 확인 및 지급
 rewardSchema.statics.checkAndAwardBadges = async function(userId) {
   const User = mongoose.model('User');
   const Post = mongoose.model('Post');
-  const { PointHistory } = require('./Point');
   
   const user = await User.findById(userId);
   if (!user) return [];
   
   const newBadges = [];
-  
-  // 사용자 통계 가져오기
-  const postCount = await Post.countDocuments({ user: userId, isPublic: true });
   const posts = await Post.find({ user: userId, isPublic: true });
+  const postCount = posts.length;
   
-  // 지역 수 계산
-  const regions = new Set(posts.map(p => p.location));
+  // 통계 계산
+  const regions = new Set(posts.map(p => (p.location || p.region || '').split(' ')[0]).filter(Boolean));
   const regionCount = regions.size;
+  const likesReceived = posts.reduce((sum, post) => sum + (post.likes || 0), 0);
+  const maxLikes = Math.max(...posts.map(p => p.likes || 0), 0);
   
-  // 카테고리별 게시물 수 계산
-  const categoryCounts = {};
+  // 지역별 게시물 수
+  const regionPostCounts = {};
   posts.forEach(post => {
-    categoryCounts[post.category] = (categoryCounts[post.category] || 0) + 1;
+    const region = (post.location || post.region || '').split(' ')[0];
+    if (region) {
+      regionPostCounts[region] = (regionPostCounts[region] || 0) + 1;
+    }
   });
+  const maxRegionPosts = Math.max(...Object.values(regionPostCounts), 0);
   
-  // 좋아요 받은 수 계산
-  const likesReceived = posts.reduce((sum, post) => sum + post.likes, 0);
-  
-  // 댓글 수 계산
-  const commentCount = posts.reduce((sum, post) => sum + post.comments.length, 0);
+  // 날짜별 게시물 수
+  const postsByDate = {};
+  posts.forEach(post => {
+    const date = new Date(post.createdAt).toDateString();
+    postsByDate[date] = (postsByDate[date] || 0) + 1;
+  });
+  const maxDailyPosts = Math.max(...Object.values(postsByDate), 0);
   
   // 각 뱃지 조건 확인
   for (const [badgeName, badgeInfo] of Object.entries(BADGES)) {
-    // 이미 획득한 뱃지인지 확인
     const alreadyHas = await this.findOne({ user: userId, badgeName });
     if (alreadyHas) continue;
     
@@ -179,42 +271,41 @@ rewardSchema.statics.checkAndAwardBadges = async function(userId) {
       case 'likesReceived':
         shouldAward = likesReceived >= badgeInfo.condition.value;
         break;
-      case 'commentCount':
-        shouldAward = commentCount >= badgeInfo.condition.value;
-        break;
       case 'regionCount':
         shouldAward = regionCount >= badgeInfo.condition.value;
         break;
-      case 'categoryCount':
-        const catCount = categoryCounts[badgeInfo.condition.category] || 0;
-        shouldAward = catCount >= badgeInfo.condition.value;
+      case 'singlePostLikes':
+        shouldAward = maxLikes >= badgeInfo.condition.value;
         break;
-      // consecutiveDays는 별도 로직 필요
+      case 'regionMaxPosts':
+        shouldAward = maxRegionPosts >= badgeInfo.condition.value;
+        break;
+      case 'dailyPosts':
+        shouldAward = maxDailyPosts >= badgeInfo.condition.value;
+        break;
     }
     
     if (shouldAward) {
-      // 뱃지 지급
-      const reward = await this.create({
-        user: userId,
-        badgeName: badgeName,
-        badgeData: badgeInfo,
-        pointsAwarded: badgeInfo.points
-      });
-      
-      // 사용자에게 뱃지 추가
-      await user.addBadge(badgeName);
-      
-      // 포인트 지급
-      await PointHistory.awardPoints(userId, '뱃지 획득', {
-        badgeName: badgeName,
-        points: badgeInfo.points
-      });
-      
-      newBadges.push({
-        badgeName,
-        badgeData: badgeInfo,
-        points: badgeInfo.points
-      });
+      try {
+        await this.create({
+          user: userId,
+          badgeName: badgeName,
+          badgeData: badgeInfo
+        });
+        
+        if (user.addBadge) {
+          await user.addBadge(badgeName);
+        }
+        
+        newBadges.push({
+          badgeName,
+          badgeData: badgeInfo
+        });
+        
+        console.log(`✅ 뱃지 지급: ${badgeName}`);
+      } catch (error) {
+        console.error(`뱃지 지급 오류 (${badgeName}):`, error);
+      }
     }
   }
   
@@ -238,23 +329,3 @@ module.exports = {
   Reward,
   BADGES
 };
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

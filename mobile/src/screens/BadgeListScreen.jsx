@@ -177,7 +177,7 @@ const BadgeListScreen = () => {
                 styles.filterText,
                 filter === 'acquired' && styles.filterTextActive
               ]}>
-                획득한 뱃지
+                획득
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -191,7 +191,7 @@ const BadgeListScreen = () => {
                 styles.filterText,
                 filter === 'all' && styles.filterTextActive
               ]}>
-                모든 뱃지
+                전체
               </Text>
             </TouchableOpacity>
           </View>
@@ -339,6 +339,7 @@ const styles = StyleSheet.create({
   },
   badgeList: {
     padding: SPACING.md,
+    paddingBottom: 120, // 하단 네비게이션 바(80px) + 여유 공간(40px)
   },
   badgeRow: {
     justifyContent: 'space-between',

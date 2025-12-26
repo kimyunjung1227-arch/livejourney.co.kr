@@ -1,20 +1,21 @@
-﻿import React, { useState } from 'react';
+﻿import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import BottomNavigation from '../components/BottomNavigation';
-import { useAuth } from '../contexts/AuthContext';
 
 const MyCouponsScreen = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
   const [filter, setFilter] = useState('available'); // 'available' or 'used'
 
   // 쿠폰 데이터 (빈 상태 - 추후 백엔드 연동)
   const coupons = [];
 
-  // 필터링된 쿠폰
-  const filteredCoupons = filter === 'available' 
-    ? coupons.filter(c => c.status === 'available')
-    : coupons.filter(c => c.status !== 'available');
+  // 필터링된 쿠폰 (useMemo로 최적화)
+  const filteredCoupons = useMemo(() => 
+    filter === 'available' 
+      ? coupons.filter(c => c.status === 'available')
+      : coupons.filter(c => c.status !== 'available'),
+    [filter, coupons]
+  );
 
   const handleUseCoupon = (coupon) => {
     if (confirm(`${coupon.name} 쿠폰을 사용하시겠습니까?`)) {

@@ -135,11 +135,15 @@ export const isOlderThanTwoDays = (timestamp) => {
   return diffHours >= 48; // 48시간 = 2일
 };
 
-// 게시물을 최신순으로 정렬하고 2일 이상 된 것은 필터링
-export const filterRecentPosts = (posts, maxDays = 2) => {
+// 게시물을 최신순으로 정렬하고 지정된 시간 이상 된 것은 필터링
+// @param {Array} posts - 게시물 배열
+// @param {number} maxDays - 최대 일수 (기본값: 2일)
+// @param {number} maxHours - 최대 시간 (maxDays보다 우선순위 높음, 선택사항)
+export const filterRecentPosts = (posts, maxDays = 2, maxHours = null) => {
   if (!posts || posts.length === 0) return [];
   
-  const maxHours = maxDays * 24;
+  // maxHours가 지정되면 그것을 사용, 아니면 maxDays * 24 사용
+  const hoursLimit = maxHours !== null ? maxHours : (maxDays * 24);
   const now = new Date();
   
   return posts
@@ -150,7 +154,7 @@ export const filterRecentPosts = (posts, maxDays = 2) => {
       const postDate = new Date(timestamp);
       const diffHours = (now - postDate) / (1000 * 60 * 60);
       
-      return diffHours < maxHours;
+      return diffHours < hoursLimit;
     })
     .sort((a, b) => {
       const timeA = new Date(a.timestamp || a.createdAt || 0);

@@ -57,6 +57,10 @@ const SettingsScreen = () => {
     navigate('/terms-and-policies');
   };
 
+  const handleStorageManagement = () => {
+    navigate('/storage-management');
+  };
+
   const handleLogout = () => {
     setShowLogoutModal(true);
   };
@@ -85,21 +89,21 @@ const SettingsScreen = () => {
           onClick={() => navigate('/profile')}
           className="flex size-12 shrink-0 items-center justify-center cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
         >
-          <span className="material-symbols-outlined text-2xl text-content-light dark:text-content-dark">arrow_back</span>
+          <span className="material-symbols-outlined text-2xl text-black dark:text-white">arrow_back</span>
         </button>
-        <h1 className="text-lg font-bold leading-tight tracking-[-0.015em] text-content-light dark:text-content-dark">
+        <h1 className="text-lg font-bold leading-tight tracking-[-0.015em] text-black dark:text-white">
           설정
         </h1>
         <div className="flex size-12 shrink-0 items-center justify-end"></div>
       </header>
 
         {/* 메인 콘텐츠 */}
-        <main className="flex-grow pb-4">
+        <main className="flex-grow pb-28">
         <div className="flex flex-col">
           {/* 개인 정보 및 계정 관리 */}
           <div className="bg-surface-light dark:bg-surface-dark">
-            <div className="px-4 pt-6 pb-2">
-              <h2 className="text-sm font-medium leading-normal text-subtle-light dark:text-subtle-dark">
+            <div className="px-4 pt-6 pb-3">
+              <h2 className="text-base font-bold leading-normal text-black dark:text-white">
                 개인 정보 및 계정 관리
               </h2>
             </div>
@@ -108,10 +112,10 @@ const SettingsScreen = () => {
                 onClick={handleEditProfile}
                 className="flex h-14 items-center justify-between px-4 hover:bg-surface-subtle-light dark:hover:bg-surface-subtle-dark transition-colors"
               >
-                <p className="text-base font-normal leading-normal text-content-light dark:text-content-dark">
+                <p className="text-base font-normal leading-normal text-black dark:text-white">
                   개인 정보 수정
                 </p>
-                <span className="material-symbols-outlined text-subtle-light dark:text-subtle-dark">
+                <span className="material-symbols-outlined text-black dark:text-white">
                   chevron_right
                 </span>
               </button>
@@ -119,10 +123,10 @@ const SettingsScreen = () => {
                 onClick={handlePasswordChange}
                 className="flex h-14 items-center justify-between px-4 hover:bg-surface-subtle-light dark:hover:bg-surface-subtle-dark transition-colors"
               >
-                <p className="text-base font-normal leading-normal text-content-light dark:text-content-dark">
+                <p className="text-base font-normal leading-normal text-black dark:text-white">
                   비밀번호 변경
                 </p>
-                <span className="material-symbols-outlined text-subtle-light dark:text-subtle-dark">
+                <span className="material-symbols-outlined text-black dark:text-white">
                   chevron_right
                 </span>
               </button>
@@ -130,10 +134,10 @@ const SettingsScreen = () => {
                 onClick={handleAccountConnection}
                 className="flex h-14 items-center justify-between px-4 hover:bg-surface-subtle-light dark:hover:bg-surface-subtle-dark transition-colors"
               >
-                <p className="text-base font-normal leading-normal text-content-light dark:text-content-dark">
+                <p className="text-base font-normal leading-normal text-black dark:text-white">
                   계정 연결 관리
                 </p>
-                <span className="material-symbols-outlined text-subtle-light dark:text-subtle-dark">
+                <span className="material-symbols-outlined text-black dark:text-white">
                   chevron_right
                 </span>
               </button>
@@ -141,10 +145,10 @@ const SettingsScreen = () => {
                 onClick={handleDeleteAccount}
                 className="flex h-14 items-center justify-between px-4 hover:bg-surface-subtle-light dark:hover:bg-surface-subtle-dark transition-colors"
               >
-                <p className="text-base font-normal leading-normal text-content-light dark:text-content-dark">
+                <p className="text-base font-normal leading-normal text-black dark:text-white">
                   계정 삭제
                 </p>
-                <span className="material-symbols-outlined text-subtle-light dark:text-subtle-dark">
+                <span className="material-symbols-outlined text-black dark:text-white">
                   chevron_right
                 </span>
               </button>
@@ -156,14 +160,14 @@ const SettingsScreen = () => {
 
           {/* 알림 설정 */}
           <div className="bg-surface-light dark:bg-surface-dark">
-            <div className="px-4 pt-6 pb-2">
-              <h2 className="text-sm font-medium leading-normal text-subtle-light dark:text-subtle-dark">
+            <div className="px-4 pt-6 pb-3">
+              <h2 className="text-base font-bold leading-normal text-black dark:text-white">
                 알림 설정
               </h2>
             </div>
             <div className="flex flex-col">
               <div className="flex h-14 items-center justify-between px-4">
-                <p className="text-base font-normal leading-normal text-content-light dark:text-content-dark">
+                <p className="text-base font-normal leading-normal text-black dark:text-white">
                   활동 알림
                 </p>
                 <button 
@@ -185,32 +189,27 @@ const SettingsScreen = () => {
                 onClick={handleFeedUpdate}
                 className="flex h-14 items-center justify-between px-4 hover:bg-surface-subtle-light dark:hover:bg-surface-subtle-dark transition-colors"
               >
-                <p className="text-base font-normal leading-normal text-content-light dark:text-content-dark">
+                <p className="text-base font-normal leading-normal text-black dark:text-white">
                   실시간 피드 업데이트 주기
                 </p>
-                <span className="material-symbols-outlined text-subtle-light dark:text-subtle-dark">
+                <span className="material-symbols-outlined text-black dark:text-white">
                   chevron_right
                 </span>
               </button>
-              <div className="flex h-14 items-center justify-between px-4">
-                <p className="text-base font-normal leading-normal text-content-light dark:text-content-dark">
-                  지역 알림 설정
-                </p>
-                <button 
-                  onClick={toggleLocationNotification}
-                  aria-checked={locationNotification}
-                  className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                    locationNotification ? 'bg-primary' : 'bg-gray-200 dark:bg-surface-subtle-dark'
-                  }`}
-                  role="switch"
-                >
-                  <span 
-                    className={`inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                      locationNotification ? 'translate-x-5' : 'translate-x-0'
-                    }`}
-                  ></span>
-                </button>
-              </div>
+              <button 
+                onClick={() => navigate('/interest-places')}
+                className="flex h-14 items-center justify-between px-4 hover:bg-surface-subtle-light dark:hover:bg-surface-subtle-dark transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="material-symbols-outlined text-primary">star</span>
+                  <p className="text-base font-normal leading-normal text-black dark:text-white">
+                    관심 지역/장소 관리
+                  </p>
+                </div>
+                <span className="material-symbols-outlined text-black dark:text-white">
+                  chevron_right
+                </span>
+              </button>
             </div>
           </div>
 
@@ -219,14 +218,14 @@ const SettingsScreen = () => {
 
           {/* 정보 공유 및 권한 설정 */}
           <div className="bg-surface-light dark:bg-surface-dark">
-            <div className="px-4 pt-6 pb-2">
-              <h2 className="text-sm font-medium leading-normal text-subtle-light dark:text-subtle-dark">
+            <div className="px-4 pt-6 pb-3">
+              <h2 className="text-base font-bold leading-normal text-black dark:text-white">
                 정보 공유 및 권한 설정
               </h2>
             </div>
             <div className="flex flex-col">
               <div className="flex h-14 items-center justify-between px-4">
-                <p className="text-base font-normal leading-normal text-content-light dark:text-content-dark">
+                <p className="text-base font-normal leading-normal text-black dark:text-white">
                   위치 정보 접근 권한
                 </p>
                 <button 
@@ -245,7 +244,7 @@ const SettingsScreen = () => {
                 </button>
               </div>
               <div className="flex h-14 items-center justify-between px-4">
-                <p className="text-base font-normal leading-normal text-content-light dark:text-content-dark">
+                <p className="text-base font-normal leading-normal text-black dark:text-white">
                   사진/카메라 접근 권한
                 </p>
                 <button 
@@ -271,8 +270,8 @@ const SettingsScreen = () => {
 
           {/* 서비스 정보 및 지원 */}
           <div className="bg-surface-light dark:bg-surface-dark">
-            <div className="px-4 pt-6 pb-2">
-              <h2 className="text-sm font-medium leading-normal text-subtle-light dark:text-subtle-dark">
+            <div className="px-4 pt-6 pb-3">
+              <h2 className="text-base font-bold leading-normal text-black dark:text-white">
                 서비스 정보 및 지원
               </h2>
             </div>
@@ -281,10 +280,10 @@ const SettingsScreen = () => {
                 onClick={handleNotice}
                 className="flex h-14 items-center justify-between px-4 hover:bg-surface-subtle-light dark:hover:bg-surface-subtle-dark transition-colors"
               >
-                <p className="text-base font-normal leading-normal text-content-light dark:text-content-dark">
+                <p className="text-base font-normal leading-normal text-black dark:text-white">
                   공지사항
                 </p>
-                <span className="material-symbols-outlined text-subtle-light dark:text-subtle-dark">
+                <span className="material-symbols-outlined text-black dark:text-white">
                   chevron_right
                 </span>
               </button>
@@ -292,10 +291,10 @@ const SettingsScreen = () => {
                 onClick={handleFAQ}
                 className="flex h-14 items-center justify-between px-4 hover:bg-surface-subtle-light dark:hover:bg-surface-subtle-dark transition-colors"
               >
-                <p className="text-base font-normal leading-normal text-content-light dark:text-content-dark">
+                <p className="text-base font-normal leading-normal text-black dark:text-white">
                   자주 묻는 질문 (FAQ)
                 </p>
-                <span className="material-symbols-outlined text-subtle-light dark:text-subtle-dark">
+                <span className="material-symbols-outlined text-black dark:text-white">
                   chevron_right
                 </span>
               </button>
@@ -303,10 +302,10 @@ const SettingsScreen = () => {
                 onClick={handleInquiry}
                 className="flex h-14 items-center justify-between px-4 hover:bg-surface-subtle-light dark:hover:bg-surface-subtle-dark transition-colors"
               >
-                <p className="text-base font-normal leading-normal text-content-light dark:text-content-dark">
+                <p className="text-base font-normal leading-normal text-black dark:text-white">
                   문의하기
                 </p>
-                <span className="material-symbols-outlined text-subtle-light dark:text-subtle-dark">
+                <span className="material-symbols-outlined text-black dark:text-white">
                   chevron_right
                 </span>
               </button>
@@ -314,18 +313,29 @@ const SettingsScreen = () => {
                 onClick={handleTerms}
                 className="flex h-14 items-center justify-between px-4 hover:bg-surface-subtle-light dark:hover:bg-surface-subtle-dark transition-colors"
               >
-                <p className="text-base font-normal leading-normal text-content-light dark:text-content-dark">
+                <p className="text-base font-normal leading-normal text-black dark:text-white">
                   서비스 약관 및 정책
                 </p>
-                <span className="material-symbols-outlined text-subtle-light dark:text-subtle-dark">
+                <span className="material-symbols-outlined text-black dark:text-white">
+                  chevron_right
+                </span>
+              </button>
+              <button 
+                onClick={handleStorageManagement}
+                className="flex h-14 items-center justify-between px-4 hover:bg-surface-subtle-light dark:hover:bg-surface-subtle-dark transition-colors"
+              >
+                <p className="text-base font-normal leading-normal text-black dark:text-white">
+                  저장소 관리
+                </p>
+                <span className="material-symbols-outlined text-black dark:text-white">
                   chevron_right
                 </span>
               </button>
               <div className="flex h-14 items-center justify-between px-4">
-                <p className="text-base font-normal leading-normal text-content-light dark:text-content-dark">
+                <p className="text-base font-normal leading-normal text-black dark:text-white">
                   버전 정보
                 </p>
-                <p className="text-base font-normal leading-normal text-subtle-light dark:text-subtle-dark">
+                <p className="text-base font-normal leading-normal text-black dark:text-white">
                   1.0.0
                 </p>
               </div>
@@ -339,7 +349,7 @@ const SettingsScreen = () => {
           <div className="bg-surface-light dark:bg-surface-dark px-4 py-6">
             <button
               onClick={handleLogout}
-              className="w-full flex items-center justify-center gap-2 py-3.5 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 font-semibold hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+              className="w-full flex items-center justify-center gap-2 py-3.5 rounded-lg bg-gray-100 dark:bg-gray-800 text-black dark:text-white font-semibold hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
             >
               <span className="material-symbols-outlined">logout</span>
               <span>로그아웃</span>
@@ -347,7 +357,7 @@ const SettingsScreen = () => {
           </div>
 
           {/* 하단 여백 */}
-          <div className="h-4"></div>
+          <div className="h-24"></div>
         </div>
         </main>
       </div>
@@ -360,8 +370,8 @@ const SettingsScreen = () => {
           <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 max-w-sm w-full shadow-2xl animate-scale-up">
             {/* 아이콘 */}
             <div className="flex justify-center mb-4">
-              <div className="flex items-center justify-center w-16 h-16 rounded-full bg-orange-100 dark:bg-orange-900/30">
-                <span className="material-symbols-outlined text-accent dark:text-accent text-4xl">
+              <div className="flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 dark:bg-gray-800">
+                <span className="material-symbols-outlined text-black dark:text-white text-4xl">
                   logout
                 </span>
               </div>

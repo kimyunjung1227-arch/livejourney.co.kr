@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import BottomNavigation from '../components/BottomNavigation';
-import { getAvailableBadges, getEarnedBadges } from '../utils/badgeSystem';
+import { getAvailableBadges, getEarnedBadges, calculateUserStats } from '../utils/badgeSystem';
 
 const BadgeListScreen = () => {
   const navigate = useNavigate();
-  const [filter, setFilter] = useState('acquired'); // 'acquired' or 'all'
+  const [filter, setFilter] = useState('all'); // 'acquired' or 'all'
   const [selectedBadge, setSelectedBadge] = useState(null); // 선택된 뱃지
   const [badges, setBadges] = useState([]);
   const [earnedBadges, setEarnedBadges] = useState([]);
@@ -13,7 +13,15 @@ const BadgeListScreen = () => {
   // 뱃지 데이터 로드 및 업데이트
   const loadBadges = () => {
     console.log('🔄 뱃지 목록 로드 시작');
-    const allBadges = getAvailableBadges();
+    
+    // 사용자 통계 계산
+    const uploadedPosts = JSON.parse(localStorage.getItem('uploadedPosts') || '[]');
+    const savedUser = JSON.parse(localStorage.getItem('user') || '{}');
+    const currentUserId = savedUser?.id || 'test_user_001';
+    const myPosts = uploadedPosts.filter(p => p.userId === currentUserId);
+    const stats = calculateUserStats(myPosts, savedUser);
+    
+    const allBadges = getAvailableBadges(stats);
     const earned = getEarnedBadges();
     
     console.log('📋 로드된 뱃지:', {
@@ -71,10 +79,22 @@ const BadgeListScreen = () => {
     };
   }, []);
 
-  // 필터링된 뱃지 목록
-  const filteredBadges = filter === 'acquired'
-    ? badges.filter(badge => badge.isEarned)
-    : badges;
+  // 필터링된 뱃지 목록 (간단하게!)
+  const filteredBadges = badges
+    .filter(badge => {
+      // 획득 여부 필터만
+      if (filter === 'acquired') return badge.isEarned;
+      return true;
+    })
+    .filter(badge => !badge.hidden) // 히든 뱃지는 기본적으로 숨김
+    .sort((a, b) => {
+      // 카테고리순으로 정렬
+      const categoryOrder = { '시작': 1, '활동': 2, '전문가': 3, '마스터': 4, '지역': 5, '특별': 6, '숨김': 7 };
+      const orderA = categoryOrder[a.category] || 999;
+      const orderB = categoryOrder[b.category] || 999;
+      if (orderA !== orderB) return orderA - orderB;
+      return a.difficulty - b.difficulty;
+    });
 
   // 삭제된 긴 badgeDefinitions 배열
   /* const badgeDefinitions = [
@@ -441,26 +461,11 @@ const BadgeListScreen = () => {
         <div className="flex px-4 py-3">
           <div className="flex h-12 flex-1 items-center justify-center rounded-full bg-background-light dark:bg-black/20 p-1.5">
             <label className={`flex cursor-pointer h-full grow items-center justify-center overflow-hidden rounded-full px-2 text-sm font-medium leading-normal transition-colors duration-200 ${
-              filter === 'acquired' 
-                ? 'bg-primary text-white' 
-                : 'text-text-primary-light dark:text-text-primary-dark'
-            }`}>
-              <span className="truncate">획득한 뱃지</span>
-              <input 
-                className="invisible w-0" 
-                name="badge-filter" 
-                type="radio" 
-                value="acquired"
-                checked={filter === 'acquired'}
-                onChange={() => setFilter('acquired')}
-              />
-            </label>
-            <label className={`flex cursor-pointer h-full grow items-center justify-center overflow-hidden rounded-full px-2 text-sm font-medium leading-normal transition-colors duration-200 ${
               filter === 'all' 
                 ? 'bg-primary text-white' 
                 : 'text-text-primary-light dark:text-text-primary-dark'
             }`}>
-              <span className="truncate">모든 뱃지</span>
+              <span className="truncate">전체</span>
               <input 
                 className="invisible w-0" 
                 name="badge-filter" 
@@ -470,11 +475,27 @@ const BadgeListScreen = () => {
                 onChange={() => setFilter('all')}
               />
             </label>
+            <label className={`flex cursor-pointer h-full grow items-center justify-center overflow-hidden rounded-full px-2 text-sm font-medium leading-normal transition-colors duration-200 ${
+              filter === 'acquired' 
+                ? 'bg-primary text-white' 
+                : 'text-text-primary-light dark:text-text-primary-dark'
+            }`}>
+              <span className="truncate">획득</span>
+              <input 
+                className="invisible w-0" 
+                name="badge-filter" 
+                type="radio" 
+                value="acquired"
+                checked={filter === 'acquired'}
+                onChange={() => setFilter('acquired')}
+              />
+            </label>
           </div>
         </div>
 
+
         {/* 뱃지 그리드 */}
-        <main className="flex-grow px-4 pb-4">
+        <main className="flex-grow px-4 pb-28">
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             {filteredBadges.map((badge, index) => (
               <button

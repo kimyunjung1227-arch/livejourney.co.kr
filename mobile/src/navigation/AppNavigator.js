@@ -20,8 +20,10 @@ import RegionDetailScreen from '../screens/RegionDetailScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import UserProfileScreen from '../screens/UserProfileScreen';
 import DetailScreen from '../screens/DetailScreen';
+import MagazineDetailScreen from '../screens/MagazineDetailScreen';
 import RegionCategoryScreen from '../screens/RegionCategoryScreen';
 import BadgeListScreen from '../screens/BadgeListScreen';
+import InterestPlacesScreen from '../screens/InterestPlacesScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -86,11 +88,26 @@ function MainTabs() {
         options={{
           tabBarLabel: '업로드',
           tabBarIcon: ({ color, focused, size }) => (
+            <View style={{
+              backgroundColor: COLORS.primary,
+              width: 56,
+              height: 56,
+              borderRadius: 28,
+              justifyContent: 'center',
+              alignItems: 'center',
+              marginTop: -8,
+              shadowColor: COLORS.primary,
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.3,
+              shadowRadius: 8,
+              elevation: 8,
+            }}>
             <Ionicons 
               name="add" 
-              size={24} 
-              color={focused ? COLORS.primary : '#8a7560'} 
+                size={28} 
+                color="white"
             />
+            </View>
           ),
         }}
       />
@@ -174,6 +191,10 @@ export default function AppNavigator() {
               component={DetailScreen}
             />
             <Stack.Screen 
+              name="MagazineDetail" 
+              component={MagazineDetailScreen}
+            />
+            <Stack.Screen 
               name="RegionCategory" 
               component={RegionCategoryScreen}
             />
@@ -188,6 +209,10 @@ export default function AppNavigator() {
             <Stack.Screen 
               name="BadgeList" 
               component={BadgeListScreen}
+            />
+            <Stack.Screen 
+              name="InterestPlaces" 
+              component={InterestPlacesScreen}
             />
           </>
         )}

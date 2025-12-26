@@ -70,9 +70,23 @@ const ProfileScreen = () => {
       // 대표 뱃지 로드
       const userId = savedUser?.id;
       if (userId) {
+        let repBadge = null;
         const repBadgeJson = await AsyncStorage.getItem(`representativeBadge_${userId}`);
         if (repBadgeJson) {
-          const repBadge = JSON.parse(repBadgeJson);
+          try {
+            repBadge = JSON.parse(repBadgeJson);
+          } catch {
+            repBadge = null;
+          }
+        }
+        
+        // 개발 단계: 대표 뱃지가 없고 획득한 뱃지가 있다면, 그 중 하나를 자동으로 대표 뱃지로 사용
+        if (!repBadge && badges && badges.length > 0) {
+          repBadge = badges[0];
+          await AsyncStorage.setItem(`representativeBadge_${userId}`, JSON.stringify(repBadge));
+        }
+
+        if (repBadge) {
           setRepresentativeBadge(repBadge);
         }
       }
@@ -312,11 +326,22 @@ const ProfileScreen = () => {
           </TouchableOpacity>
         </View>
 
-        {/* 획득한 뱃지 섹션 - 웹 버전과 동일하게 분리 */}
+        {/* 획득한 뱃지 섹션 - 웹과 동일하게 */}
         <View style={styles.badgesSection}>
-          <View style={styles.badgesHeader}>
-            <Ionicons name="trophy" size={20} color={COLORS.primary} />
-            <Text style={styles.badgesTitle}>획득한 뱃지</Text>
+          <View style={styles.badgesHeaderRow}>
+            <View style={styles.badgesHeader}>
+              <Ionicons name="trophy" size={20} color={COLORS.primary} />
+              <Text style={styles.badgesTitle}>획득한 뱃지</Text>
+            </View>
+            {/* 뱃지 모아보기 버튼 - 작게, 옆으로 */}
+            <TouchableOpacity
+              style={styles.badgesViewButton}
+              onPress={() => navigation.navigate('BadgeList')}
+            >
+              <Text style={styles.badgesViewButtonText}>모아보기</Text>
+              <Text style={styles.badgesViewButtonCount}>{earnedBadges.length}</Text>
+              <Ionicons name="chevron-forward" size={14} color={COLORS.primary} />
+            </TouchableOpacity>
           </View>
 
           {earnedBadges.length === 0 ? (
@@ -357,20 +382,6 @@ const ProfileScreen = () => {
                   {representativeBadge && (
                     <Text style={styles.representativeBadgeButtonIcon}>{representativeBadge.icon}</Text>
                   )}
-                </View>
-              </TouchableOpacity>
-
-              {/* 뱃지 모아보기 버튼 */}
-              <TouchableOpacity
-                style={styles.viewAllBadgesButton}
-                onPress={() => {
-                  navigation.navigate('BadgeList');
-                }}
-              >
-                <Text style={styles.viewAllBadgesText}>뱃지 모아보기</Text>
-                <View style={styles.viewAllBadgesCountContainer}>
-                  <Text style={styles.viewAllBadgesCountText}>{earnedBadges.length}</Text>
-                  <Ionicons name="chevron-forward" size={20} color={COLORS.textSubtle} />
                 </View>
               </TouchableOpacity>
             </View>
@@ -418,24 +429,6 @@ const ProfileScreen = () => {
               ]}>📅 타임라인</Text>
             </TouchableOpacity>
           </View>
-
-          {/* 도움 받은 사람 수 표시 */}
-          {myPosts.length > 0 && (() => {
-            const totalLikes = myPosts.reduce((sum, post) => sum + (post.likes || post.likeCount || 0), 0);
-            return (
-              <View style={styles.helpfulSection}>
-                <View style={styles.helpfulIcon}>
-                  <Ionicons name="heart" size={24} color="white" />
-                </View>
-                <View style={styles.helpfulContent}>
-                  <Text style={styles.helpfulSubtext}>현재 내 사진이</Text>
-                  <Text style={styles.helpfulText}>
-                    <Text style={styles.helpfulNumber}>{totalLikes.toLocaleString()}</Text>명에게 도움이 되었습니다
-                  </Text>
-                </View>
-              </View>
-            );
-          })()}
 
           {/* 편집 버튼 (내 사진 탭에서만) */}
           {activeTab === 'my' && myPosts.length > 0 && (
@@ -1434,6 +1427,31 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: COLORS.error,
+  },
+  badgesHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING.lg,
+  },
+  badgesViewButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: COLORS.primary + '1A',
+    borderRadius: 20,
+  },
+  badgesViewButtonText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: COLORS.primary,
+  },
+  badgesViewButtonCount: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: COLORS.primary,
   },
 });
 

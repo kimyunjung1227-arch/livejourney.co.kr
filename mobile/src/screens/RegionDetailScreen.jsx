@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, TYPOGRAPHY } from '../constants/styles';
 import { filterRecentPosts, getTimeAgo } from '../utils/timeUtils';
 import { isPostLiked } from '../utils/socialInteractions';
+import { toggleInterestPlace, isInterestPlace } from '../utils/interestPlaces';
 import { ScreenLayout, ScreenContent, ScreenHeader, ScreenBody } from '../components/ScreenLayout';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -110,7 +111,7 @@ const PostItem = ({ item, index, onPress }) => {
 const RegionDetailScreen = () => {
   const navigation = useNavigation();
   const route = useRoute();
-  const { regionName } = route.params || {};
+  const { regionName, focusLocation } = route.params || {};
   const region = route.params?.region || { name: regionName || '서울' };
 
   const [realtimePhotos, setRealtimePhotos] = useState([]);
@@ -118,6 +119,7 @@ const RegionDetailScreen = () => {
   const [touristSpots, setTouristSpots] = useState([]);
   const [foodPhotos, setFoodPhotos] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isInterest, setIsInterest] = useState(false);
 
   // 시간을 숫자로 변환하는 함수 (정렬용)
   const timeToMinutes = useCallback((timeLabel) => {
@@ -138,8 +140,21 @@ const RegionDetailScreen = () => {
       // 2일 이상 된 게시물 필터링
       uploadedPosts = filterRecentPosts(uploadedPosts, 2);
       
-      const regionPosts = uploadedPosts
-        .filter(post => post.location?.includes(region.name) || post.location === region.name)
+      let regionPosts = uploadedPosts
+        .filter(post => post.location?.includes(region.name) || post.location === region.name);
+
+      // 매거진 등에서 상세 위치(focusLocation)가 넘어온 경우, 해당 위치 중심으로 한 번 더 필터링
+      if (focusLocation) {
+        const focus = focusLocation.toLowerCase();
+        regionPosts = regionPosts.filter(post => {
+          const detailed = (post.detailedLocation || post.placeName || '').toLowerCase();
+          const locText = (post.location || '').toLowerCase();
+          return detailed.includes(focus) || locText.includes(focus);
+        });
+        console.log(`🎯 상세 위치 필터 적용: ${focusLocation} → ${regionPosts.length}개 게시물`);
+      }
+
+      regionPosts = regionPosts
         .sort((a, b) => {
           const timeA = timeToMinutes(a.timeLabel || '방금');
           const timeB = timeToMinutes(b.timeLabel || '방금');
