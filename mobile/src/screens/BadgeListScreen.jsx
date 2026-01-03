@@ -148,20 +148,21 @@ const BadgeListScreen = () => {
 
   return (
     <ScreenLayout>
+      {/* 헤더 - 웹과 동일한 구조 (ScreenContent 밖) */}
+      <ScreenHeader>
+        <View style={styles.headerContent}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
+          >
+            <Ionicons name="arrow-back" size={24} color={COLORS.textPrimaryLight} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>뱃지 목록</Text>
+          <View style={styles.headerPlaceholder} />
+        </View>
+      </ScreenHeader>
+
       <ScreenContent>
-        {/* 헤더 */}
-        <ScreenHeader>
-          <View style={styles.headerContent}>
-            <TouchableOpacity
-              style={styles.backButton}
-              onPress={() => navigation.goBack()}
-            >
-              <Ionicons name="arrow-back" size={24} color={COLORS.textPrimaryLight} />
-            </TouchableOpacity>
-            <Text style={styles.headerTitle}>뱃지 목록</Text>
-            <View style={styles.headerPlaceholder} />
-          </View>
-        </ScreenHeader>
 
         {/* 필터 토글 */}
         <View style={styles.filterContainer}>

@@ -629,24 +629,24 @@ const UploadScreen = () => {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
       >
-        <ScreenContent>
-          {/* 헤더 - 웹과 동일한 구조 */}
-          <ScreenHeader>
-            <View style={styles.headerContent}>
-              <TouchableOpacity
-                style={styles.closeButton}
-                onPress={() => navigation.goBack()}
-              >
-                <Ionicons name="arrow-back" size={24} color={COLORS.textPrimaryLight} />
-              </TouchableOpacity>
-              <Text style={styles.headerTitle}>업로드: 여행 기록</Text>
-              <View style={styles.headerPlaceholder} />
-            </View>
-          </ScreenHeader>
+        {/* 헤더 - 웹과 동일한 구조 (ScreenContent 밖) */}
+        <ScreenHeader>
+          <View style={styles.headerContent}>
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={() => navigation.goBack()}
+            >
+              <Ionicons name="arrow-back" size={24} color={COLORS.text} />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>업로드: 여행 기록</Text>
+            <View style={styles.headerPlaceholder} />
+          </View>
+        </ScreenHeader>
 
-          {/* 메인 컨텐츠 - 웹과 동일한 구조 */}
+        {/* 메인 컨텐츠 - 웹과 동일한 구조 */}
+        <ScreenContent>
           <ScreenBody>
-        <View style={styles.content}>
+            <View style={styles.content}>
             {/* 사진 추가 */}
             <View style={styles.section}>
               {formData.images.length === 0 && formData.videos.length === 0 ? (
@@ -881,9 +881,9 @@ const UploadScreen = () => {
                 </Text>
               )}
             </View>
-          </View>
-        </ScreenBody>
-          </ScreenContent>
+            </View>
+          </ScreenBody>
+        </ScreenContent>
 
         {/* 사진 선택 모달 */}
         <Modal
@@ -1108,7 +1108,6 @@ const UploadScreen = () => {
             </View>
           </View>
         </Modal>
-        </ScreenContent>
       </KeyboardAvoidingView>
     </ScreenLayout>
   );
@@ -1126,8 +1125,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    height: 64, // h-16 = 64px
-    paddingHorizontal: SPACING.md, // px-4
+    paddingVertical: 12, // py-3 = 12px (웹: padding: 12px 16px)
+    paddingHorizontal: SPACING.md, // px-4 = 16px (웹: padding: 12px 16px)
+    backgroundColor: 'transparent', // 웹: background: transparent
   },
   header: {
     flexDirection: 'row',
@@ -1150,12 +1150,12 @@ const styles = StyleSheet.create({
     height: 40,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: 20, // rounded-full
+    borderRadius: 8, // rounded-lg (웹과 동일)
   },
   headerTitle: {
-    fontSize: 18, // text-lg
-    fontWeight: 'bold',
-    color: COLORS.text, // text-text-light
+    fontSize: 18, // text-lg = 18px (웹: fontSize: '18px')
+    fontWeight: '700', // font-bold (웹: fontWeight: 700)
+    color: COLORS.text, // text-gray-900 (웹: color: '#111827')
     flex: 1,
     textAlign: 'center',
   },
@@ -1163,9 +1163,8 @@ const styles = StyleSheet.create({
     width: 40, // w-10 = 40px
   },
   content: {
-    padding: SPACING.md, // p-4 = 16px
-    paddingBottom: SPACING.xl + 100, // 하단 네비게이션 바 공간 확보
-    gap: SPACING.lg, // space-y-6 = 24px
+    padding: SPACING.md, // p-4 = 16px (웹: padding: '0 16px 100px 16px'에서 내부 div는 p-4)
+    gap: SPACING.md, // space-y-4 = 16px (웹: space-y-4)
   },
   section: {
     marginBottom: SPACING.md,

@@ -252,26 +252,26 @@ const ProfileScreen = () => {
 
   return (
     <ScreenLayout>
-      <ScreenContent>
-        {/* 헤더 - 웹과 동일한 구조 */}
-        <ScreenHeader>
-          <View style={styles.headerContent}>
-            <TouchableOpacity
-              style={styles.headerButton}
-              onPress={() => navigation.goBack()}
-            >
-              <Ionicons name="arrow-back" size={24} color={COLORS.textPrimaryLight} />
-            </TouchableOpacity>
-            <Text style={styles.headerTitle}>프로필</Text>
-            <TouchableOpacity
-              style={styles.headerButton}
-              onPress={() => navigation.navigate('Settings')}
-            >
-              <Ionicons name="settings-outline" size={24} color={COLORS.textPrimaryLight} />
-            </TouchableOpacity>
-          </View>
-        </ScreenHeader>
+      {/* 헤더 - 웹과 동일한 구조 (ScreenContent 밖) */}
+      <ScreenHeader>
+        <View style={styles.headerContent}>
+          <TouchableOpacity
+            style={styles.headerButton}
+            onPress={() => navigation.goBack()}
+          >
+            <Ionicons name="arrow-back" size={24} color={COLORS.textPrimaryLight} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>프로필</Text>
+          <TouchableOpacity
+            style={styles.headerButton}
+            onPress={() => navigation.navigate('Settings')}
+          >
+            <Ionicons name="settings-outline" size={24} color={COLORS.textPrimaryLight} />
+          </TouchableOpacity>
+        </View>
+      </ScreenHeader>
 
+      <ScreenContent>
         {/* 메인 컨텐츠 - 웹과 동일한 구조 */}
         <ScreenBody>
         {/* 프로필 정보 */}
@@ -414,7 +414,7 @@ const ProfileScreen = () => {
               <Text style={[
                 styles.tabText, 
                 activeTab === 'map' && styles.tabTextActive
-              ]}>🗺️ 여행지도</Text>
+              ]}>🗺️ 나의 기록 지도</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[

@@ -45,7 +45,16 @@ const MainScreen = () => {
   // SOS 알림
   const [nearbySosRequests, setNearbySosRequests] = useState([]);
   const [currentLocation, setCurrentLocation] = useState(null);
-  const [dismissedSosIds, setDismissedSosIds] = useState([]);
+  const [dismissedSosIds, setDismissedSosIds] = useState(() => {
+    // localStorage에서 지워진 알림 ID 목록 불러오기
+    try {
+      const saved = localStorage.getItem('dismissedSosIds_v1');
+      return saved ? JSON.parse(saved) : [];
+    } catch (error) {
+      console.error('지워진 SOS 알림 ID 로드 실패:', error);
+      return [];
+    }
+  });
   
   // 위도/경도 거리 계산 (km)
   const getDistanceKm = (lat1, lon1, lat2, lon2) => {
@@ -724,7 +733,14 @@ const MainScreen = () => {
             <button
               onClick={() => {
                 if (nearbySosRequests[0]?.id) {
-                  setDismissedSosIds([...dismissedSosIds, nearbySosRequests[0].id]);
+                  const newDismissedIds = [...dismissedSosIds, nearbySosRequests[0].id];
+                  setDismissedSosIds(newDismissedIds);
+                  // localStorage에 저장해서 영구적으로 유지
+                  try {
+                    localStorage.setItem('dismissedSosIds_v1', JSON.stringify(newDismissedIds));
+                  } catch (error) {
+                    console.error('지워진 SOS 알림 ID 저장 실패:', error);
+                  }
                 }
               }}
               style={{
@@ -1382,7 +1398,11 @@ const MainScreen = () => {
                   <button
                     key={regionName}
                     onClick={() =>
-                      navigate('/search?region=' + encodeURIComponent(regionName))
+                      navigate(`/region/${regionName}`, {
+                        state: {
+                          region: { name: regionName }
+                        }
+                      })
                     }
                     style={{
                       display: 'flex',
@@ -1508,16 +1528,32 @@ const MainScreen = () => {
             </div>
                   </div>
                   {item.location && (
-                    <span className="location-badge" style={{ 
-                      fontSize: '10px',
-                      fontWeight: 600,
-                      color: '#00BCD4',
-                      background: '#E0F7FA',
-                      padding: '4px 8px',
-                      borderRadius: '8px'
-                    }}>
+                    <button
+                      className="location-badge"
+                      onClick={(e) => {
+                        e.stopPropagation(); // 카드 클릭 이벤트와 분리
+                        navigate(`/region/${item.location}`, {
+                          state: {
+                            region: { name: item.location }
+                          }
+                        });
+                      }}
+                      style={{ 
+                        fontSize: '10px',
+                        fontWeight: 600,
+                        color: '#00BCD4',
+                        background: '#E0F7FA',
+                        padding: '4px 8px',
+                        borderRadius: '8px',
+                        border: 'none',
+                        cursor: 'pointer',
+                        transition: 'opacity 0.2s'
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.opacity = '0.8'}
+                      onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
+                    >
                       📍 {item.location}
-              </span>
+                    </button>
                   )}
             </div>
                 <div className="card-image" style={{ 

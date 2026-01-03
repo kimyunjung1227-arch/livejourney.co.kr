@@ -68,18 +68,11 @@ const styles = StyleSheet.create({
     paddingBottom: 100, // 하단 네비게이션 바(80px) + 여유 공간(20px)
   },
   screenHeader: {
-    backgroundColor: COLORS.backgroundLight,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.borderLight,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
-    zIndex: 20,
+    backgroundColor: 'transparent', // 웹과 동일: background: transparent
+    // 웹에서는 border와 shadow가 없음
   },
   screenBody: {
-    paddingBottom: 100, // 하단 네비게이션 바(80px) + 여유 공간(20px)
+    paddingBottom: 100, // 하단 네비게이션 바(80px) + 여유 공간(20px) (웹: paddingBottom: '100px')
     flex: 1, // 랜딩페이지: flex: 1
   },
 });

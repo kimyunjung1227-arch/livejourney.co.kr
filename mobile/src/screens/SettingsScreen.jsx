@@ -12,6 +12,7 @@ import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS, SPACING, TYPOGRAPHY } from '../constants/styles';
+import { ScreenLayout, ScreenContent, ScreenHeader, ScreenBody } from '../components/ScreenLayout';
 
 const SettingsScreen = () => {
   const navigation = useNavigation();
@@ -33,21 +34,25 @@ const SettingsScreen = () => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* 헤더 */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={COLORS.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>설정</Text>
-        <View style={{width: 40}} />
-      </View>
+    <ScreenLayout>
+      {/* 헤더 - 웹과 동일한 구조 (ScreenContent 밖) */}
+      <ScreenHeader>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color={COLORS.text} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>설정</Text>
+          <View style={{width: 40}} />
+        </View>
+      </ScreenHeader>
 
-      <ScrollView 
-        style={styles.scrollView} 
-        contentContainerStyle={styles.scrollViewContent}
-        showsVerticalScrollIndicator={false}
-      >
+      <ScreenContent>
+        <ScreenBody>
+          <ScrollView 
+            style={styles.scrollView} 
+            contentContainerStyle={styles.scrollViewContent}
+            showsVerticalScrollIndicator={false}
+          >
         {/* 알림 설정 */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>알림 설정</Text>
@@ -178,8 +183,10 @@ const SettingsScreen = () => {
 
         {/* 하단 여백 */}
         <View style={{height: 100}} />
-      </ScrollView>
-    </SafeAreaView>
+          </ScrollView>
+        </ScreenBody>
+      </ScreenContent>
+    </ScreenLayout>
   );
 };
 

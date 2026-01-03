@@ -8,6 +8,7 @@ import {
   isInterestPlace, 
   getInterestPlaces 
 } from '../utils/interestPlaces';
+import { ScreenLayout, ScreenContent, ScreenHeader, ScreenBody } from '../components/ScreenLayout';
 
 const InterestPlacesScreen = () => {
   const navigation = useNavigation();
@@ -51,21 +52,25 @@ const InterestPlacesScreen = () => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* 헤더 */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={COLORS.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>관심 지역/장소</Text>
-        <View style={{width: 40}} />
-      </View>
+    <ScreenLayout>
+      {/* 헤더 - 웹과 동일한 구조 (ScreenContent 밖) */}
+      <ScreenHeader>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color={COLORS.text} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>관심 지역/장소</Text>
+          <View style={{width: 40}} />
+        </View>
+      </ScreenHeader>
 
-      <ScrollView 
-        style={styles.content} 
-        contentContainerStyle={styles.scrollViewContent}
-        showsVerticalScrollIndicator={false}
-      >
+      <ScreenContent>
+        <ScreenBody>
+          <ScrollView 
+            style={styles.content} 
+            contentContainerStyle={styles.scrollViewContent}
+            showsVerticalScrollIndicator={false}
+          >
         {/* 설명 */}
         <View style={styles.description}>
           <Text style={styles.descTitle}>⭐ 관심 지역/장소란?</Text>
@@ -150,8 +155,10 @@ const InterestPlacesScreen = () => {
             ))}
           </View>
         )}
-      </ScrollView>
-    </SafeAreaView>
+          </ScrollView>
+        </ScreenBody>
+      </ScreenContent>
+    </ScreenLayout>
   );
 };
 

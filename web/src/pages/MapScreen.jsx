@@ -492,53 +492,9 @@ const MapScreen = () => {
     // 기존 마커 제거
     if (sosMarkerRef.current) {
       sosMarkerRef.current.setMap(null);
+      sosMarkerRef.current = null;
     }
-
-    const position = new window.kakao.maps.LatLng(location.lat, location.lng);
-
-    // 도움 요청 위치 마커 생성 (빨간색 원) - 지도 중심에 고정
-    const el = document.createElement('div');
-    el.innerHTML = `
-      <div style="
-        position: relative;
-        width: 40px;
-        height: 40px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      ">
-        <div style="
-          position: relative;
-          width: 32px;
-          height: 32px;
-          border-radius: 50%;
-          background-color: #ff4444;
-          border: 4px solid rgba(255, 255, 255, 1);
-          box-shadow: 0 3px 10px rgba(0,0,0,0.4);
-          z-index: 10;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        ">
-          <span style="
-            color: white;
-            font-size: 20px;
-            font-weight: bold;
-          ">!</span>
-        </div>
-      </div>
-    `;
-
-    const overlay = new window.kakao.maps.CustomOverlay({
-      position: position,
-      content: el,
-      yAnchor: 0.5,
-      xAnchor: 0.5,
-      zIndex: 1001
-    });
-
-    overlay.setMap(kakaoMap);
-    sosMarkerRef.current = overlay;
+    // 핀 마커 생성 코드 삭제됨
   };
 
   // 지도 중심 마커 표시/제거 (위치 선택 모드일 때)
@@ -607,7 +563,7 @@ const MapScreen = () => {
       top: 50%;
       left: 50%;
       transform: translate(-50%, -100%);
-      width: 32px;
+      width: 36px;
       height: 40px;
       display: flex;
       align-items: center;
@@ -625,9 +581,9 @@ const MapScreen = () => {
         align-items: center;
         justify-content: center;
       ">
-        <svg width="32" height="40" viewBox="0 0 32 40" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter: drop-shadow(0 2px 8px rgba(0,0,0,0.3));">
-          <path d="M16 0C10.477 0 6 4.477 6 10C6 17 16 40 16 40C16 40 26 17 26 10C26 4.477 21.523 0 16 0Z" fill="#00BCD4"/>
-          <circle cx="16" cy="10" r="6" fill="white"/>
+        <svg width="36" height="40" viewBox="0 0 36 40" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter: drop-shadow(0 2px 8px rgba(0,0,0,0.3));">
+          <path d="M18 0C12.477 0 8 4.477 8 10C8 17 18 40 18 40C18 40 28 17 28 10C28 4.477 23.523 0 18 0Z" fill="#00BCD4"/>
+          <circle cx="18" cy="10" r="6" fill="#0097A7"/>
         </svg>
       </div>
     `;
@@ -703,11 +659,33 @@ const MapScreen = () => {
         level: 4
       });
 
-      // 마커 추가
-      const marker = new window.kakao.maps.Marker({
+      // 커스텀 핀 마커 생성 (메인 컬러, 가운데 원은 흰색, 가로 넓게)
+      const markerEl = document.createElement('div');
+      markerEl.innerHTML = `
+        <div style="
+          position: relative;
+          width: 48px;
+          height: 40px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        ">
+          <svg width="48" height="40" viewBox="0 0 48 40" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter: drop-shadow(0 2px 8px rgba(0,0,0,0.3));">
+            <path d="M24 0C18.477 0 14 4.477 14 10C14 17 24 40 24 40C24 40 34 17 34 10C34 4.477 29.523 0 24 0Z" fill="#00BCD4"/>
+            <circle cx="24" cy="10" r="6" fill="white"/>
+          </svg>
+        </div>
+      `;
+
+      const marker = new window.kakao.maps.CustomOverlay({
         position: new window.kakao.maps.LatLng(selectedSOSLocation.lat, selectedSOSLocation.lng),
-        map: map
+        content: markerEl,
+        yAnchor: 1,
+        xAnchor: 0.5,
+        zIndex: 1001
       });
+
+      marker.setMap(map);
 
       locationPreviewMapRef.current = { map, marker };
     };
@@ -874,15 +852,33 @@ const MapScreen = () => {
   };
 
   return (
-    <div className="phone-screen" style={{ 
-      background: 'transparent',
-      borderRadius: '32px',
-      overflow: 'hidden',
-      height: '100vh',
-      display: 'flex',
-      flexDirection: 'column',
-      position: 'relative'
-    }}>
+    <>
+      <style>
+        {`
+          .sheet-scroll-container::-webkit-scrollbar {
+            height: 6px;
+          }
+          .sheet-scroll-container::-webkit-scrollbar-track {
+            background: transparent;
+          }
+          .sheet-scroll-container::-webkit-scrollbar-thumb {
+            background: #d4d4d8;
+            border-radius: 3px;
+          }
+          .sheet-scroll-container::-webkit-scrollbar-thumb:hover {
+            background: #a1a1aa;
+          }
+        `}
+      </style>
+      <div className="phone-screen" style={{ 
+        background: 'transparent',
+        borderRadius: '32px',
+        overflow: 'hidden',
+        height: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        position: 'relative'
+      }}>
       {/* 지도 컨테이너 - 전체 화면에 지도가 보이도록 */}
       <main 
         ref={mapContainerRef}
@@ -1205,15 +1201,21 @@ const MapScreen = () => {
           }}>주변 장소</h1>
         </div>
 
-        <div style={{ 
-          flex: 1,
-          overflowX: 'auto',
-          overflowY: 'hidden',
-          padding: '16px 16px 24px 16px',
-          display: 'flex',
-          gap: '12px',
-          minHeight: '110px'
-        }}>
+        <div 
+          className="sheet-scroll-container"
+          style={{ 
+            flex: 1,
+            overflowX: 'auto',
+            overflowY: 'hidden',
+            padding: '16px 16px 24px 16px',
+            display: 'flex',
+            gap: '12px',
+            minHeight: '110px',
+            scrollBehavior: 'smooth',
+            WebkitOverflowScrolling: 'touch',
+            scrollbarWidth: 'thin',
+            scrollbarColor: '#d4d4d8 transparent'
+          }}>
           {visiblePins.length > 0 ? (
             visiblePins.map((pin, index) => (
               <div
@@ -1229,6 +1231,7 @@ const MapScreen = () => {
                 style={{
                   minWidth: '90px',
                   width: '90px',
+                  flexShrink: 0,
                   borderRadius: '12px',
                   overflow: 'hidden',
                   cursor: 'pointer',
@@ -1260,26 +1263,6 @@ const MapScreen = () => {
                     }}
                   />
                 )}
-                <div style={{
-                  position: 'absolute',
-                  top: '6px',
-                  left: '6px',
-                  width: '20px',
-                  height: '20px',
-                  borderRadius: '10px',
-                  background: 'rgba(255,255,255,0.9)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
-                }}>
-                  <span className="material-symbols-outlined" style={{ 
-                    fontSize: '14px', 
-                    color: '#00BCD4' 
-                  }}>
-                    {getLocationIcon(pin.title)}
-                  </span>
-                </div>
                 <div style={{
                   padding: '6px',
                   background: 'white'
@@ -1731,7 +1714,7 @@ const MapScreen = () => {
                     background: '#fafafa'
                   }}
                   onFocus={(e) => {
-                    e.target.style.borderColor = '#ff4444';
+                    e.target.style.borderColor = '#00BCD4';
                     e.target.style.background = 'white';
                   }}
                   onBlur={(e) => {
@@ -1754,7 +1737,7 @@ const MapScreen = () => {
                 style={{
                   width: '100%',
                   padding: '14px',
-                  background: selectedSOSLocation && sosQuestion.trim() ? '#ff4444' : '#ddd',
+                  background: selectedSOSLocation && sosQuestion.trim() ? '#00BCD4' : '#ddd',
                   color: 'white',
                   border: 'none',
                   borderRadius: '12px',
@@ -1769,13 +1752,13 @@ const MapScreen = () => {
                 }}
                 onMouseEnter={(e) => {
                   if (selectedSOSLocation && sosQuestion.trim()) {
-                    e.currentTarget.style.background = '#ff3333';
+                    e.currentTarget.style.background = '#00ACC1';
                     e.currentTarget.style.transform = 'scale(1.02)';
                   }
                 }}
                 onMouseLeave={(e) => {
                   if (selectedSOSLocation && sosQuestion.trim()) {
-                    e.currentTarget.style.background = '#ff4444';
+                    e.currentTarget.style.background = '#00BCD4';
                     e.currentTarget.style.transform = 'scale(1)';
                   }
                 }}
@@ -1917,6 +1900,7 @@ const MapScreen = () => {
       {/* 하단 네비게이션 바 */}
       <BottomNavigation />
     </div>
+    </>
   );
 };
 

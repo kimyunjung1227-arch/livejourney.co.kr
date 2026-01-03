@@ -415,20 +415,21 @@ const SearchScreen = () => {
 
   return (
     <ScreenLayout>
+      {/* 헤더 - 웹과 동일한 구조 (ScreenContent 밖) */}
+      <ScreenHeader>
+        <View style={styles.headerContent}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
+          >
+            <Ionicons name="arrow-back" size={24} color={COLORS.text} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>지역 검색</Text>
+          <View style={styles.headerPlaceholder} />
+        </View>
+      </ScreenHeader>
+
       <ScreenContent scrollable={false}>
-        {/* 헤더 - 웹과 동일한 구조 */}
-        <ScreenHeader>
-          <View style={styles.headerContent}>
-            <TouchableOpacity
-              style={styles.backButton}
-              onPress={() => navigation.goBack()}
-            >
-              <Ionicons name="arrow-back" size={24} color={COLORS.text} />
-            </TouchableOpacity>
-            <Text style={styles.headerTitle}>지역 검색</Text>
-            <View style={styles.headerPlaceholder} />
-          </View>
-        </ScreenHeader>
 
         {/* 검색창 - 헤더 바로 아래 */}
           <View style={styles.searchContainer}>
@@ -476,9 +477,9 @@ const SearchScreen = () => {
 
         {/* 메인 컨텐츠 */}
         <ScreenBody>
-        {/* 최근 검색한 지역 - 추천 지역 위에 배치 */}
+        {/* 최근 검색한 지역 - 추천 지역 위에 배치 (웹과 동일: showSuggestions일 때 opacity-30) */}
         {recentSearches.length > 0 && (
-        <View style={styles.section}>
+        <View style={[styles.section, showSuggestions && { opacity: 0.3 }]}>
           <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>최근 검색한 지역</Text>
               <TouchableOpacity onPress={handleClearRecentSearches}>
@@ -489,42 +490,23 @@ const SearchScreen = () => {
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.recentScroll}
+              scrollEnabled={!showSuggestions}
+              pointerEvents={showSuggestions ? 'none' : 'auto'}
             >
               {recentSearches.map((search, index) => {
-                const secondaryColors = [
-                  COLORS.secondary2,  // Green
-                  COLORS.secondary5,  // Cyan
-                  COLORS.secondary3,  // Pink
-                  COLORS.secondary6,  // Indigo
-                ];
-                const secondaryColorsSoft = [
-                  COLORS.secondary2Soft,
-                  COLORS.secondary5Soft,
-                  COLORS.secondary3Soft,
-                  COLORS.secondary6Soft,
-                ];
-                const colorIndex = index % secondaryColors.length;
-                const badgeColor = secondaryColors[colorIndex];
-                const badgeColorSoft = secondaryColorsSoft[colorIndex];
-                
+                // 웹과 동일: 첫 번째는 primary 색상, 나머지는 기본 스타일
                 return (
                   <TouchableOpacity
                     key={index}
                     style={[
                       styles.recentSearchButton,
-                      index === 0 && [
-                        styles.recentSearchButtonActive,
-                        { backgroundColor: badgeColorSoft, borderColor: badgeColor }
-                      ]
+                      index === 0 && styles.recentSearchButtonActive
                     ]}
                     onPress={() => handleRecentSearchClick(search)}
                   >
                     <Text style={[
                       styles.recentSearchText,
-                      index === 0 && [
-                        styles.recentSearchTextActive,
-                        { color: badgeColor }
-                      ]
+                      index === 0 && styles.recentSearchTextActive
                     ]}>
                       {search}
                     </Text>
@@ -536,7 +518,7 @@ const SearchScreen = () => {
                       style={styles.deleteButton}
                       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                     >
-                      <Ionicons name="close-circle" size={18} color={COLORS.textSubtle} />
+                      <Ionicons name="close" size={16} color={index === 0 ? COLORS.primary : COLORS.textSubtle} style={{ opacity: 0.6 }} />
                     </TouchableOpacity>
                   </TouchableOpacity>
                 );
@@ -545,8 +527,8 @@ const SearchScreen = () => {
           </View>
           )}
 
-        {/* 추천 지역 - 2x2 그리드로 표시 */}
-        <View style={styles.section}>
+        {/* 추천 지역 - 2x2 그리드로 표시 (웹과 동일: showSuggestions일 때 opacity-30) */}
+        <View style={[styles.section, showSuggestions && { opacity: 0.3 }]}>
           <Text style={styles.sectionTitle}>추천 지역</Text>
           
           <View style={styles.recommendedGrid}>
@@ -597,17 +579,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: SPACING.md, // p-4 = 16px
-    paddingVertical: SPACING.md, // p-4 = 16px
+    paddingHorizontal: SPACING.md, // 웹: px-4 = 16px
+    paddingVertical: SPACING.md, // 웹: p-4 = 16px
+    backgroundColor: COLORS.backgroundLight, // 웹: bg-white
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2, // 웹: shadow-sm
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: SPACING.md, // p-4 = 16px
-    paddingTop: SPACING.md, // p-4 = 16px
-    paddingBottom: SPACING.sm, // pb-2 = 8px
-    backgroundColor: COLORS.backgroundLight, // bg-white
+    paddingHorizontal: SPACING.md,
+    paddingTop: SPACING.md,
+    paddingBottom: SPACING.sm,
+    backgroundColor: COLORS.backgroundLight,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.borderLight + '80', // border-border-light/50
     shadowColor: '#000',
@@ -910,8 +898,8 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   recentSearchButtonActive: {
-    // backgroundColor와 borderColor는 동적으로 설정됨
-    borderWidth: 2,
+    backgroundColor: COLORS.primary + '33', // primary/20 (웹과 동일)
+    borderWidth: 0, // 웹에서는 border 없음
   },
   recentSearchText: {
     fontSize: 14,
@@ -919,7 +907,7 @@ const styles = StyleSheet.create({
     color: COLORS.text,
   },
   recentSearchTextActive: {
-    // color는 동적으로 설정됨
+    color: COLORS.primary, // 웹과 동일: primary 색상
     fontWeight: '600',
   },
   deleteButton: {
