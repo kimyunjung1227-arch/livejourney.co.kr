@@ -4,7 +4,7 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   publicDir: 'public',
-  base: process.env.NODE_ENV === 'production' ? '/LiveJourney.com/' : '/', // GitHub Pages는 /repository-name/ 경로 사용
+  base: process.env.NODE_ENV === 'production' ? '/app/' : '/', // GitHub Pages는 /repository-name/ 경로 사용
   server: {
     host: '0.0.0.0',
     port: 3000,

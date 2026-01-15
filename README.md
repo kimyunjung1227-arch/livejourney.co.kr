@@ -22,7 +22,7 @@
 📖 **[GITHUB_DEPLOY_GUIDE.md](./GITHUB_DEPLOY_GUIDE.md)** - 상세 배포 가이드  
 📖 **[카페_공유_가이드.md](./카페_공유_가이드.md)** - 빠른 배포 가이드
 
-**배포 URL**: `https://kimyunjung1227-arch.github.io/LiveJourney.com/`
+**배포 URL**: `https://kimyunjung1227-arch.github.io/app/`
 
 ### 배포 전 체크리스트
 - [x] 프론트엔드 빌드 테스트 완료 ✅

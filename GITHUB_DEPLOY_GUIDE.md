@@ -73,7 +73,7 @@ LiveJourney를 GitHub Pages에 배포하여 카페 회원들이 사용할 수 �
 https://사용자명.github.io/저장소명/
 ```
 
-예: `https://kimyunjung1227-arch.github.io/livejourney.com/`
+예: `https://kimyunjung1227-arch.github.io/app/`
 
 ## ✅ 배포 확인
 
