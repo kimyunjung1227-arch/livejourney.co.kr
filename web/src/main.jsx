@@ -52,9 +52,23 @@ const loadKakaoMapAPI = () => {
   });
 };
 
+// GitHub Pages 리다이렉트 처리 (404.html에서 리다이렉트된 경우)
+const handleGitHubPagesRedirect = () => {
+  const urlParams = new URLSearchParams(window.location.search);
+  const redirectPath = urlParams.get('redirect');
+  
+  if (redirectPath) {
+    // 리다이렉트 경로로 이동
+    const newPath = redirectPath + window.location.search.replace(/[?&]redirect=[^&]*/, '').replace(/^\?/, '?') + window.location.hash;
+    window.history.replaceState({}, '', newPath);
+  }
+};
+
 // 앱 초기화
 const initApp = async () => {
   try {
+    // GitHub Pages 리다이렉트 처리
+    handleGitHubPagesRedirect();
     // Kakao Map API 로드 및 대기
     await loadKakaoMapAPI();
     logger.log('🗺️ Kakao Map API 준비 완료!');
