@@ -844,57 +844,6 @@ const MainScreen = () => {
             scrollbarWidth: 'none'
           }}
         >
-          {/* 추가 버튼 */}
-          <div className="interest-item" style={{ 
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: '4px',
-            minWidth: '52px'
-          }}>
-            <button
-              onClick={() => {
-                if (!hasMoved) {
-                  setShowAddInterestModal(true);
-                }
-              }}
-              style={{ 
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: '4px',
-                background: 'none',
-                border: 'none',
-                cursor: 'pointer',
-                width: '100%'
-              }}
-            >
-              <div className="interest-avatar" style={{ 
-                width: '46px',
-                height: '46px',
-                borderRadius: '50%',
-                background: 'linear-gradient(135deg, #F3F4F6 0%, #E5E7EB 100%)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '22px',
-                border: '1.5px dashed #9CA3AF',
-                color: '#9CA3AF'
-              }}>
-                <span className="material-symbols-outlined" style={{ fontWeight: 300, fontSize: '22px' }}>add_circle</span>
-              </div>
-              <span className="interest-name" style={{ 
-                fontSize: '10px',
-                fontWeight: 500,
-                color: '#9CA3AF',
-                textAlign: 'center',
-                whiteSpace: 'nowrap'
-              }}>
-                추가
-              </span>
-            </button>
-          </div>
-
               {/* 관심 지역/장소들 */}
               {interestPlaces.map((place, index) => {
                 const isSelected = selectedInterest === place.name;
@@ -989,6 +938,57 @@ const MainScreen = () => {
           </div>
             );
           })}
+          
+          {/* 추가 버튼 - 우측으로 배치 */}
+          <div className="interest-item" style={{ 
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '4px',
+            minWidth: '52px'
+          }}>
+            <button
+              onClick={() => {
+                if (!hasMoved) {
+                  setShowAddInterestModal(true);
+                }
+              }}
+              style={{ 
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '4px',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                width: '100%'
+              }}
+            >
+              <div className="interest-avatar" style={{ 
+                width: '46px',
+                height: '46px',
+                borderRadius: '50%',
+                background: 'linear-gradient(135deg, #F3F4F6 0%, #E5E7EB 100%)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '22px',
+                border: '1.5px dashed #9CA3AF',
+                color: '#9CA3AF'
+              }}>
+                <span className="material-symbols-outlined" style={{ fontWeight: 300, fontSize: '22px' }}>add_circle</span>
+              </div>
+              <span className="interest-name" style={{ 
+                fontSize: '10px',
+                fontWeight: 500,
+                color: '#9CA3AF',
+                textAlign: 'center',
+                whiteSpace: 'nowrap'
+              }}>
+                추가
+              </span>
+            </button>
+          </div>
             </div>
           </div>
         )}
@@ -1694,6 +1694,8 @@ const MainScreen = () => {
                 </div>
 
           {/* 여행 매거진 섹션 – 추천 여행지 하단 */}
+          {/* 나중에 고객들이 많이 모이고 나면 큐레이션해서 보여주는 것으로 변경 예정 */}
+          {false && (
           <div className="feed-section" style={{ marginBottom: '20px' }}>
             <div className="section-header-main" style={{
               display: 'flex',
@@ -1797,6 +1799,7 @@ const MainScreen = () => {
               ))}
             </div>
           </div>
+          )}
         </div>
         
         {/* 바텀 네비게이션 */}

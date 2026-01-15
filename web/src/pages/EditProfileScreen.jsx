@@ -5,13 +5,13 @@ import BottomNavigation from '../components/BottomNavigation';
 
 const EditProfileScreen = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   
   // localStorage에서 현재 사용자 정보 가져오기
   const savedUser = JSON.parse(localStorage.getItem('user') || '{}');
 
   const [formData, setFormData] = useState({
-    username: savedUser?.username || user?.username || '모사모',
+    username: savedUser?.username || user?.username || '',
     email: savedUser?.email || user?.email || 'mosamo@example.com',
     bio: savedUser?.bio || user?.bio || '',
     level: 'Lv. 5 Traveler'
@@ -86,14 +86,34 @@ const EditProfileScreen = () => {
   };
 
   const handleSave = async () => {
-    // 유효성 검사
-    if (!formData.username.trim()) {
+    // 닉네임 유효성 검사
+    const trimmedUsername = formData.username.trim();
+    
+    if (!trimmedUsername) {
       alert('닉네임을 입력해주세요.');
       return;
     }
 
-    if (formData.username.length < 2) {
+    if (trimmedUsername.length < 2) {
       alert('닉네임은 2글자 이상이어야 합니다.');
+      return;
+    }
+
+    if (trimmedUsername.length > 20) {
+      alert('닉네임은 20글자 이하여야 합니다.');
+      return;
+    }
+
+    // 닉네임 특수문자 검사 (한글, 영문, 숫자, 공백만 허용)
+    const usernameRegex = /^[가-힣a-zA-Z0-9\s]+$/;
+    if (!usernameRegex.test(trimmedUsername)) {
+      alert('닉네임은 한글, 영문, 숫자만 사용할 수 있습니다.');
+      return;
+    }
+
+    // 연속된 공백 체크
+    if (trimmedUsername.includes('  ')) {
+      alert('닉네임에 연속된 공백을 사용할 수 없습니다.');
       return;
     }
 
@@ -117,17 +137,22 @@ const EditProfileScreen = () => {
       // localStorage에서 현재 사용자 정보 가져오기
       const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
       
-      // 업데이트된 사용자 정보
+      // 업데이트된 사용자 정보 (닉네임은 trim된 값 사용)
       const updatedUser = {
         ...currentUser,
-        username: formData.username,
-        email: formData.email,
-        bio: formData.bio,
+        username: trimmedUsername,
+        email: formData.email.trim(),
+        bio: formData.bio.trim(),
         profileImage: profileImage, // 프로필 이미지 저장! ✨
       };
       
       // localStorage에 저장
       localStorage.setItem('user', JSON.stringify(updatedUser));
+      
+      // AuthContext 업데이트
+      if (updateUser) {
+        updateUser(updatedUser);
+      }
       
       // userUpdated 이벤트 발생 (다른 컴포넌트에서 감지)
       window.dispatchEvent(new Event('userUpdated'));
@@ -219,16 +244,25 @@ const EditProfileScreen = () => {
             {/* 닉네임 */}
             <div className="space-y-2">
               <label className="block text-sm font-semibold text-gray-700 dark:text-gray-200">
-                닉네임
+                닉네임 <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
                 name="username"
                 value={formData.username}
                 onChange={handleInputChange}
+                maxLength={20}
                 className="w-full px-4 py-3 rounded-lg border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all"
-                placeholder="닉네임을 입력하세요"
+                placeholder="닉네임을 입력하세요 (2-20자)"
               />
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  한글, 영문, 숫자만 사용 가능 (공백 포함 가능)
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {formData.username.length} / 20
+                </p>
+              </div>
             </div>
 
             {/* 이메일 */}

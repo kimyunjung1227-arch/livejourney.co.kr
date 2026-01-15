@@ -441,10 +441,10 @@ const BadgeListScreen = () => {
   };
 
   return (
-    <div className="screen-layout bg-white dark:bg-background-dark">
-      <div className="screen-content">
+    <div className="screen-layout bg-white dark:bg-background-dark" style={{ height: '100vh', overflow: 'hidden' }}>
+      <div className="screen-content" style={{ height: '100%', overflowY: 'auto', overflowX: 'hidden' }}>
         {/* 헤더 */}
-        <header className="screen-header bg-white dark:bg-gray-900 flex items-center p-4 justify-between shadow-sm">
+        <header className="screen-header bg-white dark:bg-gray-900 flex items-center p-4 justify-between shadow-sm" style={{ position: 'sticky', top: 0, zIndex: 20 }}>
           <button 
             onClick={() => navigate('/profile')}
             aria-label="Back" 
@@ -495,7 +495,7 @@ const BadgeListScreen = () => {
 
 
         {/* 뱃지 그리드 */}
-        <main className="flex-grow px-4 pb-28">
+        <main className="px-4 pb-28" style={{ minHeight: 'calc(100vh - 64px)' }}>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             {filteredBadges.map((badge, index) => (
               <button

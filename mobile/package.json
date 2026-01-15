@@ -7,7 +7,8 @@
     "tunnel": "expo start --tunnel",
     "android": "expo run:android",
     "ios": "expo run:ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "clear": "expo start --clear"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",

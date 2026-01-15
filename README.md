@@ -13,6 +13,32 @@
 - 🔍 **스마트 검색** - 지역/카테고리별 필터링
 - 📱 **부드러운 UX** - 네이티브 앱 수준의 스크롤 경험
 
+## 🌐 웹 앱 배포하기
+
+다른 사람들도 사용할 수 있도록 웹 앱을 배포하려면:
+
+### 🚀 지금 바로 배포
+📖 **[DEPLOY_NOW.md](./DEPLOY_NOW.md)** - 5분 빠른 배포 가이드 ⭐
+
+### 📚 상세 가이드
+- **[AUTO_DEPLOY.md](./AUTO_DEPLOY.md)** - 자동 배포 가이드 (단계별 상세 설명)
+- **[QUICK_DEPLOY.md](./QUICK_DEPLOY.md)** - 빠른 배포 가이드
+- **[DEPLOY_GUIDE.md](./DEPLOY_GUIDE.md)** - 전체 배포 가이드
+
+### 추천 배포 플랫폼
+- **프론트엔드**: [Vercel](https://vercel.com) (무료, 자동 배포)
+- **백엔드**: [Railway](https://railway.app) (무료 티어 제공)
+- **데이터베이스**: [MongoDB Atlas](https://www.mongodb.com/cloud/atlas) (무료 M0 클러스터)
+
+### 배포 전 체크리스트
+- [x] 프론트엔드 빌드 테스트 완료 ✅
+- [x] 배포 설정 파일 준비 완료 ✅
+- [ ] MongoDB Atlas 설정
+- [ ] Railway 백엔드 배포
+- [ ] Vercel 프론트엔드 배포
+
+---
+
 ## 🚀 빠른 시작
 
 ### 1. 환경 변수 설정

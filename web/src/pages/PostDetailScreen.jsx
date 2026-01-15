@@ -147,6 +147,8 @@ const PostDetailScreen = () => {
   const [verticalTouchEnd, setVerticalTouchEnd] = useState(0);
   const [isVerticalSwipe, setIsVerticalSwipe] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
+  // 이미지 영역에서의 터치 추적
+  const [isImageAreaTouch, setIsImageAreaTouch] = useState(false);
   
   // 미니 지도
   const miniMapRef = useRef(null);
@@ -356,7 +358,7 @@ const PostDetailScreen = () => {
     console.log('💬 댓글 추가:', commentText);
   }, [post, commentText, user]);
 
-  // 상하 스와이프로 게시물 변경 (무한 슬라이드) - 인스타그램 스타일
+  // 게시물 변경 (상하/좌우 스와이프 모두 지원)
   const changePost = useCallback((direction) => {
     if (!slideablePosts || slideablePosts.length === 0 || isTransitioning) return;
     
@@ -368,13 +370,13 @@ const PostDetailScreen = () => {
     
     setIsTransitioning(true);
     
-    if (direction === 'up') {
-      // 위로 스와이프: 이전 게시물 (첫 번째면 마지막으로)
+    if (direction === 'up' || direction === 'left') {
+      // 위로 또는 왼쪽으로: 이전 게시물 (첫 번째면 마지막으로)
       newIndex = currentPostIndexState > 0 
         ? currentPostIndexState - 1 
         : slideablePosts.length - 1;
     } else {
-      // 아래로 스와이프: 다음 게시물 (마지막이면 첫 번째로)
+      // 아래로 또는 오른쪽으로: 다음 게시물 (마지막이면 첫 번째로)
       newIndex = currentPostIndexState < slideablePosts.length - 1
         ? currentPostIndexState + 1
         : 0;
@@ -428,8 +430,12 @@ const PostDetailScreen = () => {
       setTouchEnd(0);
       setVerticalTouchStart(0);
       setVerticalTouchEnd(0);
+      setIsImageAreaTouch(false);
       return;
     }
+    
+    const horizontalDistance = Math.abs(touchStart - touchEnd);
+    const verticalDistance = Math.abs(verticalTouchStart - verticalTouchEnd);
     
     if (isVerticalSwipe) {
       // 상하 스와이프 - 인스타그램 스타일 (직관적인 방향)
@@ -444,33 +450,53 @@ const PostDetailScreen = () => {
       } else if (isUpSwipe) {
         changePost('up'); // 이전 게시물
       }
-    } else {
-      // 좌우 스와이프 (이미지 간 이동 - 무한 슬라이드)
+    } else if (horizontalDistance > verticalDistance) {
+      // 좌우 스와이프가 상하 스와이프보다 큰 경우
       const distance = touchStart - touchEnd;
       const isLeftSwipe = distance > 50;
       const isRightSwipe = distance < -50;
       
-      const maxIndex = mediaItems.length > 0 ? mediaItems.length : images.length;
-      
-      if (maxIndex <= 1) {
-        // 이미지가 1개 이하면 슬라이드 불가
-        return;
-      }
-      
-      if (isLeftSwipe) {
-        // 왼쪽으로 스와이프: 다음 이미지 (마지막이면 첫 번째로)
-        const nextIndex = currentImageIndex < maxIndex - 1 
-          ? currentImageIndex + 1 
-          : 0;
-        setCurrentImageIndex(nextIndex);
-      }
-      
-      if (isRightSwipe) {
-        // 오른쪽으로 스와이프: 이전 이미지 (첫 번째면 마지막으로)
-        const prevIndex = currentImageIndex > 0 
-          ? currentImageIndex - 1 
-          : maxIndex - 1;
-        setCurrentImageIndex(prevIndex);
+      // 이미지 영역에서의 터치인지 확인
+      if (isImageAreaTouch) {
+        // 이미지 영역: 이미지가 여러 개면 이미지 간 이동, 1개면 게시물 간 이동
+        const maxIndex = mediaItems.length > 0 ? mediaItems.length : images.length;
+        
+        if (maxIndex > 1) {
+          // 이미지가 여러 개면 이미지 간 이동
+          if (isLeftSwipe) {
+            // 왼쪽으로 스와이프: 다음 이미지 (마지막이면 첫 번째로)
+            const nextIndex = currentImageIndex < maxIndex - 1 
+              ? currentImageIndex + 1 
+              : 0;
+            setCurrentImageIndex(nextIndex);
+          }
+          
+          if (isRightSwipe) {
+            // 오른쪽으로 스와이프: 이전 이미지 (첫 번째면 마지막으로)
+            const prevIndex = currentImageIndex > 0 
+              ? currentImageIndex - 1 
+              : maxIndex - 1;
+            setCurrentImageIndex(prevIndex);
+          }
+        } else {
+          // 이미지가 1개면 게시물 간 이동
+          if (isLeftSwipe) {
+            // 왼쪽으로 스와이프: 다음 게시물
+            changePost('right');
+          } else if (isRightSwipe) {
+            // 오른쪽으로 스와이프: 이전 게시물
+            changePost('left');
+          }
+        }
+      } else {
+        // 이미지 영역 외부: 게시물 간 이동
+        if (isLeftSwipe) {
+          // 왼쪽으로 스와이프: 다음 게시물
+          changePost('right');
+        } else if (isRightSwipe) {
+          // 오른쪽으로 스와이프: 이전 게시물
+          changePost('left');
+        }
       }
     }
     
@@ -478,6 +504,7 @@ const PostDetailScreen = () => {
     setTouchEnd(0);
     setVerticalTouchStart(0);
     setVerticalTouchEnd(0);
+    setIsImageAreaTouch(false);
     setIsVerticalSwipe(false);
   };
 
@@ -501,7 +528,19 @@ const PostDetailScreen = () => {
   };
 
   const handleTouchMove = (e) => {
-    e.preventDefault();
+    // 이미지 영역에서만 preventDefault (스크롤 허용을 위해)
+    if (isImageAreaTouch) {
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      const horizontalDistance = Math.abs(clientX - touchStart);
+      const verticalDistance = Math.abs(clientY - verticalTouchStart);
+      
+      // 좌우 움직임이 상하 움직임보다 크면 preventDefault (이미지 스와이프)
+      if (horizontalDistance > verticalDistance && horizontalDistance > 10) {
+        e.preventDefault();
+      }
+    }
+    // 이미지 영역이 아니면 preventDefault 하지 않음 (스크롤 허용)
     handleMove(e);
   };
 
@@ -655,14 +694,13 @@ const PostDetailScreen = () => {
 
   return (
     <div 
-      className="screen-layout bg-background-light dark:bg-background-dark cursor-grab active:cursor-grabbing"
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
-      onMouseDown={handleMouseDown}
-      style={{ touchAction: 'pan-y' }}
+      className="screen-layout bg-background-light dark:bg-background-dark"
+      style={{ height: '100vh', overflow: 'hidden' }}
     >
-      <div className="screen-content">
+      <div 
+        className="screen-content"
+        style={{ height: '100%', overflowY: 'auto', overflowX: 'hidden', WebkitOverflowScrolling: 'touch' }}
+      >
         <div className="screen-header flex items-center bg-white dark:bg-gray-900 p-4 pb-2 shadow-sm relative z-50">
           <button 
             onClick={() => {
@@ -692,8 +730,35 @@ const PostDetailScreen = () => {
           </div>
         )}
 
+        {/* 게시물 간 이동 가이드 화살표 (가벼운 스타일) */}
+        {slideablePosts.length > 1 && (
+          <>
+            <div className="fixed left-2 top-[35vh] z-10 pointer-events-none">
+              <span className="material-symbols-outlined text-white/25 text-lg">chevron_left</span>
+            </div>
+            <div className="fixed right-2 top-[35vh] z-10 pointer-events-none">
+              <span className="material-symbols-outlined text-white/25 text-lg">chevron_right</span>
+            </div>
+          </>
+        )}
+
         <div className="flex w-full bg-white dark:bg-gray-900">
-          <div className="w-full gap-1 overflow-hidden bg-white dark:bg-gray-900 aspect-[4/3] flex relative shadow-md">
+          <div 
+            className="image-swipe-area w-full gap-1 overflow-hidden bg-white dark:bg-gray-900 aspect-[4/3] flex relative shadow-md"
+            onTouchStart={(e) => {
+              setIsImageAreaTouch(true);
+              handleTouchStart(e);
+            }}
+            onTouchMove={(e) => {
+              // 이미지 영역에서는 preventDefault로 스크롤 방지
+              e.preventDefault();
+              handleTouchMove(e);
+            }}
+            onMouseDown={(e) => {
+              setIsImageAreaTouch(true);
+              handleMouseDown(e);
+            }}
+          >
             <div 
               className="w-full overflow-hidden"
             >
@@ -766,7 +831,7 @@ const PostDetailScreen = () => {
           </div>
         </div>
 
-        <main className="flex flex-col bg-gray-50 dark:bg-gray-900">
+        <main className="flex flex-col bg-gray-50 dark:bg-gray-900" style={{ minHeight: 'auto' }}>
           {/* 작성자 정보 */}
           <div className="px-4 pt-5 pb-3 bg-white dark:bg-gray-900">
             <div className="flex items-center justify-between">

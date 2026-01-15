@@ -5,6 +5,7 @@ import { getWeatherByRegion, getTrafficByRegion } from '../api/weather';
 import { seedMockData } from '../utils/mockUploadData';
 import { filterRecentPosts } from '../utils/timeUtils';
 import { toggleInterestPlace, isInterestPlace } from '../utils/interestPlaces';
+import { getLandmarksByRegion, isPostMatchingLandmarks, REGION_LANDMARKS } from '../utils/regionLandmarks';
 
 const RegionDetailScreen = () => {
   const navigate = useNavigate();
@@ -41,6 +42,8 @@ const RegionDetailScreen = () => {
   });
   
   const [isNotificationEnabled, setIsNotificationEnabled] = useState(false);
+  const [selectedLandmarks, setSelectedLandmarks] = useState([]); // 선택된 명소 ID 목록
+  const [showLandmarkModal, setShowLandmarkModal] = useState(false); // 명소 선택 모달 표시 여부
   
   // 관심 지역 상태 확인
   useEffect(() => {
@@ -89,6 +92,32 @@ const RegionDetailScreen = () => {
       console.log(`🎯 상세 위치 필터 적용: ${focusLocation} → ${regionPosts.length}개 게시물`);
     }
 
+    // 선택된 명소로 필터링 (모든 지역의 명소 지원)
+    if (selectedLandmarks.length > 0) {
+      regionPosts = regionPosts.filter(post => {
+        // 선택된 명소 ID 형식: "지역명_명소ID"
+        return selectedLandmarks.some(landmarkId => {
+          const [landmarkRegion, landmarkIdOnly] = landmarkId.split('_');
+          const landmarks = getLandmarksByRegion(landmarkRegion);
+          const landmark = landmarks.find(l => l.id === landmarkIdOnly);
+          
+          if (!landmark) return false;
+          
+          // 게시물의 위치 정보
+          const postLocation = (post.detailedLocation || post.placeName || post.location || '').toLowerCase();
+          const postTags = (post.tags || []).join(' ').toLowerCase();
+          const postNote = (post.note || post.content || '').toLowerCase();
+          const searchText = `${postLocation} ${postTags} ${postNote}`;
+          
+          // 명소의 키워드와 일치하는지 확인
+          return landmark.keywords.some(keyword => {
+            return searchText.includes(keyword.toLowerCase());
+          });
+        });
+      });
+      console.log(`🏛️ 명소 필터 적용: ${selectedLandmarks.length}개 명소 → ${regionPosts.length}개 게시물`);
+    }
+
     regionPosts = regionPosts
     .sort((a, b) => {
       // 시간순 정렬 (최신순)
@@ -130,7 +159,7 @@ const RegionDetailScreen = () => {
     console.log('📊 지역 게시물 로드:', {
       total: allPosts.length
     });
-  }, [region.name, timeToMinutes]);
+  }, [region.name, timeToMinutes, selectedLandmarks]);
 
   // 필터에 따른 게시물 필터링 및 표시
   useEffect(() => {
@@ -305,66 +334,70 @@ const RegionDetailScreen = () => {
   return (
     <div className="screen-layout bg-background-light dark:bg-background-dark">
       <div className="screen-content">
-        <header className="screen-header flex items-center justify-between border-b border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-900 relative z-50">
-        <button 
-          onClick={() => navigate(-1)}
-          className="flex size-12 shrink-0 items-center justify-center text-content-light dark:text-content-dark hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors cursor-pointer"
-        >
-          <span className="material-symbols-outlined text-2xl">arrow_back</span>
-        </button>
-        <h1 className="flex-1 text-center text-lg font-bold leading-tight tracking-[-0.015em] text-content-light dark:text-content-dark">
-          {region.name}
-        </h1>
-        {/* 관심 지역 버튼 */}
-        <button
-          onClick={handleNotificationToggle}
-          className={`flex size-12 shrink-0 items-center justify-center rounded-lg transition-colors ${
-            isNotificationEnabled
-              ? 'bg-primary/10 hover:bg-primary/20'
-              : 'hover:bg-gray-100 dark:hover:bg-gray-800'
-          }`}
-          title={isNotificationEnabled ? "관심 지역 해제" : "관심 지역 추가"}
-        >
-          <span 
-            className={`material-symbols-outlined text-2xl ${
-              isNotificationEnabled ? 'text-primary' : 'text-gray-600 dark:text-gray-400'
-            }`}
-            style={isNotificationEnabled ? { fontVariationSettings: "'FILL' 1" } : {}}
+        <header className="screen-header flex flex-col border-b border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900 relative z-50">
+        <div className="flex items-center justify-between p-4 pb-2">
+          <button 
+            onClick={() => navigate(-1)}
+            className="flex size-12 shrink-0 items-center justify-center text-content-light dark:text-content-dark hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors cursor-pointer"
           >
-            {isNotificationEnabled ? 'star' : 'star_outline'}
-          </span>
-        </button>
+            <span className="material-symbols-outlined text-2xl">arrow_back</span>
+          </button>
+          <h1 className="flex-1 text-center text-lg font-bold leading-tight tracking-[-0.015em] text-content-light dark:text-content-dark">
+            {region.name}
+          </h1>
+          {/* 관심 지역 버튼 */}
+          <button
+            onClick={handleNotificationToggle}
+            className={`flex size-12 shrink-0 items-center justify-center rounded-lg transition-colors ${
+              isNotificationEnabled
+                ? 'bg-primary/10 hover:bg-primary/20'
+                : 'hover:bg-gray-100 dark:hover:bg-gray-800'
+            }`}
+            title={isNotificationEnabled ? "관심 지역 해제" : "관심 지역 추가"}
+          >
+            <span 
+              className={`material-symbols-outlined text-2xl ${
+                isNotificationEnabled ? 'text-primary' : 'text-gray-600 dark:text-gray-400'
+              }`}
+              style={isNotificationEnabled ? { fontVariationSettings: "'FILL' 1" } : {}}
+            >
+              {isNotificationEnabled ? 'star' : 'star_outline'}
+            </span>
+          </button>
+        </div>
+        
+        {/* 날씨/교통 정보 - 지역 이름 바로 아래 */}
+        <div className="flex justify-center gap-2 px-4 pb-3">
+          <div className="flex h-9 shrink-0 items-center justify-center gap-x-2 rounded-lg bg-surface pl-3 pr-4 shadow-sm dark:bg-background-dark/50">
+            {weatherInfo.loading ? (
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+            ) : (
+              <>
+                <span className="text-base">{weatherInfo.icon}</span>
+                <p className="text-sm font-medium leading-normal text-text-headings dark:text-gray-200">
+                  {weatherInfo.condition}, {weatherInfo.temperature}
+                </p>
+              </>
+            )}
+          </div>
+          
+          <div className="flex h-9 shrink-0 items-center justify-center gap-x-2 rounded-lg bg-surface pl-3 pr-4 shadow-sm dark:bg-background-dark/50">
+            {trafficInfo.loading ? (
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+            ) : (
+              <>
+                <span className="text-base">{trafficInfo.icon}</span>
+                <p className="text-sm font-medium leading-normal text-text-headings dark:text-gray-200">
+                  {trafficInfo.status}
+                </p>
+              </>
+            )}
+          </div>
+        </div>
       </header>
 
         <div className="screen-body">
           <main>
-        <div className="flex justify-center gap-2 p-4 pt-4">
-          <div className="flex h-9 shrink-0 items-center justify-center gap-x-2 rounded-lg bg-surface pl-3 pr-4 shadow-sm dark:bg-background-dark/50">
-              {weatherInfo.loading ? (
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
-              ) : (
-                <>
-                  <span className="text-base">{weatherInfo.icon}</span>
-            <p className="text-sm font-medium leading-normal text-text-headings dark:text-gray-200">
-                    {weatherInfo.condition}, {weatherInfo.temperature}
-            </p>
-                </>
-              )}
-          </div>
-            
-          <div className="flex h-9 shrink-0 items-center justify-center gap-x-2 rounded-lg bg-surface pl-3 pr-4 shadow-sm dark:bg-background-dark/50">
-              {trafficInfo.loading ? (
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
-              ) : (
-                <>
-                  <span className="text-base">{trafficInfo.icon}</span>
-            <p className="text-sm font-medium leading-normal text-text-headings dark:text-gray-200">
-                    {trafficInfo.status}
-            </p>
-                </>
-              )}
-            </div>
-        </div>
 
           {/* 현장 실시간 정보 */}
         <div>
@@ -372,6 +405,15 @@ const RegionDetailScreen = () => {
             <h2 className="text-[22px] font-bold leading-tight tracking-[-0.015em] text-text-headings dark:text-gray-100">
               현지 실시간 상황
             </h2>
+            <button
+              onClick={() => setShowLandmarkModal(true)}
+              className="px-3 py-1.5 rounded-lg text-sm font-semibold text-primary bg-primary-soft hover:bg-primary/20 transition-colors"
+            >
+              {selectedLandmarks.length > 0 
+                ? `주요 명소 (${selectedLandmarks.length})`
+                : '모든 지역 명소보기'
+              }
+            </button>
           </div>
 
           {/* 필터 버튼 - 슬라이드 가능 */}
@@ -573,6 +615,110 @@ const RegionDetailScreen = () => {
       </div>
 
       <BottomNavigation />
+
+      {/* 명소 선택 모달 - 모든 지역의 명소 표시 */}
+      {showLandmarkModal && (
+        <div 
+          className="fixed inset-0 bg-black/50 flex items-end justify-center z-50"
+          onClick={() => setShowLandmarkModal(false)}
+        >
+          <div 
+            className="w-full max-w-lg bg-background-light dark:bg-background-dark rounded-t-3xl max-h-[85vh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* 헤더 */}
+            <div className="flex items-center justify-between p-4 border-b border-border-light dark:border-border-dark">
+              <h3 className="text-lg font-bold text-text-headings dark:text-gray-100">
+                모든 지역 주요 명소
+              </h3>
+              <button
+                onClick={() => setShowLandmarkModal(false)}
+                className="material-symbols-outlined text-text-secondary-light dark:text-text-secondary-dark"
+              >
+                close
+              </button>
+            </div>
+
+            {/* 설명 */}
+            <div className="px-4 pt-4">
+              <p className="text-sm text-text-secondary-light dark:text-text-secondary-dark">
+                보고 싶은 명소를 선택하세요. 선택한 명소의 사진만 표시됩니다.
+              </p>
+            </div>
+
+            {/* 명소 목록 - 모든 지역 */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {Object.entries(REGION_LANDMARKS).map(([regionName, landmarks]) => (
+                <div key={regionName} className="space-y-2">
+                  {/* 지역 헤더 */}
+                  <div className="flex items-center gap-2 pb-2 border-b border-gray-200 dark:border-gray-700">
+                    <h4 className="text-base font-bold text-text-headings dark:text-gray-100">
+                      {regionName}
+                    </h4>
+                    <span className="text-xs text-text-secondary-light dark:text-text-secondary-dark">
+                      ({landmarks.length}개)
+                    </span>
+                  </div>
+                  
+                  {/* 해당 지역의 명소들 */}
+                  <div className="space-y-2 pl-2">
+                    {landmarks.map((landmark) => {
+                      const landmarkId = `${regionName}_${landmark.id}`;
+                      const isSelected = selectedLandmarks.includes(landmarkId);
+                      return (
+                        <button
+                          key={landmarkId}
+                          onClick={() => {
+                            if (isSelected) {
+                              setSelectedLandmarks(selectedLandmarks.filter(id => id !== landmarkId));
+                            } else {
+                              setSelectedLandmarks([...selectedLandmarks, landmarkId]);
+                            }
+                          }}
+                          className={`w-full flex items-center justify-between p-3 rounded-lg border transition-colors ${
+                            isSelected
+                              ? 'bg-primary-soft border-primary text-primary'
+                              : 'bg-background dark:bg-card-dark border-border-light dark:border-border-dark text-text-headings dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-800'
+                          }`}
+                        >
+                          <span className={`text-sm font-medium ${isSelected ? 'text-primary' : ''}`}>
+                            {landmark.name}
+                          </span>
+                          <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>
+                            {isSelected ? 'check_circle' : 'radio_button_unchecked'}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* 푸터 */}
+            <div className="flex gap-2 p-4 border-t border-border-light dark:border-border-dark">
+              <button
+                onClick={() => {
+                  setSelectedLandmarks([]);
+                  setShowLandmarkModal(false);
+                }}
+                className="flex-1 px-4 py-3 rounded-xl bg-background dark:bg-card-dark text-text-secondary-light dark:text-text-secondary-dark font-semibold hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+              >
+                초기화
+              </button>
+              <button
+                onClick={() => {
+                  setShowLandmarkModal(false);
+                  loadRegionData();
+                }}
+                className="flex-1 px-4 py-3 rounded-xl bg-primary text-white font-semibold hover:bg-primary-dark transition-colors"
+              >
+                {selectedLandmarks.length > 0 ? `${selectedLandmarks.length}개 선택됨` : '확인'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

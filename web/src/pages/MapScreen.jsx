@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import BottomNavigation from '../components/BottomNavigation';
 import { addNotification } from '../utils/notifications';
 import { getLocationByCoordinates } from '../utils/locationCoordinates';
 
@@ -35,6 +34,15 @@ const MapScreen = () => {
   const centerMarkerRef = useRef(null); // 지도 중심 고정 마커 (HTML 요소)
   const crosshairRef = useRef(null); // 가운데 표시선 (십자선)
   const locationPreviewMapRef = useRef(null); // 위치 미리보기 작은 지도
+  const [isRouteMode, setIsRouteMode] = useState(false); // 경로 모드 활성화 여부
+  const [selectedRoutePins, setSelectedRoutePins] = useState([]); // 선택된 경로 핀들
+  const routePolylineRef = useRef(null); // 경로 선 객체
+  const isRouteModeRef = useRef(false); // 최신 경로 모드 상태 저장용 ref
+
+  // isRouteMode 값이 바뀔 때마다 ref에도 반영 (마커 클릭 핸들러에서 최신 값 사용)
+  useEffect(() => {
+    isRouteModeRef.current = isRouteMode;
+  }, [isRouteMode]);
 
   // 현재 위치 가져오기 (먼저 실행)
   useEffect(() => {
@@ -104,6 +112,11 @@ const MapScreen = () => {
       }
 
       loadPosts(kakaoMap);
+      
+      // 경로 모드일 때 경로 다시 그리기
+      if (isRouteMode && selectedRoutePins.length >= 2) {
+        setTimeout(() => drawRoute(selectedRoutePins), 500);
+      }
 
       // 지도 범위 변경 시 보이는 핀 업데이트
       window.kakao.maps.event.addListener(kakaoMap, 'bounds_changed', () => {
@@ -231,7 +244,7 @@ const MapScreen = () => {
       });
 
       setPosts(validPosts);
-      createMarkers(validPosts, kakaoMap);
+      createMarkers(validPosts, kakaoMap, selectedRoutePins);
     } catch (error) {
       console.error('게시물 로드 실패:', error);
     }
@@ -262,7 +275,7 @@ const MapScreen = () => {
     return { lat: 37.5665, lng: 126.9780 };
   };
 
-  const createMarkers = (posts, kakaoMap) => {
+  const createMarkers = (posts, kakaoMap, routePins = []) => {
     markersRef.current.forEach(markerData => {
       if (markerData.overlay) {
         markerData.overlay.setMap(null);
@@ -283,6 +296,14 @@ const MapScreen = () => {
       // 게시물의 첫 번째 이미지 사용
       const imageUrl = post.images?.[0] || post.imageUrl || post.image || post.thumbnail;
       
+      // 선택된 핀인지 확인
+      const isSelected = routePins.some(p => p.post.id === post.id);
+      const borderColor = isSelected ? '#00BCD4' : 'white';
+      const borderWidth = isSelected ? '4px' : '3px';
+      const boxShadow = isSelected 
+        ? '0 3px 12px rgba(0, 188, 212, 0.5), 0 0 0 2px rgba(0, 188, 212, 0.3)' 
+        : '0 3px 12px rgba(0,0,0,0.3)';
+      
       const el = document.createElement('div');
       el.innerHTML = `
         <button 
@@ -291,15 +312,16 @@ const MapScreen = () => {
             z-index: ${index};
             width: 50px;
             height: 50px;
-            border: 3px solid white;
+            border: ${borderWidth} solid ${borderColor};
             border-radius: 4px;
-            box-shadow: 0 3px 12px rgba(0,0,0,0.3);
+            box-shadow: ${boxShadow};
             overflow: hidden;
             cursor: pointer;
             padding: 0;
             margin: 0;
             background: #f5f5f5;
             transition: transform 0.2s ease;
+            position: relative;
           " 
           data-post-id="${post.id}"
         >
@@ -314,6 +336,27 @@ const MapScreen = () => {
             alt="${post.location || '여행지'}"
             onerror="this.onerror=null; this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiByeD0iNCIgZmlsbD0iI0YzRjRGNiIvPgo8cGF0aCBkPSJNMjAgMTNDMTcuMjQgMTMgMTUgMTUuMjQgMTUgMThDMTUgMjAuNzYgMTcuMjQgMjMgMjAgMjNDMjIuNzYgMjMgMjUgMjAuNzYgMjUgMThDMjUgMTUuMjQgMjIuNzYgMTMgMjAgMTNaIiBmaWxsPSIjOUI5Q0E1Ii8+Cjwvc3ZnPg==';"
           />
+          ${isSelected ? `
+            <div style="
+              position: absolute;
+              top: -6px;
+              right: -6px;
+              width: 20px;
+              height: 20px;
+              background: #00BCD4;
+              border-radius: 50%;
+              border: 2px solid white;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              font-size: 12px;
+              font-weight: bold;
+              color: white;
+              box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+            ">
+              ${routePins.findIndex(p => p.post.id === post.id) + 1}
+            </div>
+          ` : ''}
         </button>
       `;
 
@@ -321,7 +364,12 @@ const MapScreen = () => {
       if (button) {
         button.addEventListener('click', (e) => {
           e.stopPropagation();
-          setSelectedPost({ post, allPosts: posts, currentPostIndex: index });
+          // 경로 모드일 때는 경로에 추가, 아니면 게시물 상세 보기
+          if (isRouteModeRef.current) {
+            handlePinSelectForRoute(post, position, index);
+          } else {
+            setSelectedPost({ post, allPosts: posts, currentPostIndex: index });
+          }
         });
 
         button.addEventListener('mouseenter', () => {
@@ -851,6 +899,233 @@ const MapScreen = () => {
     return 'location_on';
   };
 
+  // 핀을 경로에 추가하는 핸들러
+  const handlePinSelectForRoute = (post, position, index) => {
+    const pinData = {
+      post,
+      position,
+      index,
+      lat: position.getLat(),
+      lng: position.getLng()
+    };
+    
+    // 이미 선택된 핀인지 확인
+    const isAlreadySelected = selectedRoutePins.some(p => p.post.id === post.id);
+    
+    if (isAlreadySelected) {
+      // 이미 선택된 핀은 제거
+      const newPins = selectedRoutePins.filter(p => p.post.id !== post.id);
+      setSelectedRoutePins(newPins);
+      drawRoute(newPins);
+      // 마커 다시 생성하여 선택 상태 업데이트
+      if (map) {
+        createMarkers(posts, map, newPins);
+      }
+    } else {
+      // 새로운 핀 추가
+      const newPins = [...selectedRoutePins, pinData];
+      setSelectedRoutePins(newPins);
+      drawRoute(newPins);
+      // 마커 다시 생성하여 선택 상태 업데이트
+      if (map) {
+        createMarkers(posts, map, newPins);
+      }
+    }
+  };
+
+  // 경로 그리기
+  const drawRoute = (pins) => {
+    if (!map || !window.kakao || !window.kakao.maps) return;
+
+    // 기존 경로 선 제거
+    if (routePolylineRef.current) {
+      routePolylineRef.current.setMap(null);
+      routePolylineRef.current = null;
+    }
+
+    // 핀이 2개 이상일 때만 경로 그리기
+    if (pins.length < 2) return;
+
+    // 경로 좌표 배열 생성
+    const path = pins.map(pin => new window.kakao.maps.LatLng(pin.lat, pin.lng));
+
+    // Polyline 생성
+    const polyline = new window.kakao.maps.Polyline({
+      path: path,
+      strokeWeight: 4,
+      strokeColor: '#00BCD4',
+      strokeOpacity: 0.8,
+      strokeStyle: 'solid'
+    });
+
+    polyline.setMap(map);
+    routePolylineRef.current = polyline;
+  };
+
+  // 경로 모드 토글
+  const toggleRouteMode = () => {
+    const newMode = !isRouteMode;
+    setIsRouteMode(newMode);
+    
+    if (newMode) {
+      // 경로 모드 진입 시 상세 모달은 닫기
+      setSelectedPost(null);
+      // 경로 모드 시작 시 바텀 시트 숨기기
+      const hideOffset = sheetHeight + 20;
+      setIsSheetHidden(true);
+      setSheetOffset(hideOffset);
+    } else {
+      // 경로 모드 종료 시 경로 초기화 및 바텀 시트 다시 표시
+      clearRoute();
+      setIsSheetHidden(false);
+      setSheetOffset(0);
+    }
+  };
+
+  // 경로 초기화
+  const clearRoute = () => {
+    setSelectedRoutePins([]);
+    if (routePolylineRef.current) {
+      routePolylineRef.current.setMap(null);
+      routePolylineRef.current = null;
+    }
+    // 마커 다시 생성하여 선택 상태 제거
+    if (map) {
+      createMarkers(posts, map, []);
+    }
+  };
+
+  // 경로 저장
+  const saveRoute = () => {
+    if (selectedRoutePins.length < 2) {
+      alert('경로를 만들려면 최소 2개 이상의 핀을 선택해주세요.');
+      return;
+    }
+
+    const routeData = {
+      id: `route-${Date.now()}`,
+      pins: selectedRoutePins.map(pin => ({
+        id: pin.post.id,
+        location: pin.post.location || pin.post.detailedLocation || '여행지',
+        lat: pin.lat,
+        lng: pin.lng,
+        image: pin.post.images?.[0] || pin.post.imageUrl || pin.post.image || pin.post.thumbnail
+      })),
+      createdAt: new Date().toISOString()
+    };
+
+    // localStorage에 저장
+    try {
+      const existingRoutes = JSON.parse(localStorage.getItem('savedRoutes') || '[]');
+      const updatedRoutes = [routeData, ...existingRoutes];
+      localStorage.setItem('savedRoutes', JSON.stringify(updatedRoutes));
+      alert('경로가 저장되었습니다!');
+    } catch (error) {
+      console.error('경로 저장 실패:', error);
+      alert('경로 저장에 실패했습니다.');
+    }
+  };
+
+  // 경로 공유
+  const shareRoute = async () => {
+    if (selectedRoutePins.length < 2) {
+      alert('경로를 만들려면 최소 2개 이상의 핀을 선택해주세요.');
+      return;
+    }
+
+    const routeData = {
+      pins: selectedRoutePins.map(pin => ({
+        location: pin.post.location || pin.post.detailedLocation || '여행지',
+        lat: pin.lat,
+        lng: pin.lng
+      }))
+    };
+
+    // 공유 링크 생성 (실제로는 서버에 저장하고 링크를 받아야 함)
+    const shareUrl = `${window.location.origin}/map?route=${encodeURIComponent(JSON.stringify(routeData))}`;
+    
+    // Web Share API 사용 (지원하는 경우)
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: '여행 경로 공유',
+          text: `${selectedRoutePins.length}개의 장소를 포함한 여행 경로를 공유합니다.`,
+          url: shareUrl
+        });
+      } catch (error) {
+        // 사용자가 공유를 취소한 경우
+        if (error.name !== 'AbortError') {
+          copyToClipboard(shareUrl);
+        }
+      }
+    } else {
+      // Web Share API를 지원하지 않는 경우 클립보드에 복사
+      copyToClipboard(shareUrl);
+    }
+  };
+
+  // 클립보드에 복사
+  const copyToClipboard = (text) => {
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(text).then(() => {
+        alert('경로 링크가 클립보드에 복사되었습니다!');
+      }).catch(() => {
+        fallbackCopyToClipboard(text);
+      });
+    } else {
+      fallbackCopyToClipboard(text);
+    }
+  };
+
+  // 클립보드 복사 폴백
+  const fallbackCopyToClipboard = (text) => {
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    textArea.style.position = 'fixed';
+    textArea.style.opacity = '0';
+    document.body.appendChild(textArea);
+    textArea.select();
+    try {
+      document.execCommand('copy');
+      alert('경로 링크가 클립보드에 복사되었습니다!');
+    } catch (error) {
+      alert('링크 복사에 실패했습니다. 링크를 직접 복사해주세요: ' + text);
+    }
+    document.body.removeChild(textArea);
+  };
+
+  // 경로 모드 변경 시 경로 다시 그리기 및 마커 업데이트
+  useEffect(() => {
+    // 지도/게시물 없으면 아무 것도 하지 않음
+    if (!map || posts.length === 0) return;
+
+    if (isRouteMode) {
+      // 경로 모드: 2개 이상이면 경로 표시
+      if (selectedRoutePins.length >= 2) {
+        drawRoute(selectedRoutePins);
+      } else {
+        // 2개 미만이면 기존 선이 있으면 제거만
+        if (routePolylineRef.current) {
+          routePolylineRef.current.setMap(null);
+          routePolylineRef.current = null;
+        }
+      }
+
+      createMarkers(posts, map, selectedRoutePins);
+      return;
+    }
+
+    // 경로 모드 OFF: 선 제거 + (필요할 때만) 선택 핀 초기화
+    if (routePolylineRef.current) {
+      routePolylineRef.current.setMap(null);
+      routePolylineRef.current = null;
+    }
+    if (selectedRoutePins.length > 0) {
+      setSelectedRoutePins([]);
+    }
+    createMarkers(posts, map, []);
+  }, [isRouteMode, selectedRoutePins, map, posts]);
+
   return (
     <>
       <style>
@@ -872,7 +1147,7 @@ const MapScreen = () => {
       </style>
       <div className="phone-screen" style={{ 
         background: 'transparent',
-        borderRadius: '32px',
+        borderRadius: '0px',
         overflow: 'hidden',
         height: '100vh',
         display: 'flex',
@@ -883,13 +1158,13 @@ const MapScreen = () => {
       <main 
         ref={mapContainerRef}
         style={{ 
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: '68px',
-        overflow: 'hidden',
-        zIndex: 1,
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0, // 네비게이션바 제거 → 지도를 화면 맨 아래까지 확장
+          overflow: 'hidden',
+          zIndex: 1,
           pointerEvents: 'auto',
           width: '100%',
           height: '100%'
@@ -924,6 +1199,28 @@ const MapScreen = () => {
         zIndex: 10,
         pointerEvents: 'none'
       }}>
+        {/* 뒤로가기 버튼 - 검색창 왼쪽에 정렬 */}
+        <button
+          onClick={() => navigate(-1)}
+          style={{
+            width: '40px',
+            height: '40px',
+            borderRadius: '20px',
+            border: 'none',
+            background: 'rgba(255, 255, 255, 0.95)',
+            backdropFilter: 'blur(10px)',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            pointerEvents: 'auto'
+          }}
+        >
+          <span className="material-symbols-outlined" style={{ fontSize: '22px', color: '#333' }}>
+            arrow_back
+          </span>
+        </button>
         <div style={{
           flex: 1,
           display: 'flex',
@@ -1033,11 +1330,205 @@ const MapScreen = () => {
         </button>
       </div>
 
-      {/* 지도 컨트롤 버튼들 - 시트 상태에 따라 두 가지 고정 위치 */}
+      {/* 경로 모드 토글 버튼 */}
       <div style={{
+        position: 'absolute',
+        left: '16px',
+        // 네비게이션바 제거 → 68px 보정값 삭제, 시트 바로 위에 위치
+        bottom: isRouteMode
+          ? (selectedRoutePins.length >= 2 ? '200px' : '120px')
+          : (isSheetHidden ? '120px' : `${sheetHeight + 16}px`),
+        zIndex: 30,
+        transition: 'all 0.3s ease-out',
+        pointerEvents: 'auto'
+      }}>
+        <button
+          onClick={toggleRouteMode}
+          style={{
+            padding: '10px 16px',
+            borderRadius: '24px',
+            border: 'none',
+            background: isRouteMode ? '#00BCD4' : 'white',
+            color: isRouteMode ? 'white' : '#333',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '6px',
+            cursor: 'pointer',
+            fontSize: '14px',
+            fontWeight: '600',
+            transition: 'all 0.2s'
+          }}
+          onMouseEnter={(e) => {
+            if (!isRouteMode) {
+              e.currentTarget.style.background = '#f5f5f5';
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (!isRouteMode) {
+              e.currentTarget.style.background = 'white';
+            }
+          }}
+        >
+          <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>
+            {isRouteMode ? 'route' : 'route'}
+          </span>
+          {isRouteMode ? '경로 모드' : '경로 만들기'}
+        </button>
+      </div>
+
+      {/* 선택된 핀 개수 배지 (경로 모드일 때만 표시) */}
+      {isRouteMode && selectedRoutePins.length > 0 && (
+        <div style={{
           position: 'absolute',
-          right: '16px', // 항상 오른쪽 고정
-          bottom: isSheetHidden ? '120px' : `${68 + sheetHeight + 16}px`, // 시트 올라와 있을 때: 시트 오른쪽 상단 (시트 위쪽에 약간의 여유 공간), 시트 내려갔을 때: 오른쪽 하단
+          top: '110px',
+          left: '16px',
+          zIndex: 30,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px',
+          padding: '8px 12px',
+          background: '#00BCD4',
+          borderRadius: '20px',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+          pointerEvents: 'auto'
+        }}>
+          <span className="material-symbols-outlined" style={{ 
+            fontSize: '16px', 
+            color: 'white' 
+          }}>
+            location_on
+          </span>
+          <span style={{
+            fontSize: '13px',
+            fontWeight: '700',
+            color: 'white'
+          }}>
+            {selectedRoutePins.length}개 선택됨
+          </span>
+        </div>
+      )}
+
+      {/* 경로 관리 버튼들 (경로 모드일 때만 표시) */}
+      {isRouteMode && (
+        <div style={{
+          position: 'absolute',
+          right: '16px',
+          bottom: '84px',
+          zIndex: 30,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '8px',
+          pointerEvents: 'auto',
+          alignItems: 'flex-end'
+        }}>
+          <div style={{
+            background: 'white',
+            borderRadius: '12px',
+            padding: '12px',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px',
+            alignItems: 'flex-end'
+          }}>
+            {selectedRoutePins.length > 0 && (
+              <button
+                onClick={clearRoute}
+                style={{
+                  padding: '8px 12px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: '#f5f5f5',
+                  color: '#333',
+                  fontSize: '13px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = '#eeeeee';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = '#f5f5f5';
+                }}
+              >
+                초기화
+              </button>
+            )}
+            {selectedRoutePins.length >= 2 && (
+              <div style={{
+                display: 'flex',
+                flexDirection: 'row',
+                gap: '8px'
+              }}>
+                <button
+                  onClick={saveRoute}
+                  style={{
+                    padding: '8px 12px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    background: '#00BCD4',
+                    color: 'white',
+                    fontSize: '13px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    whiteSpace: 'nowrap'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = '#00ACC1';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = '#00BCD4';
+                  }}
+                >
+                  저장
+                </button>
+                <button
+                  onClick={shareRoute}
+                  style={{
+                    padding: '8px 12px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    background: '#4CAF50',
+                    color: 'white',
+                    fontSize: '13px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '4px',
+                    whiteSpace: 'nowrap'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = '#45a049';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = '#4CAF50';
+                  }}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>
+                    share
+                  </span>
+                  공유
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 지도 컨트롤 버튼들 - 경로 모드일 때는 숨김 */}
+      {!isRouteMode && (
+        <div style={{
+          position: 'absolute',
+          right: '16px',
+          // 네비게이션바 제거 → 68px 보정값 삭제, 시트 바로 위에 위치
+          bottom: isSheetHidden ? '120px' : `${sheetHeight + 16}px`,
           display: 'flex',
           flexDirection: 'column',
           gap: '8px',
@@ -1102,10 +1593,11 @@ const MapScreen = () => {
               my_location
             </span>
           </button>
-      </div>
+        </div>
+      )}
 
-      {/* 사진 다시 보기 버튼 - 시트가 숨겨졌을 때만 표시, 조금 위로 배치 */}
-      {isSheetHidden && (
+      {/* 사진 다시 보기 버튼 - 시트가 숨겨졌고 경로 모드가 아닐 때만 표시 */}
+      {isSheetHidden && !isRouteMode && (
           <button
             onClick={handleShowSheet}
             style={{
@@ -1148,15 +1640,15 @@ const MapScreen = () => {
         </button>
       )}
 
-      {/* 주변 장소 바텀 시트 - 항상 보임, 아래로 슬라이드 가능, 가벼운 스타일 */}
-      {!isSelectingLocation && (
+      {/* 주변 장소 바텀 시트 - 경로 모드가 아닐 때만 보임, 아래로 슬라이드 가능 */}
+      {!isSelectingLocation && !isRouteMode && (
       <div
         ref={sheetRef}
         style={{
           position: 'absolute',
           left: 0,
           right: 0,
-          bottom: '68px',
+          bottom: 0, // 네비게이션바 높이(68px)만큼 있던 여백 제거 → 화면 맨 아래까지 시트 내림
           backgroundColor: 'rgba(255, 255, 255, 0.9)',
           backdropFilter: 'blur(20px)',
           borderTopLeftRadius: '20px',
@@ -1205,7 +1697,7 @@ const MapScreen = () => {
           className="sheet-scroll-container"
           style={{ 
             flex: 1,
-            overflowX: 'auto',
+            overflowX: visiblePins.length >= 4 ? 'auto' : 'hidden', // 4개 이상일 때만 스크롤 가능
             overflowY: 'hidden',
             padding: '16px 16px 24px 16px',
             display: 'flex',
@@ -1214,14 +1706,69 @@ const MapScreen = () => {
             scrollBehavior: 'smooth',
             WebkitOverflowScrolling: 'touch',
             scrollbarWidth: 'thin',
-            scrollbarColor: '#d4d4d8 transparent'
-          }}>
+            scrollbarColor: '#d4d4d8 transparent',
+            cursor: visiblePins.length >= 4 ? 'grab' : 'default', // 4개 이상일 때만 grab 커서
+            userSelect: 'none',
+            touchAction: 'pan-x',
+            scrollSnapType: visiblePins.length >= 4 ? 'x mandatory' : 'none', // 4개 이상일 때만 스냅
+            scrollPadding: '0 16px'
+          }}
+          onMouseDown={(e) => {
+            if (e.target.closest('.pin-card')) return; // 핀 카드 클릭은 제외
+            e.currentTarget.style.cursor = 'grabbing';
+            const startX = e.pageX - e.currentTarget.scrollLeft;
+            const startScrollLeft = e.currentTarget.scrollLeft;
+            
+            const handleMouseMove = (e) => {
+              e.preventDefault();
+              const x = e.pageX - startX;
+              e.currentTarget.scrollLeft = startScrollLeft - x;
+            };
+            
+            const handleMouseUp = () => {
+              e.currentTarget.style.cursor = 'grab';
+              document.removeEventListener('mousemove', handleMouseMove);
+              document.removeEventListener('mouseup', handleMouseUp);
+            };
+            
+            document.addEventListener('mousemove', handleMouseMove);
+            document.addEventListener('mouseup', handleMouseUp);
+          }}
+          onTouchStart={(e) => {
+            if (e.target.closest('.pin-card')) return; // 핀 카드 터치는 제외
+            const startX = e.touches[0].pageX - e.currentTarget.scrollLeft;
+            const startScrollLeft = e.currentTarget.scrollLeft;
+            
+            const handleTouchMove = (e) => {
+              e.preventDefault();
+              const x = e.touches[0].pageX - startX;
+              e.currentTarget.scrollLeft = startScrollLeft - x;
+            };
+            
+            const handleTouchEnd = () => {
+              e.currentTarget.removeEventListener('touchmove', handleTouchMove);
+              e.currentTarget.removeEventListener('touchend', handleTouchEnd);
+            };
+            
+            e.currentTarget.addEventListener('touchmove', handleTouchMove, { passive: false });
+            e.currentTarget.addEventListener('touchend', handleTouchEnd);
+          }}
+        >
           {visiblePins.length > 0 ? (
             visiblePins.map((pin, index) => (
               <div
                 key={pin.id || index}
+                className="pin-card"
                 onClick={() => {
-                  // 지도를 해당 위치로 이동
+                  // 즉시 상세화면 표시
+                  if (pin.post) {
+                    setSelectedPost({ 
+                      post: pin.post, 
+                      allPosts: posts, 
+                      currentPostIndex: index 
+                    });
+                  }
+                  // 지도도 해당 위치로 이동
                   if (map && pin.lat && pin.lng) {
                     const position = new window.kakao.maps.LatLng(pin.lat, pin.lng);
                     map.panTo(position);
@@ -1238,7 +1785,11 @@ const MapScreen = () => {
                   position: 'relative',
                   boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
                   background: '#f5f5f5',
-                  transition: 'transform 0.2s'
+                  transition: 'transform 0.2s',
+                  scrollSnapAlign: visiblePins.length >= 4 ? 'start' : 'none',
+                  scrollSnapStop: visiblePins.length >= 4 ? 'always' : 'normal',
+                  display: 'flex',
+                  flexDirection: 'column' // 사진이 위, 지역명이 아래
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.transform = 'scale(1.05)';
@@ -1897,8 +2448,6 @@ const MapScreen = () => {
         </div>
       )}
 
-      {/* 하단 네비게이션 바 */}
-      <BottomNavigation />
     </div>
     </>
   );

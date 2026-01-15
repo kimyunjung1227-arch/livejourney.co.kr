@@ -1,4 +1,4 @@
-﻿import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import BottomNavigation from '../components/BottomNavigation';
 import { createPost } from '../api/posts';
@@ -9,6 +9,7 @@ import { safeSetItem, logLocalStorageStatus } from '../utils/localStorageManager
 import { checkNewBadges, awardBadge, hasSeenBadge, markBadgeAsSeen, calculateUserStats } from '../utils/badgeSystem';
 import { checkAndNotifyInterestPlace } from '../utils/interestPlaces';
 import { analyzeImageForTags, getRecommendedTags } from '../utils/aiImageAnalyzer';
+import { getWeatherByRegion } from '../api/weather';
 import { getCurrentTimestamp, getTimeAgo } from '../utils/timeUtils';
 import { gainExp } from '../utils/levelSystem';
 import { getBadgeCongratulationMessage, getBadgeDifficultyEffects } from '../utils/badgeMessages';
@@ -38,10 +39,84 @@ const UploadScreen = () => {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [autoTags, setAutoTags] = useState([]);
   const [loadingLocation, setLoadingLocation] = useState(false);
+  const weatherTagWhitelist = new Set([
+    '맑음', '맑은날씨', '청명한날씨', '화창한날씨', '쾌청한날씨',
+    '흐림', '흐린날씨', '구름많음', '구름조금',
+    '비', '소나기', '장마', '강수', '우천', '우천주의',
+    '눈', '강설', '눈발', '함박눈', '소낙눈',
+    '바람', '강풍', '미풍', '시원한바람', '따뜻한바람',
+    '안개', '짙은안개', '옅은안개',
+    '습도', '건조', '습함', '쾌적한습도',
+    '체감온도', '체감온도낮음', '체감온도높음', '쾌적한온도',
+    '일출', '일몰', '황금시간대', '블루아워', '골든아워',
+    '자외선', '자외선강함', '자외선주의', '자외선약함',
+    '봄날씨', '여름날씨', '가을날씨', '겨울날씨'
+  ]);
+
+  const normalizeTag = (tag) => (tag || '').replace('#', '').trim();
+
+  const dedupeHashtags = (tags) => {
+    const map = new Map();
+    (tags || []).forEach((tag) => {
+      const cleaned = normalizeTag(tag);
+      if (!cleaned) return;
+      const key = cleaned.toLowerCase();
+      if (!map.has(key)) {
+        map.set(key, `#${cleaned}`);
+      }
+    });
+    return Array.from(map.values());
+  };
+
+  const isWeatherTag = (tag) => {
+    const cleaned = normalizeTag(tag);
+    if (!cleaned) return false;
+    if (weatherTagWhitelist.has(cleaned)) return true;
+    if (cleaned.includes('날씨')) return true;
+    if (cleaned.includes('구름') || cleaned.includes('비') || cleaned.includes('눈')) return true;
+    return false;
+  };
+
+  const buildWeatherTagsFromCondition = (condition, temperatureText = '') => {
+    const tags = [];
+    const tempValue = parseInt(temperatureText.replace('℃', ''), 10);
+    const normalized = (condition || '').trim();
+
+    if (!normalized) return tags;
+
+    if (normalized.includes('맑음')) {
+      tags.push('맑음', '맑은날씨', '청명한날씨');
+    } else if (normalized.includes('구름')) {
+      tags.push('구름많음', '흐림');
+    } else if (normalized.includes('흐림')) {
+      tags.push('흐림', '흐린날씨');
+    } else if (normalized.includes('비')) {
+      tags.push('비', '우천', '강수');
+    } else if (normalized.includes('눈')) {
+      tags.push('눈', '강설');
+    } else if (normalized.includes('안개')) {
+      tags.push('안개', '옅은안개');
+    }
+
+    if (!Number.isNaN(tempValue)) {
+      if (tempValue >= 30) {
+        tags.push('체감온도높음', '자외선주의');
+      } else if (tempValue <= 0) {
+        tags.push('체감온도낮음');
+      }
+    }
+
+    return tags;
+  };
   const [loadingAITags, setLoadingAITags] = useState(false);
   const [showBadgeModal, setShowBadgeModal] = useState(false);
   const [earnedBadge, setEarnedBadge] = useState(null);
   const reanalysisTimerRef = useRef(null);
+
+  // 지도 관련 ref
+  const mapContainerRef = useRef(null);
+  const mapInstanceRef = useRef(null);
+  const markerRef = useRef(null);
 
   const getCurrentLocation = useCallback(async () => {
     if (!navigator.geolocation) return;
@@ -120,6 +195,117 @@ const UploadScreen = () => {
     }
   }, []);
 
+  // 업로드 화면 내 소형 지도 초기화
+  useEffect(() => {
+    if (!window.kakao || !window.kakao.maps) return;
+
+    const initSmallMap = () => {
+      if (!mapContainerRef.current) return;
+
+      const kakao = window.kakao;
+
+      // 초기 중심: 선택된 좌표 또는 서울
+      const centerLat = formData.coordinates?.lat || 37.5665;
+      const centerLng = formData.coordinates?.lng || 126.9780;
+
+      let map = mapInstanceRef.current;
+
+      if (!map) {
+        map = new kakao.maps.Map(mapContainerRef.current, {
+          center: new kakao.maps.LatLng(centerLat, centerLng),
+          level: 5
+        });
+        mapInstanceRef.current = map;
+
+        // 클릭으로 위치 선택
+        kakao.maps.event.addListener(map, 'click', (mouseEvent) => {
+          const latlng = mouseEvent.latLng;
+
+          // 마커 없으면 생성, 있으면 위치만 이동
+          if (!markerRef.current) {
+            markerRef.current = new kakao.maps.Marker({
+              position: latlng,
+              map
+            });
+          } else {
+            markerRef.current.setPosition(latlng);
+          }
+
+          // 좌표 → 주소 변환
+          if (kakao.maps.services) {
+            const geocoder = new kakao.maps.services.Geocoder();
+            geocoder.coord2Address(latlng.getLng(), latlng.getLat(), (result, status) => {
+              if (status === kakao.maps.services.Status.OK && result[0]) {
+                const address = result[0].address;
+                const roadAddress = result[0].road_address;
+
+                let locationName = '';
+                let detailedAddress = '';
+
+                if (roadAddress) {
+                  const parts = roadAddress.address_name.split(' ');
+                  locationName = parts.slice(0, 3).join(' ')
+                    .replace('특별시', '')
+                    .replace('광역시', '')
+                    .replace('특별자치시', '')
+                    .replace('특별자치도', '')
+                    .trim();
+                  detailedAddress = roadAddress.address_name;
+                } else if (address) {
+                  const parts = address.address_name.split(' ');
+                  locationName = parts.slice(0, 3).join(' ')
+                    .replace('특별시', '')
+                    .replace('광역시', '')
+                    .replace('특별자치시', '')
+                    .replace('특별자치도', '')
+                    .trim();
+                  detailedAddress = address.address_name;
+                }
+
+                setFormData(prev => ({
+                  ...prev,
+                  location: locationName,
+                  coordinates: { lat: latlng.getLat(), lng: latlng.getLng() },
+                  address: detailedAddress,
+                  detailedLocation: locationName
+                }));
+              } else {
+                setFormData(prev => ({
+                  ...prev,
+                  coordinates: { lat: latlng.getLat(), lng: latlng.getLng() }
+                }));
+              }
+            });
+          } else {
+            setFormData(prev => ({
+              ...prev,
+              coordinates: { lat: latlng.getLat(), lng: latlng.getLng() }
+            }));
+          }
+        });
+      } else {
+        // 이미 생성된 경우 중심만 이동
+        map.setCenter(new kakao.maps.LatLng(centerLat, centerLng));
+      }
+
+      // 선택된 좌표가 있으면 마커 위치 동기화
+      if (formData.coordinates) {
+        const pos = new kakao.maps.LatLng(formData.coordinates.lat, formData.coordinates.lng);
+        if (!markerRef.current) {
+          markerRef.current = new kakao.maps.Marker({
+            position: pos,
+            map
+          });
+        } else {
+          markerRef.current.setPosition(pos);
+        }
+      }
+    };
+
+    // 카카오맵이 로드되어 있으면 바로, 아니면 약간 대기
+    setTimeout(initSmallMap, 200);
+  }, [formData.coordinates, formData.location]);
+
   const analyzeImageAndGenerateTags = useCallback(async (file, location = '', note = '') => {
     // 사진 파일이 없으면 분석하지 않음
     if (!file) {
@@ -130,6 +316,22 @@ const UploadScreen = () => {
     setLoadingAITags(true);
     try {
       const analysisResult = await analyzeImageForTags(file, location, note);
+      const regionName = location?.split(' ')[0] || location || '';
+      let weatherTags = [];
+      
+      if (regionName) {
+        try {
+          const weatherResult = await getWeatherByRegion(regionName);
+          if (weatherResult?.success && weatherResult.weather) {
+            weatherTags = buildWeatherTagsFromCondition(
+              weatherResult.weather.condition,
+              weatherResult.weather.temperature
+            );
+          }
+        } catch (weatherError) {
+          logger.warn('날씨 태그 생성 실패 (무시):', weatherError);
+        }
+      }
       
       if (analysisResult.success && analysisResult.tags && analysisResult.tags.length > 0) {
         // 5개로 제한
@@ -149,15 +351,35 @@ const UploadScreen = () => {
             const notExists = !existingTags.includes(tagLower);
             // 한국어인지 확인 (한글, 공백, 숫자만 허용)
             const isKorean = /^[가-힣\s\d]+$/.test(tagWithoutHash);
-            return notExists && isKorean;
+            // 날씨 중심 태그만 추천
+            return notExists && isKorean && isWeatherTag(tagWithoutHash);
           })
           .slice(0, 5); // 최대 5개로 제한
         
-        const hashtagged = filteredTags.map(tag => 
-          tag.startsWith('#') ? tag : `#${tag}`
-        );
+        const mergedTags = [
+          ...weatherTags.map(tag => `#${normalizeTag(tag)}`),
+          ...filteredTags.map(tag => (tag.startsWith('#') ? tag : `#${tag}`))
+        ];
         
-        setAutoTags(hashtagged);
+        const dedupedTags = Array.from(
+          new Map(mergedTags.map(tag => [normalizeTag(tag).toLowerCase(), `#${normalizeTag(tag)}`])).values()
+        ).filter(tag => isWeatherTag(tag));
+        
+        let hashtagged = dedupedTags.slice(0, 5);
+        
+        if (hashtagged.length === 0) {
+          const currentMonth = new Date().getMonth() + 1;
+          const fallbackTags = currentMonth >= 3 && currentMonth <= 5
+            ? ['봄날씨', '화창한날씨', '일출', '골든아워', '쾌적한온도']
+            : currentMonth >= 6 && currentMonth <= 8
+              ? ['여름날씨', '맑음', '청명한날씨', '자외선주의', '체감온도높음']
+              : currentMonth >= 9 && currentMonth <= 11
+                ? ['가을날씨', '쾌청한날씨', '일몰', '황금시간대', '쾌적한온도']
+                : ['겨울날씨', '맑음', '청명한날씨', '일출', '체감온도낮음'];
+          hashtagged = fallbackTags.map(tag => `#${tag}`);
+        }
+        
+        setAutoTags(dedupeHashtags(hashtagged));
         setFormData(prev => ({
           ...prev,
           aiCategory: analysisResult.category,
@@ -174,13 +396,13 @@ const UploadScreen = () => {
         let defaultTags = [];
         
         if (currentMonth >= 3 && currentMonth <= 5) {
-          defaultTags = ['봄날씨', '화창한날씨', '일출', '골든아워', '여행'];
+          defaultTags = ['봄날씨', '화창한날씨', '일출', '골든아워', '쾌적한온도'];
         } else if (currentMonth >= 6 && currentMonth <= 8) {
-          defaultTags = ['여름날씨', '맑음', '청명한날씨', '자외선주의', '여행'];
+          defaultTags = ['여름날씨', '맑음', '청명한날씨', '자외선주의', '체감온도높음'];
         } else if (currentMonth >= 9 && currentMonth <= 11) {
-          defaultTags = ['가을날씨', '쾌청한날씨', '일몰', '황금시간대', '여행'];
+          defaultTags = ['가을날씨', '쾌청한날씨', '일몰', '황금시간대', '쾌적한온도'];
         } else {
-          defaultTags = ['겨울날씨', '맑음', '청명한날씨', '일출', '여행'];
+          defaultTags = ['겨울날씨', '맑음', '청명한날씨', '일출', '체감온도낮음'];
         }
         
         const filteredTags = defaultTags
@@ -190,7 +412,14 @@ const UploadScreen = () => {
           })
           .slice(0, 5);
         
-        setAutoTags(filteredTags.map(tag => `#${tag}`));
+        const fallbackMerged = [
+          ...weatherTags.map(tag => `#${normalizeTag(tag)}`),
+          ...filteredTags.map(tag => `#${normalizeTag(tag)}`)
+        ];
+        const fallbackDeduped = Array.from(
+          new Map(fallbackMerged.map(tag => [normalizeTag(tag).toLowerCase(), `#${normalizeTag(tag)}`])).values()
+        ).filter(tag => isWeatherTag(tag));
+        setAutoTags(dedupeHashtags(fallbackDeduped).slice(0, 5));
         
         setFormData(prev => ({
           ...prev,
@@ -210,20 +439,24 @@ const UploadScreen = () => {
       let defaultTags = [];
       
       if (currentMonth >= 3 && currentMonth <= 5) {
-        defaultTags = ['봄날씨', '화창한날씨', '일출', '골든아워', '여행'];
+        defaultTags = ['봄날씨', '화창한날씨', '일출', '골든아워', '쾌적한온도'];
       } else if (currentMonth >= 6 && currentMonth <= 8) {
-        defaultTags = ['여름날씨', '맑음', '청명한날씨', '자외선주의', '여행'];
+        defaultTags = ['여름날씨', '맑음', '청명한날씨', '자외선주의', '체감온도높음'];
       } else if (currentMonth >= 9 && currentMonth <= 11) {
-        defaultTags = ['가을날씨', '쾌청한날씨', '일몰', '황금시간대', '여행'];
+        defaultTags = ['가을날씨', '쾌청한날씨', '일몰', '황금시간대', '쾌적한온도'];
       } else {
-        defaultTags = ['겨울날씨', '맑음', '청명한날씨', '일출', '여행'];
+        defaultTags = ['겨울날씨', '맑음', '청명한날씨', '일출', '체감온도낮음'];
       }
       
       const filteredTags = defaultTags
         .filter(tag => !existingTags.includes(tag.toLowerCase()))
         .slice(0, 5);
       
-      setAutoTags(filteredTags.map(tag => `#${tag}`));
+      const fallbackMerged = filteredTags.map(tag => `#${normalizeTag(tag)}`);
+      const fallbackDeduped = Array.from(
+        new Map(fallbackMerged.map(tag => [normalizeTag(tag).toLowerCase(), `#${normalizeTag(tag)}`])).values()
+      ).filter(tag => isWeatherTag(tag));
+      setAutoTags(dedupeHashtags(fallbackDeduped).slice(0, 5));
       
       setFormData(prev => ({
         ...prev,
@@ -308,17 +541,20 @@ const UploadScreen = () => {
 
   // 태그가 변경될 때마다 자동 태그에서 이미 등록된 태그 제거
   useEffect(() => {
-    if (autoTags.length > 0 && formData.tags.length > 0) {
-      const existingTags = formData.tags.map(tag => 
-        tag.replace('#', '').toLowerCase()
-      );
-      
-      setAutoTags(prev => prev.filter(tag => {
+    if (autoTags.length === 0) return;
+    
+    const existingTags = formData.tags.map(tag => 
+      tag.replace('#', '').toLowerCase()
+    );
+    
+    setAutoTags(prev => {
+      const filtered = prev.filter(tag => {
         const tagClean = tag.replace('#', '').toLowerCase();
         return !existingTags.includes(tagClean);
-      }));
-    }
-  }, [formData.tags]);
+      });
+      return dedupeHashtags(filtered);
+    });
+  }, [formData.tags, autoTags.length]);
 
   const handlePhotoOptionSelect = useCallback((option) => {
     setShowPhotoOptions(false);
@@ -337,10 +573,17 @@ const UploadScreen = () => {
   }, [handleImageSelect]);
 
   const addTag = useCallback(() => {
-    if (tagInput.trim() && !formData.tags.includes(`#${tagInput.trim()}`)) {
+    const cleaned = normalizeTag(tagInput);
+    if (!cleaned) return;
+    
+    const exists = formData.tags.some(tag => {
+      return normalizeTag(tag).toLowerCase() === cleaned.toLowerCase();
+    });
+    
+    if (!exists) {
       setFormData(prev => ({
         ...prev,
-        tags: [...prev.tags, `#${tagInput.trim()}`]
+        tags: [...prev.tags, `#${cleaned}`]
       }));
       setTagInput('');
     }
@@ -901,7 +1144,7 @@ const UploadScreen = () => {
             }}
             className="flex size-10 shrink-0 items-center justify-center text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
           >
-            <span className="material-symbols-outlined text-xl">arrow_back</span>
+            <span className="text-xl">←</span>
           </button>
           <h1 className="flex-1 text-center text-lg font-bold" style={{ 
             fontSize: '18px',
@@ -919,14 +1162,16 @@ const UploadScreen = () => {
           paddingBottom: '100px',
           padding: '0 16px 100px 16px'
         }}>
-          <div className="p-4 space-y-4">
+          <div className="p-4 space-y-5">
+            {/* 1단계: 사진 / 동영상 선택 */}
             <div>
+              <p className="text-xs font-semibold text-gray-500 mb-1">STEP 1</p>
+              <p className="text-base font-bold mb-2">사진 / 동영상 선택</p>
               {(formData.images.length === 0 && formData.videos.length === 0) ? (
                 <button
                   onClick={() => setShowPhotoOptions(true)}
                   className="flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-subtle-light dark:border-subtle-dark px-6 py-12 text-center w-full hover:border-primary transition-colors"
                 >
-                  <span className="material-symbols-outlined text-4xl text-primary">add_circle</span>
                   <p className="text-base font-bold">사진 또는 동영상 추가</p>
                   <p className="text-xs text-gray-500 dark:text-gray-400">최대 10개까지</p>
                 </button>
@@ -1000,7 +1245,7 @@ const UploadScreen = () => {
                         onMouseDown={(e) => e.stopPropagation()}
                         className="absolute top-1 right-1 bg-black/70 text-white rounded-full p-1 hover:bg-black/90 transition-colors z-10"
                       >
-                        <span className="material-symbols-outlined text-xs">close</span>
+                        <span className="text-xs">×</span>
                       </button>
                     </div>
                   ))}
@@ -1014,7 +1259,7 @@ const UploadScreen = () => {
                         muted
                       />
                       <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-                        <span className="material-symbols-outlined text-white text-lg drop-shadow-lg">play_circle</span>
+                        <span className="text-white text-lg drop-shadow-lg">▶</span>
                       </div>
                       <button
                         onClick={(e) => {
@@ -1028,7 +1273,7 @@ const UploadScreen = () => {
                         onMouseDown={(e) => e.stopPropagation()}
                         className="absolute top-1 right-1 bg-black/70 text-white rounded-full p-1 hover:bg-black/90 transition-colors z-10"
                       >
-                        <span className="material-symbols-outlined text-xs">close</span>
+                        <span className="text-xs">×</span>
                       </button>
                     </div>
                   ))}
@@ -1043,45 +1288,72 @@ const UploadScreen = () => {
                       onMouseDown={(e) => e.stopPropagation()}
                       className="w-24 h-24 flex-shrink-0 rounded border-2 border-dashed border-subtle-light dark:border-subtle-dark flex items-center justify-center hover:border-primary transition-colors bg-gray-50 dark:bg-gray-800/50 snap-start z-10"
                     >
-                      <span className="material-symbols-outlined text-xl text-primary">add</span>
+                      <span className="text-xl text-primary">+</span>
                     </button>
                   )}
                 </div>
               )}
             </div>
 
+            {/* 2단계: 지도에서 위치 선택 */}
             <div>
               <label className="flex flex-col">
                 <div className="flex items-center justify-between pb-2">
-                  <p className="text-base font-medium">📍 어디에서 찍었나요?</p>
+                  <div>
+                    <p className="text-xs font-semibold text-gray-500 mb-1">STEP 2</p>
+                    <p className="text-base font-medium">지도로 위치 선택</p>
+                  </div>
                   {loadingLocation && (
                     <span className="text-xs text-primary">위치 감지 중...</span>
                   )}
                 </div>
-                <div className="flex w-full flex-1 items-stretch gap-2">
+                {/* 지도 미리보기 영역 */}
+                <div className="w-full rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 mb-3">
+                  <div 
+                    ref={mapContainerRef}
+                    style={{
+                      width: '100%',
+                      height: '200px'
+                    }}
+                  />
+                </div>
+                {/* 현재 선택된 위치 텍스트 & 현재 위치 버튼 */}
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm text-gray-600 dark:text-gray-300">
+                      {formData.location
+                        ? `선택된 위치: ${formData.location}`
+                        : '지도를 눌러 위치를 선택해주세요.'}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={getCurrentLocation}
+                      disabled={loadingLocation}
+                      className="flex items-center justify-center rounded-full border border-subtle-light dark:border-subtle-dark bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 px-3 h-8 text-xs font-medium text-primary transition-colors disabled:opacity-50"
+                      title="현재 위치로 지도 이동"
+                    >
+                      내 위치
+                    </button>
+                  </div>
+                  {/* 텍스트 입력은 보조로 유지 (자동 완성된 위치 수정용) */}
                   <input
-                    className="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg border border-subtle-light dark:border-subtle-dark bg-background-light dark:bg-background-dark focus:border-primary focus:ring-0 h-12 p-3 text-sm font-normal placeholder:text-placeholder-light dark:placeholder:text-placeholder-dark"
-                    placeholder="어디에서 찍은 사진인가요? (예: 서울 남산, 부산 해운대)"
+                    className="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg border border-subtle-light dark:border-subtle-dark bg-background-light dark:bg-background-dark focus:border-primary focus:ring-0 h-10 px-3 text-sm font-normal placeholder:text-placeholder-light dark:placeholder:text-placeholder-dark"
+                    placeholder="위치 이름을 수정하거나 직접 입력할 수 있어요 (예: 서울 남산, 부산 해운대)"
                     value={formData.location}
                     onChange={(e) => setFormData(prev => ({ ...prev, location: e.target.value }))}
                   />
-                  <button
-                    type="button"
-                    onClick={getCurrentLocation}
-                    disabled={loadingLocation}
-                    className="flex items-center justify-center rounded-lg border border-subtle-light dark:border-subtle-dark bg-primary/10 dark:bg-primary/20 hover:bg-primary/20 dark:hover:bg-primary/30 px-3 h-12 text-primary transition-colors disabled:opacity-50"
-                    title="현재 위치 자동 감지"
-                  >
-                    <span className="material-symbols-outlined text-lg">my_location</span>
-                  </button>
                 </div>
               </label>
             </div>
 
+            {/* 3단계: 태그 & 설명 */}
             <div>
               <label className="flex flex-col">
                 <div className="flex items-center justify-between pb-2">
-                  <p className="text-base font-medium">🏷️ 태그 추가</p>
+                  <div>
+                    <p className="text-xs font-semibold text-gray-500 mb-1">STEP 3</p>
+                    <p className="text-base font-medium">태그 추가</p>
+                  </div>
                   {loadingAITags && (
                     <span className="text-xs text-primary">AI 분석 중...</span>
                   )}
@@ -1116,39 +1388,19 @@ const UploadScreen = () => {
               
               
               {!loadingAITags && autoTags.length > 0 && (
-                <div className="mt-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-sm text-zinc-600 dark:text-zinc-400 flex items-center gap-1">
-                      <span className="material-symbols-outlined text-base">auto_awesome</span>
-                      <span className="font-semibold">AI 추천 태그</span>
-                      <span className="text-xs text-zinc-500">(클릭하여 추가)</span>
-                    </p>
-                    {formData.imageFiles.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => analyzeImageAndGenerateTags(formData.imageFiles[0], formData.location, formData.note)}
-                        className="text-xs text-primary hover:text-primary/80 font-semibold flex items-center gap-1"
-                      >
-                        <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>refresh</span>
-                        재분석
-                      </button>
-                    )}
-                  </div>
-                  <div className="flex flex-wrap gap-2">
+                <div className="mt-2">
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-1.5">AI 추천 태그</p>
+                  <div className="flex flex-wrap gap-1.5">
                     {autoTags.map((tag) => (
                       <button
                         key={tag}
                         onClick={() => addAutoTag(tag)}
-                        className="flex items-center gap-1.5 rounded-full bg-primary/8 dark:bg-primary/15 hover:bg-primary/12 dark:hover:bg-primary/20 py-1.5 px-3 text-sm font-medium text-primary dark:text-primary-soft hover:text-primary-dark transition-all border border-primary/20 dark:border-primary/30"
+                        className="rounded-full bg-primary/10 dark:bg-primary/15 hover:bg-primary/15 dark:hover:bg-primary/20 py-1 px-2.5 text-xs font-medium text-primary dark:text-primary-soft transition-all border border-primary/20 dark:border-primary/30"
                       >
-                        <span>{tag}</span>
-                        <span className="material-symbols-outlined text-base">add_circle</span>
+                        {tag}
                       </button>
                     ))}
                   </div>
-                  <p className="text-xs text-zinc-500 dark:text-zinc-500 mt-2">
-                    AI가 이미지를 분석해서 자동으로 생성한 태그입니다
-                  </p>
                 </div>
               )}
               
@@ -1164,9 +1416,9 @@ const UploadScreen = () => {
                         <span>{tag}</span>
                         <button
                           onClick={() => removeTag(tag)}
-                          className="flex items-center justify-center"
+                          className="flex items-center justify-center text-primary dark:text-orange-300 hover:opacity-70"
                         >
-                          <span className="material-symbols-outlined text-base">cancel</span>
+                          ×
                         </button>
                       </div>
                     ))}
@@ -1177,11 +1429,16 @@ const UploadScreen = () => {
 
             <div>
               <label className="flex flex-col">
-                <p className="text-base font-medium pb-2">✍️ 이 순간의 이야기 (선택사항)</p>
+                <div className="flex items-center justify-between pb-2">
+                  <div>
+                    <p className="text-xs font-semibold text-gray-500 mb-1">STEP 4 (선택)</p>
+                    <p className="text-base font-medium">지역 / 상황 설명</p>
+                  </div>
+                </div>
                 <div className="relative">
                   <textarea
                     className="form-textarea w-full rounded-lg border border-subtle-light dark:border-subtle-dark bg-background-light dark:bg-background-dark focus:border-primary focus:ring-0 p-3 text-sm font-normal placeholder:text-placeholder-light dark:placeholder:text-placeholder-dark resize-none"
-                    placeholder="지금 이곳이 어떤지(분위기, 사람, 날씨 등)를 간단히 적어주세요"
+                    placeholder="지금 이 지역과 상황이 어떤지(분위기, 사람, 날씨 등)를 간단히 적어주세요"
                     rows="3"
                     value={formData.note}
                     onChange={(e) => setFormData(prev => ({ ...prev, note: e.target.value }))}
@@ -1251,14 +1508,12 @@ const UploadScreen = () => {
                 onClick={() => handlePhotoOptionSelect('camera')}
                 className="w-full flex items-center justify-center gap-3 bg-white dark:bg-gray-800 border border-subtle-light dark:border-subtle-dark rounded-lg h-14 px-4 text-base font-semibold hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
               >
-                <span className="material-symbols-outlined">photo_camera</span>
                 <span>촬영하기</span>
               </button>
               <button
                 onClick={() => handlePhotoOptionSelect('gallery')}
                 className="w-full flex items-center justify-center gap-3 bg-white dark:bg-gray-800 border border-subtle-light dark:border-subtle-dark rounded-lg h-14 px-4 text-base font-semibold hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
               >
-                <span className="material-symbols-outlined">photo_library</span>
                 <span>갤러리에서 선택하기</span>
               </button>
             </div>
@@ -1282,8 +1537,8 @@ const UploadScreen = () => {
               <div className="flex justify-center mb-4">
                 <div className="relative">
                   <div className="flex items-center justify-center w-20 h-20 rounded-full bg-green-100 dark:bg-green-900/30">
-                    <span className="material-symbols-outlined text-green-600 dark:text-green-400 text-5xl">
-                      check_circle
+                    <span className="text-green-600 dark:text-green-400 text-5xl">
+                      ✓
                     </span>
                   </div>
                   <div className="absolute inset-0 rounded-full bg-green-500/20 animate-ping"></div>

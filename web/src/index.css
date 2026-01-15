@@ -20,50 +20,48 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  /* 그라데이션 배경 */
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  /* 좌우 흰 바탕 */
+  background: #ffffff;
   min-height: 100vh;
   overflow-x: hidden;
   overflow-y: auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 30px 20px;
+  padding: 0;
+  display: block;
 }
 
 #root {
   width: 100%;
-  max-width: 360px;
-  height: 780px;
-  margin: 0 auto;
+  max-width: 100%;
+  min-height: 100vh;
+  height: auto;
+  margin: 0;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  background: #ffffff;
 }
 
-/* 핸드폰 프레임 - 웹 브라우저에서만 표시 */
+/* 앱 컨테이너 - 가운데 정렬, 모바일 크기 제한 */
 .app-container {
-  width: 360px;
-  height: 780px;
+  width: 100%;
+  max-width: 414px; /* 모바일 최대 너비 */
+  min-height: 100vh;
+  height: auto;
   margin: 0 auto;
   background-color: #ffffff;
   position: relative;
-  border-radius: 40px;
-  overflow: hidden;
-  /* 핸드폰 프레임 효과 */
-  box-shadow: 
-    /* 내부 베젤 (검정) */
-    0 0 0 12px #1a1a1a,
-    /* 외부 베젤 (진회색) */
-    0 0 0 14px #2d2d2d,
-    /* 큰 그림자 */
-    0 25px 70px rgba(0, 0, 0, 0.6),
-    /* 중간 그림자 */
-    0 12px 30px rgba(0, 0, 0, 0.4),
-    /* 작은 그림자 */
-    0 6px 12px rgba(0, 0, 0, 0.3),
-    /* 내부 하이라이트 */
-    inset 0 1px 0 rgba(255, 255, 255, 0.2),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.3);
+  border-radius: 0;
+  overflow: visible;
+  box-shadow: none;
   display: flex;
   flex-direction: column;
+}
+
+/* 작은 화면에서는 전체 너비 사용 */
+@media (max-width: 414px) {
+  .app-container {
+    max-width: 100%;
+  }
 }
 
 /* 페이지 래퍼 - 표준 레이아웃 구조 */

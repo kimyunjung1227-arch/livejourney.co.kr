@@ -21,14 +21,6 @@ const SettingsScreen = () => {
   const toggleCameraPermission = () => setCameraPermission(!cameraPermission);
 
   // 메뉴 핸들러
-  const handleEditProfile = () => {
-    navigate('/personal-info-edit');
-  };
-
-  const handlePasswordChange = () => {
-    navigate('/password-change');
-  };
-
   const handleAccountConnection = () => {
     navigate('/account-connection');
   };
@@ -57,9 +49,6 @@ const SettingsScreen = () => {
     navigate('/terms-and-policies');
   };
 
-  const handleStorageManagement = () => {
-    navigate('/storage-management');
-  };
 
   const handleLogout = () => {
     setShowLogoutModal(true);
@@ -81,10 +70,10 @@ const SettingsScreen = () => {
   };
 
   return (
-    <div className="screen-layout bg-background-light dark:bg-background-dark">
-      <div className="screen-content">
+    <div className="screen-layout bg-background-light dark:bg-background-dark" style={{ height: '100vh', overflow: 'hidden' }}>
+      <div className="screen-content" style={{ height: '100%', overflowY: 'auto', overflowX: 'hidden' }}>
         {/* 헤더 */}
-        <header className="screen-header flex h-16 items-center justify-between border-b border-border-light bg-white dark:border-border-dark dark:bg-gray-900 px-4 shadow-sm">
+        <header className="screen-header flex h-16 items-center justify-between border-b border-border-light bg-white dark:border-border-dark dark:bg-gray-900 px-4 shadow-sm" style={{ position: 'sticky', top: 0, zIndex: 20 }}>
         <button 
           onClick={() => navigate('/profile')}
           className="flex size-12 shrink-0 items-center justify-center cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
@@ -98,38 +87,16 @@ const SettingsScreen = () => {
       </header>
 
         {/* 메인 콘텐츠 */}
-        <main className="flex-grow pb-28">
+        <main className="pb-28" style={{ minHeight: 'calc(100vh - 64px)' }}>
         <div className="flex flex-col">
-          {/* 개인 정보 및 계정 관리 */}
+          {/* 계정 관리 */}
           <div className="bg-surface-light dark:bg-surface-dark">
             <div className="px-4 pt-6 pb-3">
               <h2 className="text-base font-bold leading-normal text-black dark:text-white">
-                개인 정보 및 계정 관리
+                계정 관리
               </h2>
             </div>
             <div className="flex flex-col">
-              <button 
-                onClick={handleEditProfile}
-                className="flex h-14 items-center justify-between px-4 hover:bg-surface-subtle-light dark:hover:bg-surface-subtle-dark transition-colors"
-              >
-                <p className="text-base font-normal leading-normal text-black dark:text-white">
-                  개인 정보 수정
-                </p>
-                <span className="material-symbols-outlined text-black dark:text-white">
-                  chevron_right
-                </span>
-              </button>
-              <button 
-                onClick={handlePasswordChange}
-                className="flex h-14 items-center justify-between px-4 hover:bg-surface-subtle-light dark:hover:bg-surface-subtle-dark transition-colors"
-              >
-                <p className="text-base font-normal leading-normal text-black dark:text-white">
-                  비밀번호 변경
-                </p>
-                <span className="material-symbols-outlined text-black dark:text-white">
-                  chevron_right
-                </span>
-              </button>
               <button 
                 onClick={handleAccountConnection}
                 className="flex h-14 items-center justify-between px-4 hover:bg-surface-subtle-light dark:hover:bg-surface-subtle-dark transition-colors"
@@ -320,17 +287,6 @@ const SettingsScreen = () => {
                   chevron_right
                 </span>
               </button>
-              <button 
-                onClick={handleStorageManagement}
-                className="flex h-14 items-center justify-between px-4 hover:bg-surface-subtle-light dark:hover:bg-surface-subtle-dark transition-colors"
-              >
-                <p className="text-base font-normal leading-normal text-black dark:text-white">
-                  저장소 관리
-                </p>
-                <span className="material-symbols-outlined text-black dark:text-white">
-                  chevron_right
-                </span>
-              </button>
               <div className="flex h-14 items-center justify-between px-4">
                 <p className="text-base font-normal leading-normal text-black dark:text-white">
                   버전 정보
@@ -405,6 +361,7 @@ const SettingsScreen = () => {
           </div>
         </div>
       )}
+
     </div>
   );
 };

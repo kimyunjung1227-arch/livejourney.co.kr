@@ -13,12 +13,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, TYPOGRAPHY } from '../constants/styles';
 import { ScreenLayout, ScreenContent, ScreenHeader, ScreenBody } from '../components/ScreenLayout';
 import { getAvailableBadges, getEarnedBadges } from '../utils/badgeSystem';
+import { useScrollTabBar } from '../hooks/useScrollTabBar';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const BADGE_ITEM_WIDTH = (SCREEN_WIDTH - SPACING.md * 3) / 2;
 
 const BadgeListScreen = () => {
   const navigation = useNavigation();
+  const handleScroll = useScrollTabBar();
   const [filter, setFilter] = useState('acquired'); // 'acquired' or 'all'
   const [selectedBadge, setSelectedBadge] = useState(null);
   const [badges, setBadges] = useState([]);
@@ -218,6 +220,8 @@ const BadgeListScreen = () => {
               contentContainerStyle={styles.badgeList}
               columnWrapperStyle={styles.badgeRow}
               showsVerticalScrollIndicator={false}
+              onScroll={handleScroll}
+              scrollEventThrottle={16}
             />
           )}
         </ScreenBody>

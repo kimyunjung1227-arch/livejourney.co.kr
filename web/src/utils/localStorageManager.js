@@ -108,7 +108,12 @@ export const limitPostsCount = (maxCount = 100) => {
 export const clearAllMockData = () => {
   try {
     const posts = JSON.parse(localStorage.getItem('uploadedPosts') || '[]');
-    const userPosts = posts.filter(p => !p.id || !p.id.toString().startsWith('mock-'));
+    const userPosts = posts.filter(p => {
+      // id가 mock-로 시작하거나 userId가 mock_user_로 시작하는 데이터는 모두 제거
+      if (p.id && p.id.toString().startsWith('mock-')) return false;
+      if (p.userId && p.userId.toString().startsWith('mock_user_')) return false;
+      return true;
+    });
     localStorage.setItem('uploadedPosts', JSON.stringify(userPosts));
     console.log(`🗑️ 모든 Mock 데이터 삭제 완료`);
     return true;

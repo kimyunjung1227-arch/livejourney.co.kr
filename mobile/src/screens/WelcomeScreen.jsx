@@ -44,9 +44,6 @@ const WelcomeScreen = () => {
       <View style={styles.content}>
         <View style={styles.logoContainer}>
           <LiveJourneyLogo size={180} showText={true} />
-          <Text style={styles.subtitle}>
-            가기 전에 확인하고,{'\n'}실망 없이 즐기세요
-          </Text>
         </View>
       </View>
 

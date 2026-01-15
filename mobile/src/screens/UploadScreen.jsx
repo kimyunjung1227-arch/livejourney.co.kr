@@ -767,44 +767,13 @@ const UploadScreen = () => {
               {loadingAITags && (
                 <View style={styles.aiLoadingContainer}>
                   <ActivityIndicator size="small" color={COLORS.primary} />
-                  <Text style={styles.aiLoadingText}>AI가 이미지를 분석하고 있습니다...</Text>
-                </View>
-              )}
-
-              {!loadingAITags && formData.aiCategoryName && formData.images.length > 0 && (
-                <View style={styles.aiCategoryContainer}>
-                  <Text style={styles.aiCategoryEmoji}>{formData.aiCategoryIcon}</Text>
-                  <View style={styles.aiCategoryInfo}>
-                    <Text style={styles.aiCategoryLabel}>AI 자동 분류</Text>
-                    <Text style={styles.aiCategoryName}>{formData.aiCategoryName}</Text>
-                  </View>
-                  <View style={styles.aiCategoryBadge}>
-                    <Text style={styles.aiCategoryBadgeText}>자동</Text>
-                  </View>
+                  <Text style={styles.aiLoadingText}>AI 분석 중...</Text>
                 </View>
               )}
 
               {!loadingAITags && autoTags.length > 0 && (
                 <View style={styles.autoTagsContainer}>
-                  <View style={styles.autoTagsHeader}>
-                    <View style={styles.autoTagsHeaderLeft}>
-                      <Ionicons name="sparkles" size={16} color={COLORS.primary} />
-                      <Text style={styles.autoTagsTitle}>AI 추천 태그</Text>
-                      <Text style={styles.autoTagsSubtitle}>(클릭하여 추가)</Text>
-                    </View>
-                    {formData.imageFiles.length > 0 && (
-                      <TouchableOpacity
-                        onPress={() => {
-                          const firstFile = formData.imageFiles[0];
-                          if (firstFile) {
-                            analyzeImageAndGenerateTags(firstFile.uri, formData.location, formData.note);
-                          }
-                        }}
-                      >
-                        <Text style={styles.reanalyzeButton}>재분석</Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
+                  <Text style={styles.autoTagsTitle}>AI 추천 태그</Text>
                   <View style={styles.autoTagsList}>
                     {autoTags.map((tag) => (
                       <TouchableOpacity
@@ -813,13 +782,9 @@ const UploadScreen = () => {
                         onPress={() => addAutoTag(tag)}
                       >
                         <Text style={styles.autoTagText}>{tag}</Text>
-                        <Ionicons name="add-circle" size={16} color={COLORS.primary} />
                       </TouchableOpacity>
                     ))}
                   </View>
-                  <Text style={styles.autoTagsNote}>
-                    AI가 이미지를 분석해서 자동으로 생성한 태그입니다
-                  </Text>
                 </View>
               )}
 
@@ -1343,99 +1308,32 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: COLORS.primary,
   },
-  aiCategoryContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.md,
-    marginTop: SPACING.md,
-    padding: SPACING.md,
-    backgroundColor: COLORS.primary + '08',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.primary + '20',
-  },
-  aiCategoryEmoji: {
-    fontSize: 32,
-  },
-  aiCategoryInfo: {
-    flex: 1,
-  },
-  aiCategoryLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: COLORS.primary,
-    marginBottom: 4,
-  },
-  aiCategoryName: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: COLORS.text,
-  },
-  aiCategoryBadge: {
-    backgroundColor: COLORS.primary + '20',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
-  },
-  aiCategoryBadgeText: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: COLORS.primary,
-  },
   autoTagsContainer: {
-    marginTop: SPACING.md,
-  },
-  autoTagsHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: SPACING.sm,
-  },
-  autoTagsHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.xs,
+    marginTop: SPACING.sm,
   },
   autoTagsTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.text,
-  },
-  autoTagsSubtitle: {
     fontSize: 12,
-    color: COLORS.textSubtle,
-  },
-  reanalyzeButton: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: COLORS.primary,
+    fontWeight: '500',
+    color: COLORS.textSecondary,
+    marginBottom: SPACING.xs,
   },
   autoTagsList: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: SPACING.sm,
-    marginBottom: SPACING.xs,
+    gap: SPACING.xs,
   },
   autoTagButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.xs,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    borderRadius: 999,
-    backgroundColor: COLORS.primary + '08',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: COLORS.primary + '10',
     borderWidth: 1,
     borderColor: COLORS.primary + '20',
   },
   autoTagText: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '500',
     color: COLORS.primary,
-  },
-  autoTagsNote: {
-    fontSize: 12,
-    color: COLORS.textSubtle,
-    marginTop: SPACING.xs,
   },
   myTagsContainer: {
     marginTop: SPACING.md,

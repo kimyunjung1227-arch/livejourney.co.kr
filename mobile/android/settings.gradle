@@ -18,7 +18,7 @@ pluginManagement {
 }
 
 plugins {
-`1``````1`1`````    ``111``  id("com.facebook.react.settings")
+  id("com.facebook.react.settings")
   id("expo-autolinking-settings")
 }
 

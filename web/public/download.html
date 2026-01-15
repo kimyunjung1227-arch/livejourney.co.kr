@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LiveJourney - 다운로드</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 24px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 600px;
+            width: 100%;
+            padding: 48px 32px;
+            text-align: center;
+        }
+
+        .logo {
+            width: 120px;
+            height: 120px;
+            margin: 0 auto 24px;
+            background: linear-gradient(135deg, #00BCD4 0%, #0097A7 100%);
+            border-radius: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 48px;
+            color: white;
+            font-weight: bold;
+        }
+
+        h1 {
+            font-size: 32px;
+            color: #333;
+            margin-bottom: 8px;
+            font-weight: 700;
+        }
+
+        .subtitle {
+            color: #666;
+            font-size: 16px;
+            margin-bottom: 40px;
+        }
+
+        .download-section {
+            margin: 32px 0;
+            padding: 32px;
+            background: #f8f9fa;
+            border-radius: 16px;
+            border: 2px solid #e9ecef;
+        }
+
+        .download-section h2 {
+            font-size: 24px;
+            color: #333;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+        }
+
+        .download-section p {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 24px;
+            line-height: 1.6;
+        }
+
+        .download-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            padding: 16px 32px;
+            background: linear-gradient(135deg, #00BCD4 0%, #0097A7 100%);
+            color: white;
+            text-decoration: none;
+            border-radius: 12px;
+            font-size: 18px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(0, 188, 212, 0.3);
+            margin: 8px;
+        }
+
+        .download-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 188, 212, 0.4);
+        }
+
+        .download-btn.secondary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+
+        .download-btn.secondary:hover {
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .info-box {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 12px;
+            padding: 16px;
+            margin-top: 24px;
+            text-align: left;
+        }
+
+        .info-box strong {
+            color: #856404;
+            display: block;
+            margin-bottom: 8px;
+        }
+
+        .info-box ul {
+            color: #856404;
+            font-size: 14px;
+            padding-left: 20px;
+            line-height: 1.8;
+        }
+
+        .badge {
+            display: inline-block;
+            background: #28a745;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: 8px;
+        }
+
+        .version {
+            color: #999;
+            font-size: 14px;
+            margin-top: 8px;
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                padding: 32px 20px;
+            }
+
+            h1 {
+                font-size: 24px;
+            }
+
+            .download-section {
+                padding: 24px 16px;
+            }
+
+            .download-btn {
+                width: 100%;
+                justify-content: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">LJ</div>
+        <h1>LiveJourney</h1>
+        <p class="subtitle">지금 당신의 눈 앞에 펼쳐진 여정을 완성하세요</p>
+
+        <!-- 웹 앱 다운로드 -->
+        <div class="download-section">
+            <h2>
+                🌐 웹 앱
+                <span class="badge">즉시 사용</span>
+            </h2>
+            <p>브라우저에서 바로 사용할 수 있는 웹 버전입니다.</p>
+            <a href="/" class="download-btn secondary">
+                <span>🌐</span>
+                웹 앱 열기
+            </a>
+            <p class="version">최신 버전 | 실시간 업데이트</p>
+        </div>
+
+        <!-- 안드로이드 APK 다운로드 -->
+        <div class="download-section">
+            <h2>
+                📱 안드로이드 앱
+                <span class="badge">APK</span>
+            </h2>
+            <p>안드로이드 폰에 설치해서 사용할 수 있는 앱입니다.</p>
+            <a href="/app-debug.apk" class="download-btn" id="apkDownload" download>
+                <span>📥</span>
+                APK 다운로드
+            </a>
+            <p class="version">버전 1.0.0 | 약 15MB</p>
+            
+            <div class="info-box">
+                <strong>📋 설치 방법:</strong>
+                <ul>
+                    <li>APK 파일을 다운로드합니다</li>
+                    <li>핸드폰 설정 → 보안 → "알 수 없는 출처" 허용</li>
+                    <li>다운로드한 APK 파일을 탭하여 설치합니다</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- 안내 문구 -->
+        <div style="margin-top: 32px; color: #999; font-size: 14px;">
+            <p>💡 웹 앱은 모든 기기에서 즉시 사용 가능합니다</p>
+            <p style="margin-top: 8px;">💡 안드로이드 앱은 오프라인에서도 일부 기능 사용 가능합니다</p>
+        </div>
+    </div>
+
+    <script>
+        // APK 다운로드 링크 확인
+        document.getElementById('apkDownload').addEventListener('click', function(e) {
+            // GitHub Releases URL (필요시 수정)
+            const githubReleasesUrl = 'https://github.com/kimyunjung1227-arch/app/releases';
+            
+            // APK 파일 존재 확인 (선택사항)
+            fetch('/app-debug.apk', { method: 'HEAD' })
+                .then(response => {
+                    if (!response.ok) {
+                        // APK 파일이 없으면 GitHub Releases 페이지로 이동
+                        if (confirm('APK 파일을 찾을 수 없습니다.\nGitHub Releases 페이지로 이동하시겠습니까?')) {
+                            window.open(githubReleasesUrl, '_blank');
+                        }
+                        e.preventDefault();
+                    }
+                    // 파일이 있으면 정상 다운로드 진행
+                })
+                .catch(() => {
+                    // 네트워크 오류 시에도 정상 다운로드 시도 (파일이 있을 수 있음)
+                    console.log('APK 다운로드 시도 중...');
+                });
+        });
+    </script>
+</body>
+</html>
+

@@ -5,64 +5,63 @@ document.addEventListener('DOMContentLoaded', function() {
   
   if (!emailForm || !emailInput) {
     console.log('Form not found, skipping form handler');
-    return;
-  }
+  } else {
+    const emailSubmit = emailForm.querySelector('button[type="submit"]');
   
-  const emailSubmit = emailForm.querySelector('button[type="submit"]');
-
-  emailForm.addEventListener('submit', function(e) {
-    e.preventDefault();
-    
-    const email = emailInput.value.trim();
-    
-    if (!email) {
-      alert('이메일을 입력해주세요.');
-      return;
-    }
-
-    // 이메일 형식 검증
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      alert('올바른 이메일 형식을 입력해주세요.');
-      return;
-    }
-
-    // 버튼 상태 변경
-    emailSubmit.textContent = '처리 중...';
-    emailSubmit.disabled = true;
-
-    // TODO: 실제 백엔드 API 연동
-    // 현재는 로컬스토리지에 저장하고 시뮬레이션
-    setTimeout(() => {
-      // 로컬스토리지에 저장
-      const subscribers = JSON.parse(localStorage.getItem('subscribers') || '[]');
+    emailForm.addEventListener('submit', function(e) {
+      e.preventDefault();
       
-      if (subscribers.includes(email)) {
-        alert('이미 등록된 이메일입니다.');
-        emailSubmit.textContent = '초기 멤버 신청';
-        emailSubmit.disabled = false;
+      const email = emailInput.value.trim();
+      
+      if (!email) {
+        alert('이메일을 입력해주세요.');
         return;
       }
-
-      subscribers.push(email);
-      localStorage.setItem('subscribers', JSON.stringify(subscribers));
-
-      // 성공 처리
-      emailSubmit.textContent = '✓ 신청 완료!';
-      emailSubmit.classList.add('success');
-      emailInput.value = '';
-
-      // 감사 메시지
-      alert('감사합니다! 라이브 저니의 초기 멤버가 되셨습니다.\n서비스 출시 소식을 이메일로 보내드리겠습니다.');
-
-      // 3초 후 버튼 원상복구
+  
+      // 이메일 형식 검증
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        alert('올바른 이메일 형식을 입력해주세요.');
+        return;
+      }
+  
+      // 버튼 상태 변경
+      emailSubmit.textContent = '처리 중...';
+      emailSubmit.disabled = true;
+  
+      // TODO: 실제 백엔드 API 연동
+      // 현재는 로컬스토리지에 저장하고 시뮬레이션
       setTimeout(() => {
-        emailSubmit.textContent = '초기 멤버 신청';
-        emailSubmit.classList.remove('success');
-        emailSubmit.disabled = false;
-      }, 3000);
-    }, 1000);
-  });
+        // 로컬스토리지에 저장
+        const subscribers = JSON.parse(localStorage.getItem('subscribers') || '[]');
+        
+        if (subscribers.includes(email)) {
+          alert('이미 등록된 이메일입니다.');
+          emailSubmit.textContent = '초기 멤버 신청';
+          emailSubmit.disabled = false;
+          return;
+        }
+  
+        subscribers.push(email);
+        localStorage.setItem('subscribers', JSON.stringify(subscribers));
+  
+        // 성공 처리
+        emailSubmit.textContent = '✓ 신청 완료!';
+        emailSubmit.classList.add('success');
+        emailInput.value = '';
+  
+        // 감사 메시지
+        alert('감사합니다! 라이브 저니의 초기 멤버가 되셨습니다.\n서비스 출시 소식을 이메일로 보내드리겠습니다.');
+  
+        // 3초 후 버튼 원상복구
+        setTimeout(() => {
+          emailSubmit.textContent = '초기 멤버 신청';
+          emailSubmit.classList.remove('success');
+          emailSubmit.disabled = false;
+        }, 3000);
+      }, 1000);
+    });
+  }
 
   // Smooth scroll for anchor links
   document.querySelectorAll('a[href^="#"]').forEach(anchor => {
@@ -112,6 +111,9 @@ document.addEventListener('DOMContentLoaded', function() {
     '.faq-item',
     '.comparison-card',
     '.solution-item-card',
+    '.solution-revolution-card',
+    '.solution-summary-table',
+    '.solution-closing',
     '.value-card',
     '.story-connection .connection-card',
     '.problem-card',
@@ -135,6 +137,53 @@ document.addEventListener('DOMContentLoaded', function() {
       observer.observe(el);
     });
   });
+
+  // Before / After Slider (문제 섹션)
+  const beforeAfter = document.getElementById('problemBeforeAfter');
+  if (beforeAfter) {
+    const afterImage = beforeAfter.querySelector('.after-image');
+    const handleLine = beforeAfter.querySelector('.handle-line');
+    const handleCircle = beforeAfter.querySelector('.handle-circle');
+
+    const updateSlider = (clientX) => {
+      const rect = beforeAfter.getBoundingClientRect();
+      let offsetX = clientX - rect.left;
+      if (offsetX < 0) offsetX = 0;
+      if (offsetX > rect.width) offsetX = rect.width;
+
+      const percentage = (offsetX / rect.width) * 100;
+      afterImage.style.clipPath = `inset(0 0 0 ${percentage}%)`;
+      handleLine.style.left = `${percentage}%`;
+      handleCircle.style.left = `${percentage}%`;
+    };
+
+    let isDragging = false;
+
+    const startDrag = (e) => {
+      isDragging = true;
+      beforeAfter.classList.add('is-dragging');
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      updateSlider(clientX);
+    };
+
+    const onMove = (e) => {
+      if (!isDragging) return;
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      updateSlider(clientX);
+    };
+
+    const stopDrag = () => {
+      isDragging = false;
+      beforeAfter.classList.remove('is-dragging');
+    };
+
+    beforeAfter.addEventListener('mousedown', startDrag);
+    beforeAfter.addEventListener('touchstart', startDrag, { passive: true });
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('touchmove', onMove, { passive: true });
+    window.addEventListener('mouseup', stopDrag);
+    window.addEventListener('touchend', stopDrag);
+  }
 
   // Console message for developers
   console.log('%c🚀 라이브 저니에 오신 것을 환영합니다!', 'color: #667eea; font-size: 20px; font-weight: bold;');

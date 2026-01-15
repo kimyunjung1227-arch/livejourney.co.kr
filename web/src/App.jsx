@@ -46,9 +46,12 @@ function App() {
     initStatusBar();
   }, []);
 
+  // 개발 환경에서는 basename 없이, 프로덕션에서는 BASE_URL 사용
+  const basename = import.meta.env.PROD ? import.meta.env.BASE_URL : undefined;
+  
   return (
     <AuthProvider>
-      <Router>
+      <Router basename={basename}>
         <div className="app-container">
           <MockDataLoader />
           <div className="page-wrapper">

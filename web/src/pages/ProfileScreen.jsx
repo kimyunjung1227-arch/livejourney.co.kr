@@ -21,21 +21,31 @@ const ProfileScreen = () => {
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const [isEditMode, setIsEditMode] = useState(false);
   const [selectedPhotos, setSelectedPhotos] = useState([]);
-  const [activeTab, setActiveTab] = useState('my'); // 'my' | 'map' | 'timeline'
+  const [activeTab, setActiveTab] = useState('my'); // 'my' | 'map'
   
   // 지도 관련
   const mapRef = useRef(null);
   const mapInstance = useRef(null);
   const markersRef = useRef([]);
   const [mapLoading, setMapLoading] = useState(true);
+  
+  // 날짜 필터
+  const [selectedDate, setSelectedDate] = useState('');
+  const [filteredPosts, setFilteredPosts] = useState([]);
+  const [availableDates, setAvailableDates] = useState([]);
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [loginError, setLoginError] = useState('');
 
   // 모든 Hook을 먼저 선언한 후 useEffect 실행
   useEffect(() => {
-    // 로그인되지 않은 경우 useEffect 실행 안함
     if (!isAuthenticated) return;
     // localStorage에서 사용자 정보 로드
     const savedUser = JSON.parse(localStorage.getItem('user') || '{}');
-    setUser(savedUser);
+    // authUser가 있으면 우선 사용, 없으면 localStorage에서 로드한 값 사용
+    const userData = authUser || savedUser;
+    if (userData && Object.keys(userData).length > 0) {
+      setUser(userData);
+    }
 
     // 획득한 뱃지 로드
     const badges = getEarnedBadges();
@@ -43,7 +53,7 @@ const ProfileScreen = () => {
     logger.log('🏆 프로필 화면 - 획득한 뱃지 로드:', badges.length);
 
     // 대표 뱃지 로드 (반드시 획득한 뱃지 중에서 선택)
-    const userId = savedUser?.id;
+    const userId = userData?.id;
     let savedRepBadgeJson = userId 
       ? localStorage.getItem(`representativeBadge_${userId}`) || localStorage.getItem('representativeBadge')
       : localStorage.getItem('representativeBadge');
@@ -92,6 +102,18 @@ const ProfileScreen = () => {
     logger.debug('  사용자 ID:', userId);
     
     setMyPosts(userPosts);
+    setFilteredPosts(userPosts);
+    
+    // 사용 가능한 날짜 목록 추출
+    const dates = [...new Set(
+      userPosts
+        .map(post => {
+          const date = new Date(post.createdAt || post.timestamp || Date.now());
+          return date.toISOString().split('T')[0]; // YYYY-MM-DD 형식
+        })
+        .filter(Boolean)
+    )].sort((a, b) => new Date(b) - new Date(a));
+    setAvailableDates(dates);
 
     // 알림 개수 업데이트
     setUnreadNotificationCount(getUnreadCount());
@@ -118,7 +140,32 @@ const ProfileScreen = () => {
           내게시물: updatedUserPosts.length,
           사용자ID: userId
         });
+        
+        const previousPostsCount = myPosts.length;
         setMyPosts(updatedUserPosts);
+        
+        // 사용 가능한 날짜 목록 업데이트
+        const dates = [...new Set(
+          updatedUserPosts
+            .map(post => {
+              const date = new Date(post.createdAt || post.timestamp || Date.now());
+              return date.toISOString().split('T')[0]; // YYYY-MM-DD 형식
+            })
+            .filter(Boolean)
+        )].sort((a, b) => new Date(b) - new Date(a));
+        setAvailableDates(dates);
+        
+        // 새 게시물이 추가되면 해당 날짜로 자동 선택 (선택된 날짜가 없을 때만)
+        if (updatedUserPosts.length > previousPostsCount && !selectedDate && activeTab === 'map') {
+          const newPost = updatedUserPosts.find(p => !myPosts.find(op => op.id === p.id));
+          if (newPost) {
+            const newPostDate = new Date(newPost.createdAt || newPost.timestamp || Date.now());
+            const dateStr = newPostDate.toISOString().split('T')[0];
+            if (dates.includes(dateStr)) {
+              setSelectedDate(dateStr);
+            }
+          }
+        }
         
         // 레벨 정보도 업데이트
         const updatedLevelInfo = getUserLevel();
@@ -140,11 +187,21 @@ const ProfileScreen = () => {
       logger.debug('📊 레벨 업데이트:', updatedLevelInfo);
     };
 
+    // 사용자 정보 업데이트 이벤트 리스너
+    const handleUserUpdate = () => {
+      const updatedUser = JSON.parse(localStorage.getItem('user') || '{}');
+      const userData = authUser || updatedUser;
+      if (userData && Object.keys(userData).length > 0) {
+        setUser(userData);
+      }
+    };
+
     window.addEventListener('notificationUpdate', handleNotificationUpdate);
     window.addEventListener('newPostsAdded', handlePostsUpdate);
     window.addEventListener('storage', handlePostsUpdate);
     window.addEventListener('badgeEarned', handleBadgeUpdate);
     window.addEventListener('levelUp', handleLevelUpdate);
+    window.addEventListener('userUpdated', handleUserUpdate);
     
     return () => {
       window.removeEventListener('notificationUpdate', handleNotificationUpdate);
@@ -152,8 +209,48 @@ const ProfileScreen = () => {
       window.removeEventListener('storage', handlePostsUpdate);
       window.removeEventListener('badgeEarned', handleBadgeUpdate);
       window.removeEventListener('levelUp', handleLevelUpdate);
+      window.removeEventListener('userUpdated', handleUserUpdate);
     };
-  }, []);
+  }, [isAuthenticated, authUser]);
+
+  // 날짜 필터 적용
+  useEffect(() => {
+    if (activeTab === 'map') {
+      let filtered = [...myPosts];
+      
+      if (selectedDate) {
+        const filterDate = new Date(selectedDate);
+        filterDate.setHours(0, 0, 0, 0);
+        const nextDay = new Date(filterDate);
+        nextDay.setDate(nextDay.getDate() + 1);
+        
+        filtered = filtered.filter(post => {
+          const postDate = new Date(post.createdAt || post.timestamp || Date.now());
+          postDate.setHours(0, 0, 0, 0);
+          return postDate >= filterDate && postDate < nextDay;
+        });
+      }
+      
+      setFilteredPosts(filtered);
+    } else {
+      setFilteredPosts(myPosts);
+    }
+  }, [myPosts, selectedDate, activeTab]);
+  
+  // 새 게시물 추가 시 해당 날짜로 자동 선택
+  useEffect(() => {
+    if (myPosts.length > 0 && !selectedDate && activeTab === 'map') {
+      const latestPost = myPosts[0];
+      if (latestPost) {
+        const latestPostDate = new Date(latestPost.createdAt || latestPost.timestamp || Date.now());
+        const dateStr = latestPostDate.toISOString().split('T')[0];
+        // availableDates에 해당 날짜가 있으면 자동 선택
+        if (availableDates.includes(dateStr)) {
+          setSelectedDate(dateStr);
+        }
+      }
+    }
+  }, [myPosts.length, availableDates, activeTab]);
 
   // 지도 초기화 및 마커 표시
   const initMap = useCallback(() => {
@@ -161,7 +258,7 @@ const ProfileScreen = () => {
       kakaoLoaded: !!window.kakao, 
       mapRefExists: !!mapRef.current, 
       activeTab, 
-      postsCount: myPosts.length 
+      postsCount: filteredPosts.length 
     });
 
     if (!window.kakao || !window.kakao.maps) {
@@ -182,13 +279,16 @@ const ProfileScreen = () => {
     }
 
     try {
-      // 기존 마커 제거
+      // 기존 마커 및 선 제거
       markersRef.current.forEach(markerData => {
         if (markerData.overlay) {
           markerData.overlay.setMap(null);
         }
         if (markerData.marker) {
           markerData.marker.setMap(null);
+        }
+        if (markerData.polyline) {
+          markerData.polyline.setMap(null);
         }
       });
       markersRef.current = [];
@@ -204,8 +304,8 @@ const ProfileScreen = () => {
       let centerLng = 126.9780;
       let level = 6;
 
-      if (myPosts.length > 0) {
-        const firstPost = myPosts[0];
+      if (filteredPosts.length > 0) {
+        const firstPost = filteredPosts[0];
         const coords = firstPost.coordinates || getCoordinatesByLocation(firstPost.detailedLocation || firstPost.location);
         if (coords) {
           centerLat = coords.lat;
@@ -271,15 +371,18 @@ const ProfileScreen = () => {
 
       // 마커 생성 함수 (지도 로드 후 호출)
       const createMarkersAfterMapLoad = (map) => {
-        logger.log('📍 마커 생성 시작:', myPosts.length);
+        logger.log('📍 마커 생성 시작:', filteredPosts.length);
         
-        // 기존 마커 제거
+        // 기존 마커 및 선 제거
         markersRef.current.forEach(markerData => {
           if (markerData.overlay) {
             markerData.overlay.setMap(null);
           }
           if (markerData.marker) {
             markerData.marker.setMap(null);
+          }
+          if (markerData.polyline) {
+            markerData.polyline.setMap(null);
           }
         });
         markersRef.current = [];
@@ -305,11 +408,11 @@ const ProfileScreen = () => {
           });
 
           window.kakao.maps.event.addListener(marker, 'click', () => {
-            const currentIndex = myPosts.findIndex(p => p.id === post.id);
+            const currentIndex = filteredPosts.findIndex(p => p.id === post.id);
             navigate(`/post/${post.id}`, {
               state: {
                 post: post,
-                allPosts: myPosts,
+                allPosts: filteredPosts,
                 currentPostIndex: currentIndex >= 0 ? currentIndex : 0
               }
             });
@@ -359,11 +462,11 @@ const ProfileScreen = () => {
           const button = el.querySelector('button');
           if (button) {
             button.addEventListener('click', () => {
-              const currentIndex = myPosts.findIndex(p => p.id === post.id);
+              const currentIndex = filteredPosts.findIndex(p => p.id === post.id);
               navigate(`/post/${post.id}`, {
                 state: {
                   post: post,
-                  allPosts: myPosts,
+                  allPosts: filteredPosts,
                   currentPostIndex: currentIndex >= 0 ? currentIndex : 0
                 }
               });
@@ -433,10 +536,34 @@ const ProfileScreen = () => {
           hasValidMarker = true;
         };
 
-        // 모든 게시물에 대해 마커 생성
-        myPosts.forEach((post, index) => {
-          createMarker(post, index, map, bounds);
+        // 필터링된 게시물에 대해 마커 생성 및 좌표 수집
+        const sortedPosts = [...filteredPosts].sort((a, b) => {
+          const dateA = new Date(a.createdAt || a.timestamp || 0);
+          const dateB = new Date(b.createdAt || b.timestamp || 0);
+          return dateA - dateB;
         });
+        
+        const pathCoordinates = [];
+        sortedPosts.forEach((post, index) => {
+          createMarker(post, index, map, bounds);
+          const coords = post.coordinates || getCoordinatesByLocation(post.detailedLocation || post.location);
+          if (coords && coords.lat && coords.lng) {
+            pathCoordinates.push(new window.kakao.maps.LatLng(coords.lat, coords.lng));
+          }
+        });
+
+        // 경로 선 그리기 (2개 이상의 좌표가 있을 때)
+        if (pathCoordinates.length >= 2) {
+          const polyline = new window.kakao.maps.Polyline({
+            path: pathCoordinates,
+            strokeWeight: 3,
+            strokeColor: '#14B8A6', // primary 색상
+            strokeOpacity: 0.7,
+            strokeStyle: 'solid'
+          });
+          polyline.setMap(map);
+          markersRef.current.push({ polyline: polyline });
+        }
 
         // 마커 생성 완료 후 지도 범위 조정
         setTimeout(() => {
@@ -474,13 +601,31 @@ const ProfileScreen = () => {
       logger.error('지도 초기화 오류:', error);
       setMapLoading(false);
     }
-  }, [myPosts, activeTab, navigate]);
+  }, [filteredPosts, activeTab, navigate, selectedDate]);
 
-  // 탭 변경 시 지도 초기화
+  // 탭 변경 또는 날짜 변경 시 지도 초기화
   useEffect(() => {
     if (activeTab === 'map') {
-      logger.log('🗺️ 나의 기록 지도 탭 활성화');
+      logger.log('🗺️ 나의 기록 지도 탭 활성화 또는 날짜 변경');
       setMapLoading(true);
+      
+      // 기존 마커 및 선 제거
+      markersRef.current.forEach(markerData => {
+        try {
+          if (markerData.overlay) {
+            markerData.overlay.setMap(null);
+          }
+          if (markerData.marker) {
+            markerData.marker.setMap(null);
+          }
+          if (markerData.polyline) {
+            markerData.polyline.setMap(null);
+          }
+        } catch (error) {
+          logger.warn('마커 제거 오류 (무시):', error);
+        }
+      });
+      markersRef.current = [];
       
       // DOM이 완전히 렌더링된 후 지도 초기화
       const initTimer = setTimeout(() => {
@@ -521,6 +666,9 @@ const ProfileScreen = () => {
             if (markerData.marker) {
               markerData.marker.setMap(null);
             }
+            if (markerData.polyline) {
+              markerData.polyline.setMap(null);
+            }
           } catch (error) {
             logger.warn('마커 제거 오류 (무시):', error);
           }
@@ -531,7 +679,7 @@ const ProfileScreen = () => {
       }
       setMapLoading(false);
     }
-  }, [activeTab, myPosts, initMap]);
+  }, [activeTab, filteredPosts, initMap, selectedDate]);
 
   const handleLogout = () => {
     // 로그아웃 플래그 설정
@@ -576,7 +724,7 @@ const ProfileScreen = () => {
     localStorage.setItem('uploadedPosts', JSON.stringify(filteredPosts));
 
     // 내 게시물 목록 업데이트
-    const userId = user.id;
+    const userId = user?.id || authUser?.id;
     const updatedMyPosts = filteredPosts.filter(post => post.userId === userId);
     setMyPosts(updatedMyPosts);
 
@@ -589,7 +737,8 @@ const ProfileScreen = () => {
 
   // 대표 뱃지 선택
   const selectRepresentativeBadge = (badge) => {
-    const userId = user?.id;
+    const currentUser = user || authUser;
+    const userId = currentUser?.id;
     if (userId) {
       localStorage.setItem(`representativeBadge_${userId}`, JSON.stringify(badge));
     }
@@ -598,148 +747,141 @@ const ProfileScreen = () => {
     setShowBadgeSelector(false);
     
     // user 정보 업데이트
-    const updatedUser = { ...user, representativeBadge: badge };
-    localStorage.setItem('user', JSON.stringify(updatedUser));
-    setUser(updatedUser);
+    if (currentUser) {
+      const updatedUser = { ...currentUser, representativeBadge: badge };
+      localStorage.setItem('user', JSON.stringify(updatedUser));
+      setUser(updatedUser);
+    }
     
     logger.log('✅ 대표 뱃지 선택:', badge.name);
   };
 
   // 대표 뱃지 제거
   const removeRepresentativeBadge = () => {
-    const userId = user?.id;
+    const currentUser = user || authUser;
+    const userId = currentUser?.id;
     if (userId) {
       localStorage.removeItem(`representativeBadge_${userId}`);
     }
     localStorage.removeItem('representativeBadge'); // 호환성 유지
     setRepresentativeBadge(null);
     
-    const updatedUser = { ...user, representativeBadge: null };
-    localStorage.setItem('user', JSON.stringify(updatedUser));
-    setUser(updatedUser);
+    if (currentUser) {
+      const updatedUser = { ...currentUser, representativeBadge: null };
+      localStorage.setItem('user', JSON.stringify(updatedUser));
+      setUser(updatedUser);
+    }
     
     logger.log('❌ 대표 뱃지 제거');
   };
 
-  // 사용자가 없을 때 계정연결하기 화면 표시
-  if (!user || !authUser) {
-    return (
-      <div className="screen-layout bg-background-light dark:bg-background-dark">
-        {/* 계정 연결 안내 화면은 스크롤 없이 한 화면에 고정 */}
-        <div className="screen-content" style={{ overflow: 'hidden' }}>
-          {/* 헤더 */}
-          <header className="screen-header bg-white dark:bg-gray-900 flex items-center p-4 justify-between">
-            <button 
-              onClick={() => navigate('/main')}
-              className="flex size-12 shrink-0 items-center justify-center text-text-primary-light dark:text-text-primary-dark hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
-            >
-              <span className="material-symbols-outlined text-2xl">arrow_back</span>
-            </button>
-            <h1 className="text-text-primary-light dark:text-text-primary-dark text-base font-semibold">프로필</h1>
-            <div className="w-12"></div>
-          </header>
-
-          {/* 계정연결하기 유도 화면 - 살짝 상단으로 올린 레이아웃 */}
-          <div className="screen-body flex flex-col items-center justify-start px-6 pt-16 pb-8">
-            <div className="w-full max-w-sm text-center">
-              {/* 아이콘 */}
-              <div className="mb-6 flex justify-center">
-                <div className="w-24 h-24 rounded-full bg-primary/10 dark:bg-primary/20 flex items-center justify-center">
-                  <span className="material-symbols-outlined text-primary text-5xl">account_circle</span>
-        </div>
-              </div>
-
-              {/* 제목 */}
-              <h2 className="text-2xl font-bold text-text-primary-light dark:text-text-primary-dark mb-2">
-                계정을 연결해주세요
-              </h2>
-              <p className="text-text-secondary-light dark:text-text-secondary-dark text-sm mb-8">
-                계정을 연결하면 기록을 저장하고<br />
-                뱃지를 획득할 수 있어요
-              </p>
-
-              {/* 계정연결하기 버튼 */}
-              <button
-                onClick={() => {
-                  // 소셜로그인 화면으로 이동
-                  sessionStorage.setItem('showLoginScreen', 'true');
-                  navigate('/start');
-                }}
-                className="w-full bg-primary text-white py-4 px-6 rounded-xl font-bold text-base hover:bg-primary/90 transition-colors shadow-lg flex items-center justify-center gap-2 mb-4"
-              >
-                <span className="material-symbols-outlined">link</span>
-                계정연결하기
-              </button>
-
-              {/* 안내 메시지 */}
-              <p className="text-xs text-text-secondary-light dark:text-text-secondary-dark">
-                소셜 로그인으로 간편하게 시작할 수 있어요
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <BottomNavigation />
-      </div>
-    );
-  }
 
   const badgeCount = earnedBadges.length;
 
-  // 로그인되지 않은 경우 로그인 유도 화면 렌더링
+  // 프로필 화면 안에서 사용할 소셜 로그인 핸들러
+  const handleSocialLogin = async (provider) => {
+    setLoginLoading(true);
+    setLoginError('');
+
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+      const providerLower = provider.toLowerCase();
+      let authEndpoint = '';
+
+      if (providerLower === 'kakao') {
+        authEndpoint = `${apiUrl}/api/auth/kakao`;
+      } else if (providerLower === 'naver') {
+        authEndpoint = `${apiUrl}/api/auth/naver`;
+      } else if (providerLower === 'google') {
+        authEndpoint = `${apiUrl}/api/auth/google`;
+      } else {
+        throw new Error('지원하지 않는 소셜 로그인 제공자입니다.');
+      }
+
+      window.location.href = authEndpoint;
+    } catch (error) {
+      console.error('소셜 로그인 실패:', error);
+      setLoginError(`${provider} 로그인에 실패했습니다.`);
+      setLoginLoading(false);
+    }
+  };
+
+  // 로그인되지 않은 경우: 프로필 화면 안에서 소셜 로그인 카드 표시
   if (!isAuthenticated) {
     return (
-      <div className="relative flex h-full w-full flex-col bg-white dark:bg-zinc-900">
-        {/* 헤더 */}
-        <div className="sticky top-0 z-10 flex items-center justify-between bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-          <h1 className="text-lg font-bold text-text-primary-light dark:text-text-primary-dark">프로필</h1>
-        </div>
+      <div className="screen-layout bg-white dark:bg-zinc-900">
+        <div className="screen-content">
+          {/* 헤더 */}
+          <header className="screen-header bg-white dark:bg-gray-900 flex items-center p-4 justify-between shadow-sm">
+            <h1 className="text-lg font-bold text-text-primary-light dark:text-text-primary-dark">
+              프로필
+            </h1>
+          </header>
 
-        {/* 로그인 유도 컨텐츠 */}
-        <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
-          <div className="w-24 h-24 mb-6 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
-            <span className="material-symbols-outlined text-6xl text-gray-400 dark:text-gray-500">
-              person
-            </span>
-          </div>
-          
-          <h2 className="text-xl font-bold text-text-primary-light dark:text-text-primary-dark mb-3">
-            로그인이 필요합니다
-          </h2>
-          
-          <p className="text-sm text-text-secondary-light dark:text-text-secondary-dark mb-6 max-w-sm">
-            로그인하시면 게시물 업로드, 뱃지 획득, 커뮤니티 참여 등 다양한 기능을 사용하실 수 있습니다.
-          </p>
-
-          <button
-            onClick={() => navigate('/start')}
-            className="flex items-center justify-center gap-2 px-6 py-3 bg-primary text-white rounded-full font-semibold hover:bg-primary-dark active:scale-95 transition-all shadow-lg"
+          {/* 소셜 로그인 화면 - 화면 정중앙 배치 */}
+          <main
+            className="flex-1 flex flex-col items-center justify-center px-6 py-8"
+            style={{ minHeight: 'calc(100vh - 160px)' }}
           >
-            <span className="material-symbols-outlined text-xl">login</span>
-            <span>로그인 / 회원가입</span>
-          </button>
+            <div className="w-full max-w-md text-center">
+              {/* 상단 카피 */}
+              <div className="mb-8">
+                <p className="text-xs font-semibold text-primary mb-1 tracking-[0.15em] uppercase">
+                  LIVEJOURNEY
+                </p>
+                <p className="text-lg font-bold text-gray-900 dark:text-white leading-snug">
+                  실시간 여행 현황 검증의 기준,<br />라이브저니
+                </p>
+              </div>
 
-          <div className="mt-8 p-4 bg-gray-50 dark:bg-gray-800 rounded-xl">
-            <p className="text-xs text-gray-600 dark:text-gray-400 mb-2 font-semibold">로그인하면 이용 가능:</p>
-            <div className="flex flex-col gap-2 text-left">
-              <div className="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300">
-                <span className="material-symbols-outlined text-base text-primary">check_circle</span>
-                <span>여행 사진 업로드 및 공유</span>
+              {/* 소셜 로그인 버튼들 */}
+              <div className="flex flex-col items-center gap-3 mb-3">
+                {/* 카카오 로그인 */}
+                <button 
+                  onClick={() => handleSocialLogin('Kakao')}
+                  disabled={loginLoading}
+                  className="flex cursor-pointer items-center justify-center gap-3 rounded-full h-12 px-6 bg-[#FEE500] text-[#000000] text-sm font-bold tracking-tight hover:bg-[#fdd835] active:bg-[#fbc02d] transition-all shadow-md disabled:opacity-50 w-full max-w-sm"
+                  style={{ touchAction: 'manipulation' }}
+                >
+                  <span className="material-symbols-outlined text-base bg-black text-[#FEE500] rounded-full w-6 h-6 flex items-center justify-center">
+                    chat
+                  </span>
+                  <span className="truncate">카카오로 시작하기</span>
+                </button>
+
+                {/* 구글 로그인 */}
+                <button 
+                  onClick={() => handleSocialLogin('Google')}
+                  disabled={loginLoading}
+                  className="flex cursor-pointer items-center justify-center gap-3 rounded-full h-12 px-6 bg-white dark:bg-gray-900 text-[#1F1F1F] dark:text-white text-sm font-semibold tracking-tight border border-zinc-300 dark:border-zinc-600 hover:bg-zinc-50 dark:hover:bg-gray-800 active:bg-zinc-100 transition-all shadow-sm disabled:opacity-50 w-full max-w-sm"
+                  style={{ touchAction: 'manipulation' }}
+                >
+                  <svg className="w-5 h-5" viewBox="0 0 24 24">
+                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                  </svg>
+                  <span className="truncate">구글로 시작하기</span>
+                </button>
               </div>
-              <div className="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300">
-                <span className="material-symbols-outlined text-base text-primary">check_circle</span>
-                <span>뱃지 획득 및 레벨 시스템</span>
-              </div>
-              <div className="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300">
-                <span className="material-symbols-outlined text-base text-primary">check_circle</span>
-                <span>다른 여행자 팔로우 및 소통</span>
-              </div>
-              <div className="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300">
-                <span className="material-symbols-outlined text-base text-primary">check_circle</span>
-                <span>맞춤 추천 및 알림</span>
-              </div>
+
+              {/* 에러 메시지 */}
+              {loginError && (
+                <div className="mt-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 p-2.5 rounded-lg text-xs font-medium text-center">
+                  {loginError}
+                </div>
+              )}
+
+              {/* 로딩 상태 */}
+              {loginLoading && (
+                <div className="mt-3 flex items-center justify-center gap-2 text-primary dark:text-primary-soft">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current"></div>
+                  <span className="text-xs font-medium">로그인 중...</span>
+                </div>
+              )}
             </div>
-          </div>
+          </main>
         </div>
 
         {/* 하단 네비게이션 */}
@@ -747,6 +889,25 @@ const ProfileScreen = () => {
       </div>
     );
   }
+
+  // 사용자 정보가 아직 로드되지 않은 경우
+  if (isAuthenticated && !user && !authUser) {
+    return (
+      <div className="screen-layout bg-background-light dark:bg-background-dark">
+        <div className="screen-content">
+          <div className="flex items-center justify-center h-full">
+            <div className="flex flex-col items-center gap-4">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+              <p className="text-text-secondary-light dark:text-text-secondary-dark">사용자 정보를 불러오는 중...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 현재 사용자 정보 (user 또는 authUser)
+  const currentUser = user || authUser;
 
   return (
     <div className="screen-layout bg-background-light dark:bg-background-dark">
@@ -775,9 +936,9 @@ const ProfileScreen = () => {
           <div className="flex items-center gap-4 mb-4">
             {/* 프로필 사진 */}
             <div className="flex-shrink-0">
-              {user.profileImage && user.profileImage !== 'default' ? (
+              {currentUser?.profileImage && currentUser.profileImage !== 'default' ? (
                 <img 
-                  src={user.profileImage} 
+                  src={currentUser.profileImage} 
                   alt="Profile" 
                   className="w-16 h-16 rounded-full object-cover border-2 border-gray-200 dark:border-gray-700"
                 />
@@ -790,19 +951,41 @@ const ProfileScreen = () => {
 
             {/* 사용자 정보 */}
             <div className="flex-1">
-              <div className="flex items-center gap-2 mb-1">
+              <div className="flex items-center gap-2 mb-1 flex-wrap">
                 <h2 className="text-text-primary-light dark:text-text-primary-dark text-lg font-bold">
-                  {user.username || '모사모'}
+                  {currentUser?.username || '모사모'}
                 </h2>
-                {/* 대표 뱃지 */}
-                {representativeBadge && (
-                  <div className="flex items-center gap-1 px-2 py-1 bg-gradient-to-r from-primary-soft to-accent-soft rounded-full border-2 border-primary/30">
-                    <span className="text-base leading-none" role="img" aria-label={representativeBadge.name}>
-                      {representativeBadge.icon || '🏆'}
-                    </span>
-                    <span className="text-xs font-bold text-primary">{representativeBadge.name}</span>
-                  </div>
-                )}
+                {/* 대표 뱃지 - 클릭 가능 */}
+                <button
+                  onClick={() => {
+                    if (earnedBadges.length > 0) {
+                      setShowBadgeSelector(true);
+                    } else {
+                      alert('아직 획득한 뱃지가 없습니다.');
+                    }
+                  }}
+                  disabled={earnedBadges.length === 0}
+                  className="flex items-center gap-1 px-2 py-1 bg-gradient-to-r from-primary-soft to-accent-soft rounded-full border-2 border-primary/30 hover:border-primary/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {representativeBadge ? (
+                    <>
+                      <span className="text-base leading-none" role="img" aria-label={representativeBadge.name}>
+                        {representativeBadge.icon || '🏆'}
+                      </span>
+                      <span className="text-xs font-bold text-primary">{representativeBadge.name}</span>
+                    </>
+                  ) : (
+                    <span className="text-xs font-medium text-text-secondary-light dark:text-text-secondary-dark">뱃지 없음</span>
+                  )}
+                </button>
+                {/* 뱃지 모아보기 버튼 - 플러스 아이콘 */}
+                <button
+                  onClick={() => navigate('/badges')}
+                  className="flex items-center justify-center w-7 h-7 bg-primary/10 hover:bg-primary/20 rounded-full transition-colors"
+                  title="뱃지 모아보기"
+                >
+                  <span className="material-symbols-outlined text-primary text-base">add</span>
+                </button>
               </div>
               <p className="text-text-secondary-light dark:text-text-secondary-dark text-sm">
                 {levelInfo ? `Lv. ${levelInfo.level} ${levelInfo.title}` : 'Lv. 1 여행 입문자'}
@@ -841,80 +1024,6 @@ const ProfileScreen = () => {
           </button>
         </div>
 
-        {/* 획득한 뱃지 섹션 */}
-        <div className="bg-white dark:bg-gray-900 px-6 py-6">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-2">
-              <span className="material-symbols-outlined text-primary text-xl">workspace_premium</span>
-              <h3 className="text-text-primary-light dark:text-text-primary-dark text-base font-bold">
-                획득한 뱃지
-              </h3>
-            </div>
-            {/* 뱃지 모아보기 버튼 - 작게 */}
-            <button
-              onClick={() => navigate('/badges')}
-              className="flex items-center gap-1 px-3 py-1.5 bg-primary/10 hover:bg-primary/20 rounded-full transition-colors"
-            >
-              <span className="text-xs font-semibold text-primary">모아보기</span>
-              <span className="text-xs font-bold text-primary">{badgeCount}</span>
-              <span className="material-symbols-outlined text-primary text-sm">chevron_right</span>
-            </button>
-          </div>
-
-          {badgeCount === 0 ? (
-            <div className="text-center py-6">
-              <div className="relative inline-block mb-4">
-                <div className="w-20 h-20 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
-                  <span className="material-symbols-outlined text-gray-300 dark:text-gray-600 text-5xl">workspace_premium</span>
-                </div>
-                <span className="absolute -top-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-white text-xs font-bold">
-                  0
-                </span>
-              </div>
-              <p className="text-text-primary-light dark:text-text-primary-dark text-sm font-medium mb-1">
-                아직 획득한 뱃지가 없어요
-              </p>
-              <p className="text-text-secondary-light dark:text-text-secondary-dark text-xs mb-4">
-                기록을 남기고 뱃지를 획득해보세요!
-              </p>
-              <button
-                onClick={() => navigate('/upload')}
-                className="w-full bg-primary text-white py-3 px-6 rounded-xl font-semibold hover:bg-primary/90 transition-colors shadow-lg flex items-center justify-center gap-2"
-              >
-                <span className="material-symbols-outlined text-lg">add_circle</span>
-                첫 기록하기
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {/* 대표 뱃지 선택 버튼 */}
-              <button
-                onClick={() => setShowBadgeSelector(true)}
-                className="w-full text-left"
-              >
-                <div className="flex items-center justify-between p-4 bg-gradient-to-r from-primary-soft to-accent-soft rounded-xl border-2 border-primary/30 hover:border-primary/50 transition-all">
-                  <div className="flex items-center gap-3">
-                    <span className="material-symbols-outlined text-primary text-2xl">military_tech</span>
-                    <div>
-                      <p className="text-text-primary-light dark:text-text-primary-dark font-bold text-sm">대표 뱃지</p>
-                      <p className="text-text-secondary-light dark:text-text-secondary-dark text-xs">
-                        {representativeBadge ? representativeBadge.name : '뱃지를 선택해주세요'}
-                      </p>
-                    </div>
-                  </div>
-                  {representativeBadge && (
-                    <div className="flex items-center gap-2">
-                      <span className="text-3xl leading-none" role="img" aria-label={representativeBadge.name}>
-                        {representativeBadge.icon || '🏆'}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </button>
-            </div>
-          )}
-        </div>
-
         {/* 기록 탭 */}
         <div className="bg-white dark:bg-gray-900 px-6 py-6 border-t border-gray-100 dark:border-gray-800">
           {/* 탭 전환 */}
@@ -939,16 +1048,6 @@ const ProfileScreen = () => {
             >
               🗺️ 나의 기록 지도
             </button>
-            <button
-              onClick={() => setActiveTab('timeline')}
-              className={`flex-1 py-3 px-2 rounded-xl font-semibold transition-all text-sm whitespace-nowrap ${
-                activeTab === 'timeline'
-                  ? 'bg-primary text-white shadow-lg'
-                  : 'bg-gray-100 dark:bg-gray-800 text-text-secondary-light dark:text-text-secondary-dark hover:bg-gray-200 dark:hover:bg-gray-700'
-              }`}
-            >
-              📅 타임라인
-            </button>
           </div>
 
           {/* 편집 버튼 (내 사진 탭에서만) */}
@@ -971,7 +1070,7 @@ const ProfileScreen = () => {
               </div>
             )}
 
-          {/* 내 사진 탭 */}
+          {/* 내 사진 탭 (타임라인 형식) */}
           {activeTab === 'my' && myPosts.length === 0 && (
             <div className="text-center py-8">
               <span className="material-symbols-outlined text-6xl text-gray-300 dark:text-gray-600 mb-4 block">
@@ -995,95 +1094,127 @@ const ProfileScreen = () => {
           )}
 
           {activeTab === 'my' && myPosts.length > 0 && (
-            <div className="grid grid-cols-2 gap-4">
-              {myPosts.map((post, index) => {
-                const likedPosts = JSON.parse(localStorage.getItem('likedPosts') || '{}');
-                const isLiked = likedPosts[post.id] || false;
-                const likeCount = post.likes || post.likeCount || 0;
-                
-                return (
-                  <div
-                    key={post.id || index}
-                    onClick={(e) => {
-                      if (isEditMode) {
-                        togglePhotoSelection(post.id);
-                      } else {
-                        const currentIndex = myPosts.findIndex(p => p.id === post.id);
-                        navigate(`/post/${post.id}`, {
-                          state: {
-                            post: post,
-                            allPosts: myPosts,
-                            currentPostIndex: currentIndex >= 0 ? currentIndex : 0
-                          }
-                        });
-                      }
-                    }}
-                    className="cursor-pointer"
-                  >
-                    {/* 이미지 */}
-                    <div className="aspect-square relative overflow-hidden rounded-lg mb-2">
-                      {post.videos && post.videos.length > 0 ? (
-                        <video
-                          src={post.videos[0]}
-                          className="w-full h-full object-cover"
-                          muted
-                          loop
-                          playsInline
-                        />
-                      ) : (
-                        <img
-                          src={post.imageUrl || post.images?.[0] || post.image}
-                          alt={post.location}
-                          className={`w-full h-full object-cover transition-all duration-300 ${
-                            isEditMode ? 'hover:opacity-70' : 'hover:scale-110'
-                          }`}
-                        />
-                      )}
-                      
-                      {/* 우측 하단 하트 아이콘 */}
-                      {!isEditMode && (
-                        <div className="absolute bottom-2 right-2 flex items-center gap-1 bg-white/80 backdrop-blur-sm rounded-full px-2 py-1">
-                          <span className={`material-symbols-outlined text-sm ${isLiked ? 'text-red-500 fill' : 'text-gray-600'}`}>
-                            favorite
-                          </span>
-                          <span className="text-xs font-semibold text-gray-700">{likeCount}</span>
-                        </div>
-                      )}
-                      
-                      {/* 편집 모드 체크박스 */}
-                      {isEditMode && (
-                        <div className="absolute top-2 right-2">
-                          <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
-                            selectedPhotos.includes(post.id)
-                              ? 'bg-primary border-primary'
-                              : 'bg-white border-gray-300'
-                          }`}>
-                            {selectedPhotos.includes(post.id) && (
-                              <span className="material-symbols-outlined text-white text-sm">check</span>
-                            )}
-                          </div>
-                        </div>
-                      )}
+            <div className="space-y-6">
+              {Object.entries(
+                myPosts.reduce((acc, post) => {
+                  const date = new Date(post.createdAt || Date.now());
+                  const dateKey = date.toLocaleDateString('ko-KR', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                  });
+                  if (!acc[dateKey]) acc[dateKey] = [];
+                  acc[dateKey].push(post);
+                  return acc;
+                }, {})
+              )
+                .sort((a, b) => new Date(b[1][0].createdAt) - new Date(a[1][0].createdAt))
+                .map(([date, posts]) => (
+                  <div key={date}>
+                    {/* 날짜 헤더 */}
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="flex items-center gap-2">
+                        <span className="material-symbols-outlined text-primary text-xl">calendar_today</span>
+                        <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300">{date}</h3>
+                      </div>
+                      <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700"></div>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">{posts.length}장</span>
                     </div>
-                    
-                    {/* 이미지 밖 하단 텍스트 */}
-                    <div className="space-y-1">
-                      <p className="text-sm font-semibold text-text-primary-light dark:text-text-primary-dark line-clamp-2">
-                        {post.note || post.location || '기록'}
-                      </p>
-                      {post.tags && post.tags.length > 0 && (
-                        <div className="flex flex-wrap gap-1">
-                          {post.tags.slice(0, 3).map((tag, tagIndex) => (
-                            <span key={tagIndex} className="text-xs text-text-secondary-light dark:text-text-secondary-dark">
-                              #{typeof tag === 'string' ? tag.replace('#', '') : tag}
-                            </span>
-                          ))}
-                        </div>
-                      )}
+
+                    {/* 사진 그리드 */}
+                    <div className="grid grid-cols-2 gap-4">
+                      {posts.map((post, index) => {
+                        const likedPosts = JSON.parse(localStorage.getItem('likedPosts') || '{}');
+                        const isLiked = likedPosts[post.id] || false;
+                        const likeCount = post.likes || post.likeCount || 0;
+                        const allPosts = myPosts;
+                        const currentIndex = allPosts.findIndex(p => p.id === post.id);
+                        
+                        return (
+                          <div
+                            key={post.id || index}
+                            onClick={(e) => {
+                              if (isEditMode) {
+                                togglePhotoSelection(post.id);
+                              } else {
+                                navigate(`/post/${post.id}`, {
+                                  state: {
+                                    post: post,
+                                    allPosts: allPosts,
+                                    currentPostIndex: currentIndex >= 0 ? currentIndex : 0
+                                  }
+                                });
+                              }
+                            }}
+                            className="cursor-pointer"
+                          >
+                            {/* 이미지 */}
+                            <div className="aspect-square relative overflow-hidden rounded-lg mb-2">
+                              {post.videos && post.videos.length > 0 ? (
+                                <video
+                                  src={post.videos[0]}
+                                  className="w-full h-full object-cover"
+                                  muted
+                                  loop
+                                  playsInline
+                                />
+                              ) : (
+                                <img
+                                  src={post.imageUrl || post.images?.[0] || post.image}
+                                  alt={post.location}
+                                  className={`w-full h-full object-cover transition-all duration-300 ${
+                                    isEditMode ? 'hover:opacity-70' : 'hover:scale-110'
+                                  }`}
+                                />
+                              )}
+                              
+                              {/* 우측 하단 하트 아이콘 */}
+                              {!isEditMode && (
+                                <div className="absolute bottom-2 right-2 flex items-center gap-1 bg-white/80 backdrop-blur-sm rounded-full px-2 py-1">
+                                  <span className={`material-symbols-outlined text-sm ${isLiked ? 'text-red-500 fill' : 'text-gray-600'}`}>
+                                    favorite
+                                  </span>
+                                  <span className="text-xs font-semibold text-gray-700">{likeCount}</span>
+                                </div>
+                              )}
+                              
+                              {/* 편집 모드 체크박스 */}
+                              {isEditMode && (
+                                <div className="absolute top-2 right-2">
+                                  <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
+                                    selectedPhotos.includes(post.id)
+                                      ? 'bg-primary border-primary'
+                                      : 'bg-white border-gray-300'
+                                  }`}>
+                                    {selectedPhotos.includes(post.id) && (
+                                      <span className="material-symbols-outlined text-white text-sm">check</span>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                            
+                            {/* 이미지 밖 하단 텍스트 */}
+                            <div className="space-y-1">
+                              <p className="text-sm font-semibold text-text-primary-light dark:text-text-primary-dark line-clamp-2">
+                                {post.note || post.location || '기록'}
+                              </p>
+                              {post.tags && post.tags.length > 0 && (
+                                <div className="flex flex-wrap gap-1">
+                                  {post.tags.slice(0, 3).map((tag, tagIndex) => (
+                                    <span key={tagIndex} className="text-xs text-text-secondary-light dark:text-text-secondary-dark">
+                                      #{typeof tag === 'string' ? tag.replace('#', '') : tag}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
-                );
-              })}
+                ))}
             </div>
           )}
 
@@ -1112,6 +1243,62 @@ const ProfileScreen = () => {
                 </div>
               ) : (
                 <div>
+                  {/* 날짜 필터 - 가벼운 디자인 */}
+                  {availableDates.length > 0 && (
+                    <div className="mb-3 flex items-center gap-2 flex-wrap">
+                      <button
+                        onClick={() => setSelectedDate('')}
+                        className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                          !selectedDate
+                            ? 'bg-primary text-white shadow-sm'
+                            : 'bg-white/95 backdrop-blur-md text-gray-700 border border-gray-200 hover:bg-gray-50'
+                        }`}
+                      >
+                        전체
+                      </button>
+                      {availableDates.slice(0, 7).map((date) => {
+                        const dateObj = new Date(date);
+                        const dateStr = dateObj.toLocaleDateString('ko-KR', {
+                          month: 'short',
+                          day: 'numeric',
+                        });
+                        const isSelected = selectedDate === date;
+                        return (
+                          <button
+                            key={date}
+                            onClick={() => setSelectedDate(isSelected ? '' : date)}
+                            className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                              isSelected
+                                ? 'bg-primary text-white shadow-sm'
+                                : 'bg-white/95 backdrop-blur-md text-gray-700 border border-gray-200 hover:bg-gray-50'
+                            }`}
+                          >
+                            {dateStr}
+                          </button>
+                        );
+                      })}
+                      {availableDates.length > 7 && (
+                        <button
+                          onClick={() => {
+                            const input = document.createElement('input');
+                            input.type = 'date';
+                            input.max = new Date().toISOString().split('T')[0];
+                            input.value = selectedDate || '';
+                            input.onchange = (e) => {
+                              if (e.target.value) {
+                                setSelectedDate(e.target.value);
+                              }
+                            };
+                            input.click();
+                          }}
+                          className="px-3 py-1.5 rounded-full text-xs font-semibold bg-white/95 backdrop-blur-md text-gray-700 border border-gray-200 hover:bg-gray-50 transition-all"
+                        >
+                          + 더보기
+                        </button>
+                      )}
+                    </div>
+                  )}
+
                   {/* 지도 영역 */}
                   <div 
                     ref={mapRef}
@@ -1127,13 +1314,74 @@ const ProfileScreen = () => {
                         </div>
                       </div>
                     )}
+
+                    {/* 여행 통계 - 지도 하단 오버레이 */}
+                    {filteredPosts.length > 0 && (() => {
+                    // 이동 거리 계산
+                    const getDistanceKm = (lat1, lon1, lat2, lon2) => {
+                      const toRad = (v) => (v * Math.PI) / 180;
+                      const R = 6371;
+                      const dLat = toRad(lat2 - lat1);
+                      const dLon = toRad(lon2 - lon1);
+                      const a =
+                        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                        Math.cos(toRad(lat1)) *
+                          Math.cos(toRad(lat2)) *
+                          Math.sin(dLon / 2) *
+                          Math.sin(dLon / 2);
+                      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+                      return R * c;
+                    };
+
+                    const sortedPosts = [...filteredPosts].sort((a, b) => {
+                      const dateA = new Date(a.createdAt || a.timestamp || 0);
+                      const dateB = new Date(b.createdAt || b.timestamp || 0);
+                      return dateA - dateB;
+                    });
+
+                    let totalDistance = 0;
+                    for (let i = 0; i < sortedPosts.length - 1; i++) {
+                      const post1 = sortedPosts[i];
+                      const post2 = sortedPosts[i + 1];
+                      const coords1 = post1.coordinates || getCoordinatesByLocation(post1.detailedLocation || post1.location);
+                      const coords2 = post2.coordinates || getCoordinatesByLocation(post2.detailedLocation || post2.location);
+                      
+                      if (coords1 && coords2 && coords1.lat && coords1.lng && coords2.lat && coords2.lng) {
+                        totalDistance += getDistanceKm(coords1.lat, coords1.lng, coords2.lat, coords2.lng);
+                      }
+                    }
+
+                    // 방문한 곳 목록 (중복 제거)
+                    const visitedPlaces = [...new Set(
+                      filteredPosts
+                        .filter(post => post.location || post.detailedLocation)
+                        .map(post => post.location || post.detailedLocation)
+                    )];
+
+                      return (
+                        <div className="absolute bottom-3 left-3 right-3 z-20 flex items-center justify-center gap-3">
+                          <div className="px-3 py-1.5 bg-white/95 backdrop-blur-md rounded-full border border-white/50 shadow-sm flex items-center gap-1.5">
+                            <span className="material-symbols-outlined text-primary text-sm">straighten</span>
+                            <span className="text-xs font-semibold text-gray-700">
+                              {totalDistance.toFixed(1)}km
+                            </span>
+                          </div>
+                          <div className="px-3 py-1.5 bg-white/95 backdrop-blur-md rounded-full border border-white/50 shadow-sm flex items-center gap-1.5">
+                            <span className="material-symbols-outlined text-primary text-sm">place</span>
+                            <span className="text-xs font-semibold text-gray-700">
+                              {visitedPlaces.length}곳
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   {/* 지역별 사진 수 */}
                   <div className="space-y-2">
                     <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">📍 지역</h3>
                     {Object.entries(
-                      myPosts.reduce((acc, post) => {
+                      filteredPosts.reduce((acc, post) => {
                         const location = post.location || '기타';
                         acc[location] = (acc[location] || 0) + 1;
                         return acc;
@@ -1163,100 +1411,6 @@ const ProfileScreen = () => {
             </div>
           )}
 
-          {/* 타임라인 탭 */}
-          {activeTab === 'timeline' && (
-            <div>
-              {myPosts.length === 0 ? (
-                <div className="text-center py-12">
-                  <span className="material-symbols-outlined text-6xl text-gray-300 dark:text-gray-600 mb-4 block">
-                    event_note
-                  </span>
-                  <p className="text-text-secondary-light dark:text-text-secondary-dark text-base font-medium mb-2">
-                    아직 기록이 없어요
-                  </p>
-                  <p className="text-gray-400 dark:text-gray-500 text-sm">
-                    사진을 올리면 타임라인으로 정리돼요!
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-6">
-                  {Object.entries(
-                    myPosts.reduce((acc, post) => {
-                      const date = new Date(post.createdAt || Date.now());
-                      const dateKey = date.toLocaleDateString('ko-KR', {
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric',
-                      });
-                      if (!acc[dateKey]) acc[dateKey] = [];
-                      acc[dateKey].push(post);
-                      return acc;
-                    }, {})
-                  )
-                    .sort((a, b) => new Date(b[1][0].createdAt) - new Date(a[1][0].createdAt))
-                    .map(([date, posts]) => (
-                      <div key={date}>
-                        {/* 날짜 헤더 */}
-                        <div className="flex items-center gap-3 mb-3">
-                          <div className="flex items-center gap-2">
-                            <span className="material-symbols-outlined text-primary text-xl">calendar_today</span>
-                            <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300">{date}</h3>
-                          </div>
-                          <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700"></div>
-                          <span className="text-xs text-gray-500 dark:text-gray-400">{posts.length}장</span>
-                        </div>
-
-                        {/* 사진 그리드 */}
-                        <div className="grid grid-cols-3 gap-2 mb-4">
-                          {posts.map((post, index) => {
-                            const allPosts = myPosts;
-                            const currentIndex = allPosts.findIndex(p => p.id === post.id);
-                            return (
-                            <div
-                              key={post.id || index}
-                                onClick={() => navigate(`/post/${post.id}`, {
-                                  state: {
-                                    post: post,
-                                    allPosts: allPosts,
-                                    currentPostIndex: currentIndex >= 0 ? currentIndex : 0
-                                  }
-                                })}
-                              className="cursor-pointer group"
-                            >
-                              <div className="aspect-square relative overflow-hidden rounded-lg">
-                                <img
-                                  src={post.imageUrl || post.images?.[0] || 'https://images.unsplash.com/photo-1524222717473-730000096953?w=800&auto=format&fit=crop&q=80'}
-                                  alt={post.location}
-                                  className="w-full h-full object-cover group-hover:scale-110 transition-all duration-300"
-                                  onError={(e) => {
-                                    e.currentTarget.src = 'https://images.unsplash.com/photo-1524222717473-730000096953?w=800&auto=format&fit=crop&q=80';
-                                  }}
-                                />
-                                {/* 카테고리 아이콘 */}
-                                <div className="absolute top-2 left-2">
-                                  <div className="text-2xl drop-shadow-lg">
-                                    {post.category === 'blooming' && '🌸'}
-                                    {post.category === 'snow' && '❄️'}
-                                    {post.category === 'autumn' && '🍁'}
-                                    {post.category === 'festival' && '🎉'}
-                                    {post.category === 'crowd' && '👥'}
-                                    {post.category === 'general' && '📷'}
-                                  </div>
-                                </div>
-                              </div>
-                              <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 truncate">
-                                {post.location}
-                              </p>
-                            </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ))}
-                </div>
-              )}
-            </div>
-          )}
         </div>
         </div>
 

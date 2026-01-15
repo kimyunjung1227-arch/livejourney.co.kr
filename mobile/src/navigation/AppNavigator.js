@@ -1,9 +1,10 @@
-import React from 'react';
-import { View } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { View, Animated } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useAuth } from '../contexts/AuthContext';
+import { useTabBar } from '../contexts/TabBarContext';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../constants/styles';
 
@@ -30,6 +31,26 @@ const Tab = createBottomTabNavigator();
 
 // 메인 탭 네비게이터 (웹과 동일한 디자인)
 function MainTabs() {
+  const { isTabBarVisible } = useTabBar();
+  const tabBarHeight = 80;
+  const translateY = useRef(new Animated.Value(0)).current;
+  const opacity = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(translateY, {
+        toValue: isTabBarVisible ? 0 : tabBarHeight,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+      Animated.timing(opacity, {
+        toValue: isTabBarVisible ? 1 : 0,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [isTabBarVisible, tabBarHeight, translateY, opacity]);
+
   return (
     <Tab.Navigator
       screenOptions={{
@@ -42,7 +63,11 @@ function MainTabs() {
           backgroundColor: '#FFFFFF', // background-light
           paddingBottom: 8,
           paddingTop: 8,
-          height: 80, // h-20 (웹과 동일)
+          height: tabBarHeight, // h-20 (웹과 동일)
+          position: 'absolute',
+          bottom: 0,
+          opacity: opacity,
+          transform: [{ translateY: translateY }],
         },
         tabBarLabelStyle: {
           fontSize: 12,

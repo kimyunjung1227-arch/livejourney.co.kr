@@ -10,11 +10,13 @@ import {
   Alert,
   ActivityIndicator,
   Dimensions,
+  TextInput,
 } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
+import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import { COLORS, SPACING, TYPOGRAPHY } from '../constants/styles';
 import { getUserDailyTitle } from '../utils/dailyTitleSystem';
 import { getEarnedBadges } from '../utils/badgeSystem';
@@ -22,6 +24,7 @@ import { getUserLevel } from '../utils/levelSystem';
 import PostGridItem from '../components/PostGridItem';
 import { Modal } from 'react-native';
 import { ScreenLayout, ScreenContent, ScreenHeader, ScreenBody } from '../components/ScreenLayout';
+import { getCoordinatesByLocation } from '../utils/regionLocationMapping';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -37,12 +40,107 @@ const ProfileScreen = () => {
   const [isEditMode, setIsEditMode] = useState(false);
   const [selectedPhotos, setSelectedPhotos] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('my'); // 'my' | 'map' | 'timeline'
+  const [activeTab, setActiveTab] = useState('my'); // 'my' | 'map'
   const [levelInfo, setLevelInfo] = useState(null);
+  
+  // 날짜 필터
+  const [selectedDate, setSelectedDate] = useState('');
+  const [filteredPosts, setFilteredPosts] = useState([]);
+  const [mapRegion, setMapRegion] = useState(null);
+  const [availableDates, setAvailableDates] = useState([]);
 
   useEffect(() => {
     loadProfileData();
   }, []);
+
+  // 날짜 필터 적용
+  useEffect(() => {
+    if (activeTab === 'map') {
+      let filtered = [...myPosts];
+      
+      if (selectedDate) {
+        filtered = filtered.filter(post => {
+          const postDate = new Date(post.createdAt || post.timestamp || Date.now());
+          // availableDates를 만들 때 사용한 것과 동일한 방식으로 날짜 키 생성
+          const dateKey = postDate.toISOString().split('T')[0]; // YYYY-MM-DD
+          return dateKey === selectedDate;
+        });
+      }
+      
+      setFilteredPosts(filtered);
+      
+      // 필터링된 게시물로 지도 영역 재계산 (날짜 변경 시 지도 초기화)
+      if (filtered.length > 0) {
+        const postsWithCoords = filtered.filter(post => post.coordinates && post.coordinates.lat && post.coordinates.lng);
+        if (postsWithCoords.length > 0) {
+          const lats = postsWithCoords.map(p => p.coordinates.lat);
+          const lngs = postsWithCoords.map(p => p.coordinates.lng);
+          const minLat = Math.min(...lats);
+          const maxLat = Math.max(...lats);
+          const minLng = Math.min(...lngs);
+          const maxLng = Math.max(...lngs);
+          
+          setMapRegion({
+            latitude: (minLat + maxLat) / 2,
+            longitude: (minLng + maxLng) / 2,
+            latitudeDelta: Math.max((maxLat - minLat) * 1.5, 0.01),
+            longitudeDelta: Math.max((maxLng - minLng) * 1.5, 0.01),
+          });
+        } else {
+          // 좌표가 없고 지역명만 있는 경우: 지역명을 지도 좌표로 변환해서 이동
+          const firstPostWithLocation = filtered.find(
+            post => post.location || post.detailedLocation
+          );
+          if (firstPostWithLocation) {
+            const locName = firstPostWithLocation.location || firstPostWithLocation.detailedLocation;
+            const coords = getCoordinatesByLocation(locName);
+            if (coords) {
+              setMapRegion({
+                latitude: coords.lat,
+                longitude: coords.lng,
+                latitudeDelta: 0.1,
+                longitudeDelta: 0.1,
+              });
+            } else {
+              // 매핑에 없는 지역이면 서울로 기본 설정
+          setMapRegion({
+            latitude: 37.5665,
+            longitude: 126.9780,
+            latitudeDelta: 0.1,
+            longitudeDelta: 0.1,
+          });
+            }
+          } else {
+            // 지역 정보가 전혀 없으면 서울로 기본 설정
+            setMapRegion({
+              latitude: 37.5665,
+              longitude: 126.9780,
+              latitudeDelta: 0.1,
+              longitudeDelta: 0.1,
+            });
+          }
+        }
+      } else {
+        // 필터링된 게시물이 없으면 서울로 기본 설정
+        setMapRegion({
+          latitude: 37.5665,
+          longitude: 126.9780,
+          latitudeDelta: 0.1,
+          longitudeDelta: 0.1,
+        });
+      }
+    } else {
+      setFilteredPosts(myPosts);
+    }
+  }, [myPosts, selectedDate, activeTab]);
+
+  // 지도 탭을 처음 열 때: 가장 최근에 올린 날짜로 자동 선택
+  useEffect(() => {
+    if (activeTab === 'map' && !selectedDate && availableDates.length > 0) {
+      // 최신 날짜(가장 최근에 올린 기록)를 기본 선택
+      setSelectedDate(availableDates[0]);
+    }
+  }, [activeTab, availableDates, selectedDate]);
 
   const loadProfileData = async () => {
     try {
@@ -97,11 +195,116 @@ const ProfileScreen = () => {
       const userPosts = uploadedPosts.filter(post => post.userId === userId);
       
       setMyPosts(userPosts);
+      setFilteredPosts(userPosts);
+      
+      // 사용 가능한 날짜 목록 추출
+      const updateAvailableDates = (posts) => {
+        const dates = [...new Set(
+          posts
+            .map(post => {
+              const date = new Date(post.createdAt || post.timestamp || Date.now());
+              return date.toISOString().split('T')[0]; // YYYY-MM-DD 형식
+            })
+            .filter(Boolean)
+        )].sort((a, b) => new Date(b) - new Date(a));
+        setAvailableDates(dates);
+      };
+      
+      updateAvailableDates(userPosts);
+      
+      // 게시물 업데이트 감지를 위한 주기적 체크
+      const checkInterval = setInterval(async () => {
+        try {
+          const updatedPostsJson = await AsyncStorage.getItem('uploadedPosts');
+          const updatedPosts = updatedPostsJson ? JSON.parse(updatedPostsJson) : [];
+          const updatedUserPosts = updatedPosts.filter(post => post.userId === userId);
+          
+          if (updatedUserPosts.length !== userPosts.length) {
+            setMyPosts(updatedUserPosts);
+            updateAvailableDates(updatedUserPosts);
+            
+            // 새 게시물이 추가되면 해당 날짜로 자동 선택 (선택된 날짜가 없을 때만)
+            if (updatedUserPosts.length > userPosts.length && !selectedDate) {
+              const newPost = updatedUserPosts[0];
+              if (newPost) {
+                const newPostDate = new Date(newPost.createdAt || newPost.timestamp || Date.now());
+                const dateStr = newPostDate.toISOString().split('T')[0];
+                setSelectedDate(dateStr);
+              }
+            }
+          }
+        } catch (error) {
+          console.error('게시물 업데이트 체크 실패:', error);
+        }
+      }, 1000);
+      
+      return () => {
+        clearInterval(checkInterval);
+      };
+      
+      // 지도 영역 계산
+      if (userPosts.length > 0) {
+        const postsWithCoords = userPosts.filter(post => post.coordinates && post.coordinates.lat && post.coordinates.lng);
+        if (postsWithCoords.length > 0) {
+          const lats = postsWithCoords.map(p => p.coordinates.lat);
+          const lngs = postsWithCoords.map(p => p.coordinates.lng);
+          const minLat = Math.min(...lats);
+          const maxLat = Math.max(...lats);
+          const minLng = Math.min(...lngs);
+          const maxLng = Math.max(...lngs);
+          
+          setMapRegion({
+            latitude: (minLat + maxLat) / 2,
+            longitude: (minLng + maxLng) / 2,
+            latitudeDelta: Math.max((maxLat - minLat) * 1.5, 0.01),
+            longitudeDelta: Math.max((maxLng - minLng) * 1.5, 0.01),
+          });
+        } else {
+          // 좌표가 없고 지역명만 있는 경우: 지역명을 지도 좌표로 변환해서 이동
+          const firstPostWithLocation = userPosts.find(
+            post => post.location || post.detailedLocation
+          );
+          if (firstPostWithLocation) {
+            const locName = firstPostWithLocation.location || firstPostWithLocation.detailedLocation;
+            const coords = getCoordinatesByLocation(locName);
+            if (coords) {
+              setMapRegion({
+                latitude: coords.lat,
+                longitude: coords.lng,
+                latitudeDelta: 0.1,
+                longitudeDelta: 0.1,
+              });
+            } else {
+              // 매핑에 없는 지역이면 서울로 기본 설정
+          setMapRegion({
+            latitude: 37.5665,
+            longitude: 126.9780,
+            latitudeDelta: 0.1,
+            longitudeDelta: 0.1,
+          });
+            }
+          } else {
+            // 지역 정보가 전혀 없으면 서울로 기본 설정
+            setMapRegion({
+              latitude: 37.5665,
+              longitude: 126.9780,
+              latitudeDelta: 0.1,
+              longitudeDelta: 0.1,
+            });
+          }
+        }
+      }
     } catch (error) {
       console.error('프로필 데이터 로드 실패:', error);
     } finally {
       setLoading(false);
     }
+    
+    return () => {
+      if (checkInterval) {
+        clearInterval(checkInterval);
+      }
+    };
   };
 
   const handleLogout = () => {
@@ -287,12 +490,34 @@ const ProfileScreen = () => {
             <View style={styles.profileInfo}>
               <View style={styles.usernameRow}>
                 <Text style={styles.username}>{user.username || '모사모'}</Text>
-                {representativeBadge && (
-                  <View style={styles.representativeBadge}>
-                    <Text style={styles.representativeBadgeIcon}>{representativeBadge.icon}</Text>
-                    <Text style={styles.representativeBadgeText}>{representativeBadge.name}</Text>
-                  </View>
-                )}
+                {/* 대표 뱃지 - 클릭 가능 */}
+                <TouchableOpacity
+                  style={styles.representativeBadge}
+                  onPress={() => {
+                    if (earnedBadges.length > 0) {
+                      setShowBadgeSelector(true);
+                    } else {
+                      Alert.alert('알림', '아직 획득한 뱃지가 없습니다.');
+                    }
+                  }}
+                  disabled={earnedBadges.length === 0}
+                >
+                  {representativeBadge ? (
+                    <>
+                      <Text style={styles.representativeBadgeIcon}>{representativeBadge.icon}</Text>
+                      <Text style={styles.representativeBadgeText}>{representativeBadge.name}</Text>
+                    </>
+                  ) : (
+                    <Text style={styles.representativeBadgePlaceholder}>뱃지 없음</Text>
+                  )}
+                </TouchableOpacity>
+                {/* 뱃지 모아보기 버튼 - 플러스 아이콘 */}
+                <TouchableOpacity
+                  style={styles.badgesViewButtonPlus}
+                  onPress={() => navigation.navigate('BadgeList')}
+                >
+                  <Ionicons name="add" size={16} color={COLORS.primary} />
+                </TouchableOpacity>
               </View>
               <Text style={styles.levelText}>
                 {levelInfo ? `Lv. ${levelInfo.level} ${levelInfo.title}` : 'Lv. 1 여행 입문자'}
@@ -326,68 +551,6 @@ const ProfileScreen = () => {
           </TouchableOpacity>
         </View>
 
-        {/* 획득한 뱃지 섹션 - 웹과 동일하게 */}
-        <View style={styles.badgesSection}>
-          <View style={styles.badgesHeaderRow}>
-            <View style={styles.badgesHeader}>
-              <Ionicons name="trophy" size={20} color={COLORS.primary} />
-              <Text style={styles.badgesTitle}>획득한 뱃지</Text>
-            </View>
-            {/* 뱃지 모아보기 버튼 - 작게, 옆으로 */}
-            <TouchableOpacity
-              style={styles.badgesViewButton}
-              onPress={() => navigation.navigate('BadgeList')}
-            >
-              <Text style={styles.badgesViewButtonText}>모아보기</Text>
-              <Text style={styles.badgesViewButtonCount}>{earnedBadges.length}</Text>
-              <Ionicons name="chevron-forward" size={14} color={COLORS.primary} />
-            </TouchableOpacity>
-          </View>
-
-          {earnedBadges.length === 0 ? (
-            <View style={styles.badgesEmpty}>
-              <View style={styles.badgesEmptyIconContainer}>
-                <View style={styles.badgesEmptyIcon}>
-                  <Ionicons name="trophy-outline" size={48} color={COLORS.textSubtle} />
-                </View>
-                <View style={styles.badgesEmptyBadge}>
-                  <Text style={styles.badgesEmptyBadgeText}>0</Text>
-                </View>
-              </View>
-              <Text style={styles.badgesEmptyTitle}>아직 획득한 뱃지가 없어요</Text>
-              <Text style={styles.badgesEmptySubtitle}>여행 기록을 남기고 뱃지를 획득해보세요!</Text>
-              <TouchableOpacity
-                style={styles.badgesEmptyButton}
-                onPress={() => navigation.navigate('Upload')}
-              >
-                <Ionicons name="add-circle" size={20} color="white" />
-                <Text style={styles.badgesEmptyButtonText}>첫 여행 기록하기</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <View>
-              {/* 대표 뱃지 선택 버튼 */}
-              <TouchableOpacity
-                style={styles.representativeBadgeButton}
-                onPress={() => setShowBadgeSelector(true)}
-              >
-                <View style={styles.representativeBadgeButtonContent}>
-                  <Ionicons name="star" size={24} color={COLORS.primary} />
-                  <View style={styles.representativeBadgeButtonText}>
-                    <Text style={styles.representativeBadgeButtonTitle}>대표 뱃지</Text>
-                    <Text style={styles.representativeBadgeButtonSubtitle}>
-                      {representativeBadge ? representativeBadge.name : '뱃지를 선택해주세요'}
-                    </Text>
-                  </View>
-                  {representativeBadge && (
-                    <Text style={styles.representativeBadgeButtonIcon}>{representativeBadge.icon}</Text>
-                  )}
-                </View>
-              </TouchableOpacity>
-            </View>
-          )}
-        </View>
-
         {/* 여행 기록 탭 */}
         <View style={styles.tabsSection}>
           {/* 탭 전환 */}
@@ -416,18 +579,6 @@ const ProfileScreen = () => {
                 activeTab === 'map' && styles.tabTextActive
               ]}>🗺️ 나의 기록 지도</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.tab, 
-                activeTab === 'timeline' && styles.tabActive
-              ]}
-              onPress={() => setActiveTab('timeline')}
-            >
-              <Text style={[
-                styles.tabText, 
-                activeTab === 'timeline' && styles.tabTextActive
-              ]}>📅 타임라인</Text>
-            </TouchableOpacity>
           </View>
 
           {/* 편집 버튼 (내 사진 탭에서만) */}
@@ -446,7 +597,7 @@ const ProfileScreen = () => {
             </View>
           )}
 
-          {/* 내 사진 탭 */}
+          {/* 내 사진 탭 (타임라인 형식) */}
           {activeTab === 'my' && myPosts.length === 0 && (
             <View style={styles.emptyContainer}>
               <Ionicons name="add-photo-alternate" size={64} color={COLORS.textSubtle} />
@@ -463,18 +614,44 @@ const ProfileScreen = () => {
           )}
 
           {activeTab === 'my' && myPosts.length > 0 && (
-            <View style={styles.postsGrid}>
-              {myPosts.map((post, index) => (
-                <PostGridItem
-                  key={post.id || index}
-                  post={post}
-                  index={index}
-                  isEditMode={isEditMode}
-                  isSelected={selectedPhotos.includes(post.id)}
-                  onPress={handlePostPress}
-                  onToggleSelection={togglePhotoSelection}
-                />
-              ))}
+            <View style={styles.timelineContainer}>
+              {Object.entries(
+                myPosts.reduce((acc, post) => {
+                  const date = new Date(post.createdAt || post.timestamp || Date.now());
+                  const dateKey = date.toLocaleDateString('ko-KR', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                  });
+                  if (!acc[dateKey]) acc[dateKey] = [];
+                  acc[dateKey].push(post);
+                  return acc;
+                }, {})
+              )
+                .sort((a, b) => new Date(b[1][0].createdAt || b[1][0].timestamp) - new Date(a[1][0].createdAt || a[1][0].timestamp))
+                .map(([date, posts]) => (
+                  <View key={date} style={styles.timelineDateGroup}>
+                    <View style={styles.timelineDateHeader}>
+                      <Ionicons name="calendar" size={20} color={COLORS.primary} />
+                      <Text style={styles.timelineDateText}>{date}</Text>
+                      <View style={styles.timelineDateLine} />
+                      <Text style={styles.timelineDateCount}>{posts.length}장</Text>
+                    </View>
+                    <View style={styles.timelinePostsGrid}>
+                      {posts.map((post, index) => (
+                        <PostGridItem
+                          key={post.id || index}
+                          post={post}
+                          index={index}
+                          isEditMode={isEditMode}
+                          isSelected={selectedPhotos.includes(post.id)}
+                          onPress={handlePostPress}
+                          onToggleSelection={togglePhotoSelection}
+                        />
+                      ))}
+                    </View>
+                  </View>
+                ))}
             </View>
           )}
 
@@ -489,13 +666,184 @@ const ProfileScreen = () => {
                 </View>
               ) : (
                 <View>
+                  {/* 날짜 필터 - 가벼운 디자인 */}
+                  {availableDates.length > 0 && (
+                    <View style={styles.dateFilterLight}>
+                      <ScrollView 
+                        horizontal 
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={styles.dateFilterScrollContent}
+                      >
+                        <TouchableOpacity
+                          style={[
+                            styles.dateFilterButton,
+                            !selectedDate && styles.dateFilterButtonActive
+                          ]}
+                          onPress={() => setSelectedDate('')}
+                        >
+                          <Text style={[
+                            styles.dateFilterButtonText,
+                            !selectedDate && styles.dateFilterButtonTextActive
+                          ]}>전체</Text>
+                        </TouchableOpacity>
+                        {availableDates.slice(0, 7).map((date) => {
+                          const dateObj = new Date(date);
+                          const dateStr = dateObj.toLocaleDateString('ko-KR', {
+                            month: 'short',
+                            day: 'numeric',
+                          });
+                          const isSelected = selectedDate === date;
+                          return (
+                            <TouchableOpacity
+                              key={date}
+                              style={[
+                                styles.dateFilterButton,
+                                isSelected && styles.dateFilterButtonActive
+                              ]}
+                              onPress={() => setSelectedDate(isSelected ? '' : date)}
+                            >
+                              <Text style={[
+                                styles.dateFilterButtonText,
+                                isSelected && styles.dateFilterButtonTextActive
+                              ]}>{dateStr}</Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                        {availableDates.length > 7 && (
+                          <TouchableOpacity
+                            style={styles.dateFilterButton}
+                            onPress={() => {
+                              // 날짜 선택 모달 또는 다른 방식으로 구현 가능
+                              Alert.alert('날짜 선택', '더 많은 날짜는 준비 중입니다.');
+                            }}
+                          >
+                            <Text style={styles.dateFilterButtonText}>+ 더보기</Text>
+                          </TouchableOpacity>
+                        )}
+                      </ScrollView>
+                    </View>
+                  )}
+
                   {/* 지도 영역 - React Native Maps 사용 */}
-                  <View style={styles.mapContainer}>
-                    <Text style={styles.mapPlaceholder}>지도 기능은 준비 중입니다</Text>
-                    <Text style={styles.mapPlaceholderSubtext}>
-                      {myPosts.length}개의 사진이 지도에 표시됩니다
-                    </Text>
-                  </View>
+                  {mapRegion && (() => {
+                    // 날짜순으로 정렬된 게시물
+                    const sortedPosts = [...filteredPosts]
+                      .filter(post => post.coordinates && post.coordinates.lat && post.coordinates.lng)
+                      .sort((a, b) => {
+                        const dateA = new Date(a.createdAt || a.timestamp || 0);
+                        const dateB = new Date(b.createdAt || b.timestamp || 0);
+                        return dateA - dateB;
+                      });
+
+                    // 경로 좌표 생성
+                    const pathCoordinates = sortedPosts.map(post => ({
+                      latitude: post.coordinates.lat,
+                      longitude: post.coordinates.lng,
+                    }));
+
+                    // 이동 거리 계산
+                    const getDistanceKm = (lat1, lon1, lat2, lon2) => {
+                      const toRad = (v) => (v * Math.PI) / 180;
+                      const R = 6371;
+                      const dLat = toRad(lat2 - lat1);
+                      const dLon = toRad(lon2 - lon1);
+                      const a =
+                        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                        Math.cos(toRad(lat1)) *
+                          Math.cos(toRad(lat2)) *
+                          Math.sin(dLon / 2) *
+                          Math.sin(dLon / 2);
+                      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+                      return R * c;
+                    };
+
+                    let totalDistance = 0;
+                    for (let i = 0; i < sortedPosts.length - 1; i++) {
+                      const post1 = sortedPosts[i];
+                      const post2 = sortedPosts[i + 1];
+                      const coords1 = post1.coordinates;
+                      const coords2 = post2.coordinates;
+                      
+                      if (coords1 && coords2 && coords1.lat && coords1.lng && coords2.lat && coords2.lng) {
+                        totalDistance += getDistanceKm(coords1.lat, coords1.lng, coords2.lat, coords2.lng);
+                      }
+                    }
+
+                    // 방문한 곳 목록 (중복 제거)
+                    const visitedPlaces = [...new Set(
+                      filteredPosts
+                        .filter(post => post.location || post.detailedLocation)
+                        .map(post => post.location || post.detailedLocation)
+                    )];
+
+                    return (
+                      <View style={styles.mapContainer}>
+                        <MapView
+                          style={styles.map}
+                          provider={PROVIDER_GOOGLE}
+                          initialRegion={mapRegion}
+                          region={mapRegion}
+                          showsUserLocation={false}
+                          showsMyLocationButton={false}
+                        >
+                          {/* 경로 선 그리기 */}
+                          {pathCoordinates.length >= 2 && (
+                            <Polyline
+                              coordinates={pathCoordinates}
+                              strokeColor="#14B8A6"
+                              strokeWidth={3}
+                              lineDashPattern={[]}
+                            />
+                          )}
+                          {/* 마커 표시 */}
+                          {sortedPosts.map((post, index) => (
+                            <Marker
+                              key={post.id || index}
+                              coordinate={{
+                                latitude: post.coordinates.lat,
+                                longitude: post.coordinates.lng,
+                              }}
+                              onPress={() => {
+                                const currentIndex = filteredPosts.findIndex(p => p.id === post.id);
+                                navigation.navigate('PostDetail', {
+                                  postId: post.id,
+                                  post: post,
+                                  allPosts: filteredPosts,
+                                  currentPostIndex: currentIndex >= 0 ? currentIndex : 0,
+                                });
+                              }}
+                            >
+                              <View style={styles.markerContainer}>
+                                <Image
+                                  source={{ uri: post.images?.[0] || post.image }}
+                                  style={styles.markerImage}
+                                  resizeMode="cover"
+                                />
+                              </View>
+                            </Marker>
+                          ))}
+                        </MapView>
+                        
+                        {/* 여행 통계 - 지도 하단 오버레이 */}
+                        <View style={styles.mapStatsOverlay}>
+                          <View style={styles.mapStatsRow}>
+                            <View style={styles.mapStatBadge}>
+                              <Ionicons name="navigate" size={14} color={COLORS.primary} />
+                              <Text style={styles.mapStatBadgeText}>
+                                {totalDistance.toFixed(1)}km
+                              </Text>
+                            </View>
+                            <View style={styles.mapStatBadge}>
+                              <Ionicons name="location" size={14} color={COLORS.primary} />
+                              <Text style={styles.mapStatBadgeText}>
+                                {visitedPlaces.length}곳
+                              </Text>
+                            </View>
+                          </View>
+                        </View>
+                      </View>
+                    );
+                  })()}
 
                   {/* 오늘의 타이틀 영역 */}
                   {dailyTitle && (
@@ -512,11 +860,12 @@ const ProfileScreen = () => {
                     </View>
                   )}
 
+
                   {/* 지역별 사진 수 */}
                   <View style={styles.regionList}>
                     <Text style={styles.regionListTitle}>📍 방문한 지역</Text>
                     {Object.entries(
-                      myPosts.reduce((acc, post) => {
+                      filteredPosts.reduce((acc, post) => {
                         const location = post.location || '기타';
                         acc[location] = (acc[location] || 0) + 1;
                         return acc;
@@ -542,60 +891,6 @@ const ProfileScreen = () => {
             </View>
           )}
 
-          {/* 타임라인 탭 */}
-          {activeTab === 'timeline' && (
-            <View>
-              {myPosts.length === 0 ? (
-                <View style={styles.emptyContainer}>
-                  <Ionicons name="calendar" size={64} color={COLORS.textSubtle} />
-                  <Text style={styles.emptyText}>아직 여행 기록이 없어요</Text>
-                  <Text style={styles.emptySubtext}>사진을 올리면 타임라인으로 정리돼요!</Text>
-                </View>
-              ) : (
-                <View style={styles.timelineContainer}>
-                  {Object.entries(
-                    myPosts.reduce((acc, post) => {
-                      const date = new Date(post.createdAt || post.timestamp || Date.now());
-                      const dateKey = date.toLocaleDateString('ko-KR', {
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric',
-                      });
-                      if (!acc[dateKey]) acc[dateKey] = [];
-                      acc[dateKey].push(post);
-                      return acc;
-                    }, {})
-                  )
-                    .sort((a, b) => new Date(b[1][0].createdAt || b[1][0].timestamp) - new Date(a[1][0].createdAt || a[1][0].timestamp))
-                    .map(([date, posts]) => (
-                      <View key={date} style={styles.timelineDateGroup}>
-                        <View style={styles.timelineDateHeader}>
-                          <Ionicons name="calendar" size={20} color={COLORS.primary} />
-                          <Text style={styles.timelineDateText}>{date}</Text>
-                          <View style={styles.timelineDateLine} />
-                          <Text style={styles.timelineDateCount}>{posts.length}장</Text>
-                        </View>
-                        <View style={styles.timelinePostsGrid}>
-                          {posts.map((post, index) => (
-                            <TouchableOpacity
-                              key={post.id || index}
-                              style={styles.timelinePostItem}
-                              onPress={() => handlePostPress(post, index)}
-                            >
-                              <Image
-                                source={{ uri: post.images?.[0] || post.image }}
-                                style={styles.timelinePostImage}
-                                resizeMode="cover"
-                              />
-                            </TouchableOpacity>
-                          ))}
-                        </View>
-                      </View>
-                    ))}
-                </View>
-              )}
-            </View>
-          )}
         </View>
 
         {/* 설정 메뉴 */}
@@ -775,6 +1070,7 @@ const styles = StyleSheet.create({
   usernameRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: SPACING.sm,
     marginBottom: SPACING.xs,
   },
@@ -794,6 +1090,7 @@ const styles = StyleSheet.create({
     borderRadius: 999, // rounded-full
     borderWidth: 2,
     borderColor: COLORS.primary + '4D', // border-primary/30
+    marginLeft: SPACING.xs,
   },
   representativeBadgeIcon: {
     fontSize: 16, // text-base = 16px
@@ -802,6 +1099,20 @@ const styles = StyleSheet.create({
     fontSize: 12, // text-xs = 12px
     fontWeight: 'bold',
     color: COLORS.primary, // text-primary
+  },
+  representativeBadgePlaceholder: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: COLORS.textSubtle,
+  },
+  badgesViewButtonPlus: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: COLORS.primary + '1A',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: SPACING.xs,
   },
   titleBadge: {
     flexDirection: 'row',
@@ -1037,19 +1348,96 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 384,
     borderRadius: 12,
-    backgroundColor: COLORS.border,
-    justifyContent: 'center',
-    alignItems: 'center',
+    overflow: 'hidden',
     marginBottom: SPACING.md,
+    position: 'relative',
   },
-  mapPlaceholder: {
-    fontSize: 16,
-    color: COLORS.textSecondary,
-    marginBottom: SPACING.xs,
+  map: {
+    width: '100%',
+    height: '100%',
   },
-  mapPlaceholderSubtext: {
-    fontSize: 14,
-    color: COLORS.textSubtle,
+  mapStatsOverlay: {
+    position: 'absolute',
+    bottom: SPACING.sm,
+    left: SPACING.sm,
+    right: SPACING.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mapStatsRow: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+    alignItems: 'center',
+  },
+  mapStatBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.5)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  mapStatBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  dateFilterLight: {
+    marginBottom: SPACING.sm,
+  },
+  dateFilterScrollContent: {
+    paddingHorizontal: SPACING.sm,
+    gap: SPACING.xs,
+  },
+  dateFilterButton: {
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  dateFilterButtonActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  dateFilterButtonText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  dateFilterButtonTextActive: {
+    color: 'white',
+  },
+  markerContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 8,
+    overflow: 'hidden',
+    borderWidth: 3,
+    borderColor: 'white',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  markerImage: {
+    width: '100%',
+    height: '100%',
   },
   dailyTitleCard: {
     flexDirection: 'row',

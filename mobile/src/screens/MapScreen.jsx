@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,9 @@ import {
   PanResponder,
   Modal,
   Alert,
+  Share,
+  StatusBar,
+  Platform,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -40,11 +43,20 @@ const MapScreen = () => {
   const [selectedSOSLocation, setSelectedSOSLocation] = useState(null);
   const [sosQuestion, setSosQuestion] = useState('');
   const [isSelectingLocation, setIsSelectingLocation] = useState(false);
+  const [isRouteMode, setIsRouteMode] = useState(false); // 경로 모드 활성화 여부
+  const [selectedRoutePins, setSelectedRoutePins] = useState([]); // 선택된 경로 핀들
   
   const sheetRef = useRef(null);
   const dragHandleRef = useRef(null);
   const sheetOffsetAnim = useRef(new Animated.Value(0)).current;
   const startY = useRef(0);
+
+  // 네비게이션 바 숨기기
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerShown: false,
+    });
+  }, [navigation]);
 
   useEffect(() => {
     loadLocation();
@@ -126,6 +138,176 @@ const MapScreen = () => {
     console.log('현재 위치로 이동');
   };
 
+  // 핀을 경로에 추가하는 핸들러
+  const handlePinSelectForRoute = (pin, index) => {
+    if (!isRouteMode) {
+      // 경로 모드가 아니면 경로 모드를 활성화하도록 안내
+      Alert.alert(
+        '경로 모드',
+        '경로에 추가하려면 먼저 "경로 만들기" 버튼을 눌러주세요.',
+        [
+          { text: '취소', style: 'cancel' },
+          { text: '경로 모드 켜기', onPress: () => setIsRouteMode(true) }
+        ]
+      );
+      return;
+    }
+
+    const pinData = {
+      post: pin.post,
+      lat: pin.lat,
+      lng: pin.lng,
+      title: pin.title,
+      image: pin.image,
+      index
+    };
+    
+    // 이미 선택된 핀인지 확인
+    const isAlreadySelected = selectedRoutePins.some(p => p.post.id === pin.post.id);
+    
+    if (isAlreadySelected) {
+      // 이미 선택된 핀은 제거
+      const newPins = selectedRoutePins.filter(p => p.post.id !== pin.post.id);
+      setSelectedRoutePins(newPins);
+    } else {
+      // 새로운 핀 추가
+      const newPins = [...selectedRoutePins, pinData];
+      setSelectedRoutePins(newPins);
+    }
+  };
+
+  // 경로 모드 토글
+  const toggleRouteMode = () => {
+    const newMode = !isRouteMode;
+    
+    if (!newMode && selectedRoutePins.length > 0) {
+      // 경로 모드 종료 시 경로 초기화 확인
+      Alert.alert(
+        '경로 모드 종료',
+        '경로 모드를 종료하면 선택한 핀들이 초기화됩니다. 계속하시겠습니까?',
+        [
+          { text: '취소', style: 'cancel' },
+          { 
+            text: '종료', 
+            onPress: () => {
+              setIsRouteMode(false);
+              setSelectedRoutePins([]);
+              // 바텀 시트 다시 표시
+              setIsSheetHidden(false);
+              setSheetOffset(0);
+              Animated.spring(sheetOffsetAnim, {
+                toValue: 0,
+                useNativeDriver: true,
+              }).start();
+            }
+          }
+        ]
+      );
+    } else {
+      // 경로 모드 시작 또는 종료
+      setIsRouteMode(newMode);
+      if (newMode) {
+        // 경로 모드 시작 시 바텀 시트 숨기기
+        const hideOffset = sheetHeight + 20;
+        setIsSheetHidden(true);
+        setSheetOffset(hideOffset);
+        Animated.spring(sheetOffsetAnim, {
+          toValue: hideOffset,
+          useNativeDriver: true,
+        }).start();
+      } else {
+        // 경로 모드 종료 시 선택된 핀 초기화 및 바텀 시트 다시 표시
+        setSelectedRoutePins([]);
+        setIsSheetHidden(false);
+        setSheetOffset(0);
+        Animated.spring(sheetOffsetAnim, {
+          toValue: 0,
+          useNativeDriver: true,
+        }).start();
+      }
+    }
+  };
+
+  // 경로 초기화
+  const clearRoute = () => {
+    if (selectedRoutePins.length > 0) {
+      Alert.alert(
+        '경로 초기화',
+        '선택한 모든 핀을 제거하시겠습니까?',
+        [
+          { text: '취소', style: 'cancel' },
+          { 
+            text: '초기화', 
+            onPress: () => {
+              setSelectedRoutePins([]);
+            }
+          }
+        ]
+      );
+    } else {
+      setSelectedRoutePins([]);
+    }
+  };
+
+  // 경로 저장
+  const saveRoute = async () => {
+    if (selectedRoutePins.length < 2) {
+      Alert.alert('알림', '경로를 만들려면 최소 2개 이상의 핀을 선택해주세요.');
+      return;
+    }
+
+    const routeData = {
+      id: `route-${Date.now()}`,
+      pins: selectedRoutePins.map(pin => ({
+        id: pin.post.id,
+        location: pin.title,
+        lat: pin.lat,
+        lng: pin.lng,
+        image: pin.image
+      })),
+      createdAt: new Date().toISOString()
+    };
+
+    try {
+      const existingRoutesJson = await AsyncStorage.getItem('savedRoutes');
+      const existingRoutes = existingRoutesJson ? JSON.parse(existingRoutesJson) : [];
+      const updatedRoutes = [routeData, ...existingRoutes];
+      await AsyncStorage.setItem('savedRoutes', JSON.stringify(updatedRoutes));
+      Alert.alert('성공', '경로가 저장되었습니다!');
+    } catch (error) {
+      console.error('경로 저장 실패:', error);
+      Alert.alert('오류', '경로 저장에 실패했습니다.');
+    }
+  };
+
+  // 경로 공유
+  const shareRoute = async () => {
+    if (selectedRoutePins.length < 2) {
+      Alert.alert('알림', '경로를 만들려면 최소 2개 이상의 핀을 선택해주세요.');
+      return;
+    }
+
+    const routeData = {
+      pins: selectedRoutePins.map(pin => ({
+        location: pin.title,
+        lat: pin.lat,
+        lng: pin.lng
+      }))
+    };
+
+    const shareUrl = `여행 경로: ${selectedRoutePins.map(p => p.title).join(' → ')}`;
+    
+    try {
+      await Share.share({
+        message: `${selectedRoutePins.length}개의 장소를 포함한 여행 경로를 공유합니다.\n${shareUrl}`,
+        title: '여행 경로 공유'
+      });
+    } catch (error) {
+      console.error('공유 실패:', error);
+      Alert.alert('오류', '경로 공유에 실패했습니다.');
+    }
+  };
+
   const handleSOSRequest = () => {
     setIsSelectingLocation(true);
     setShowSOSModal(true);
@@ -185,7 +367,8 @@ const MapScreen = () => {
 
   return (
     <View style={styles.container}>
-      {/* 지도 컨테이너 - 전체 화면에 지도가 보이도록 (웹과 동일) */}
+      <StatusBar barStyle="dark-content" />
+      {/* 지도 컨테이너 - 전체 화면에 지도가 보이도록 */}
       <View style={styles.mapContainer}>
         {loading ? (
           <View style={styles.loadingContainer}>
@@ -203,7 +386,7 @@ const MapScreen = () => {
         )}
       </View>
 
-      {/* 검색바 - 투명 배경으로 지도가 보이도록 (웹과 동일) */}
+      {/* 검색바 - 투명 배경으로 지도가 보이도록 */}
       <View style={styles.searchBarContainer}>
         <View style={styles.searchBar}>
           <Ionicons name="search" size={24} color="#666" />
@@ -239,24 +422,112 @@ const MapScreen = () => {
         </TouchableOpacity>
       </View>
 
-      {/* 지도 컨트롤 버튼들 - 시트 상태에 따라 두 가지 고정 위치 (웹과 동일) */}
+      {/* 경로 모드 토글 버튼 */}
       <View style={[
-        styles.mapControls,
-        { bottom: isSheetHidden ? 120 : sheetHeight + 16 + BOTTOM_TAB_HEIGHT }
+        styles.routeModeButtonContainer,
+        { bottom: isRouteMode ? (selectedRoutePins.length >= 2 ? 200 : 120) : (isSheetHidden ? 120 : sheetHeight + 16 + BOTTOM_TAB_HEIGHT) }
       ]}>
-        <TouchableOpacity style={styles.controlButton} onPress={handleZoomIn}>
-          <Ionicons name="add" size={20} color="#333" />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.controlButton} onPress={handleZoomOut}>
-          <Ionicons name="remove" size={20} color="#333" />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.controlButton} onPress={handleCenterLocation}>
-          <Ionicons name="locate" size={20} color={COLORS.primary} />
+        <TouchableOpacity
+          style={[
+            styles.routeModeButton,
+            isRouteMode && styles.routeModeButtonActive
+          ]}
+          onPress={toggleRouteMode}
+          activeOpacity={0.8}
+        >
+          <Ionicons 
+            name="map" 
+            size={20} 
+            color={isRouteMode ? COLORS.textWhite : COLORS.text} 
+          />
+          <Text style={[
+            styles.routeModeButtonText,
+            isRouteMode && styles.routeModeButtonTextActive
+          ]}>
+            {isRouteMode ? '경로 모드' : '경로 만들기'}
+          </Text>
         </TouchableOpacity>
       </View>
 
-      {/* 사진 다시 보기 버튼 - 시트가 숨겨졌을 때만 표시 (웹과 동일) */}
-      {isSheetHidden && (
+      {/* 선택된 핀 개수 배지 (경로 모드일 때만 표시) */}
+      {isRouteMode && selectedRoutePins.length > 0 && (
+        <View style={[
+          styles.pinCountBadge,
+          { 
+            top: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 70 : 110,
+            bottom: 'auto'
+          }
+        ]}>
+          <Ionicons name="location" size={16} color={COLORS.textWhite} />
+          <Text style={styles.pinCountBadgeText}>
+            {selectedRoutePins.length}개 선택됨
+          </Text>
+        </View>
+      )}
+
+      {/* 경로 관리 버튼들 (경로 모드일 때만 표시) */}
+      {isRouteMode && (
+        <View style={[
+          styles.routeControlsContainer,
+          { bottom: BOTTOM_TAB_HEIGHT + 16, right: 16, left: 'auto' }
+        ]}>
+          <View style={styles.routeControls}>
+            {selectedRoutePins.length > 0 && (
+              <TouchableOpacity
+                style={styles.routeControlButton}
+                onPress={clearRoute}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.routeControlButtonText}>초기화</Text>
+              </TouchableOpacity>
+            )}
+            {selectedRoutePins.length >= 2 && (
+              <View style={styles.routeActionButtons}>
+                <TouchableOpacity
+                  style={[styles.routeControlButton, styles.routeControlButtonPrimary]}
+                  onPress={saveRoute}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.routeControlButtonText, styles.routeControlButtonTextPrimary]}>
+                    저장
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.routeControlButton, styles.routeControlButtonSuccess]}
+                  onPress={shareRoute}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="share" size={16} color={COLORS.textWhite} />
+                  <Text style={[styles.routeControlButtonText, styles.routeControlButtonTextSuccess]}>
+                    공유
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        </View>
+      )}
+
+      {/* 지도 컨트롤 버튼들 - 경로 모드일 때는 숨김 */}
+      {!isRouteMode && (
+        <View style={[
+          styles.mapControls,
+          { bottom: isSheetHidden ? 120 : sheetHeight + 16 + BOTTOM_TAB_HEIGHT }
+        ]}>
+          <TouchableOpacity style={styles.controlButton} onPress={handleZoomIn}>
+            <Ionicons name="add" size={20} color="#333" />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.controlButton} onPress={handleZoomOut}>
+            <Ionicons name="remove" size={20} color="#333" />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.controlButton} onPress={handleCenterLocation}>
+            <Ionicons name="locate" size={20} color={COLORS.primary} />
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* 사진 다시 보기 버튼 - 시트가 숨겨졌고 경로 모드가 아닐 때만 표시 */}
+      {isSheetHidden && !isRouteMode && (
         <TouchableOpacity
           style={styles.showSheetButton}
           onPress={handleShowSheet}
@@ -267,8 +538,8 @@ const MapScreen = () => {
         </TouchableOpacity>
       )}
 
-      {/* 주변 장소 바텀 시트 - 항상 보임, 아래로 슬라이드 가능 (웹과 동일) */}
-      {!isSelectingLocation && (
+      {/* 주변 장소 바텀 시트 - 경로 모드가 아닐 때만 보임, 아래로 슬라이드 가능 (웹과 동일) */}
+      {!isSelectingLocation && !isRouteMode && (
         <Animated.View
           ref={sheetRef}
           style={[
@@ -296,20 +567,57 @@ const MapScreen = () => {
             <Text style={styles.sheetHeaderTitle}>주변 장소</Text>
           </View>
 
-          {/* 주변 장소 스크롤 */}
+          {/* 주변 장소 스크롤 - 4개 이상일 때만 좌우 슬라이드 가능 */}
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.sheetScrollContent}
+            pagingEnabled={false}
+            snapToInterval={visiblePins.length >= 4 ? 102 : undefined} // 4개 이상일 때만 스냅
+            snapToAlignment="start"
+            decelerationRate="fast"
+            scrollEventThrottle={16}
+            scrollEnabled={visiblePins.length >= 4} // 4개 이상일 때만 스크롤 가능
           >
             {visiblePins.length > 0 ? (
-              visiblePins.map((pin, index) => (
+              visiblePins.map((pin, index) => {
+                const isSelected = selectedRoutePins.some(p => p.post.id === pin.post.id);
+                const selectedIndex = selectedRoutePins.findIndex(p => p.post.id === pin.post.id);
+                
+                return (
                 <TouchableOpacity
                   key={pin.id || index}
-                  style={styles.pinCard}
+                  style={[
+                    styles.pinCard,
+                    isSelected && styles.pinCardSelected
+                  ]}
                   activeOpacity={0.8}
                   onPress={() => {
-                    setSelectedPost({ post: pin.post, allPosts: posts, currentPostIndex: index });
+                    // 경로 모드일 때는 경로에 추가, 아니면 게시물 상세 보기
+                    if (isRouteMode) {
+                      handlePinSelectForRoute(pin, index);
+                    } else {
+                      // 즉시 상세화면 표시
+                      const postData = { 
+                        post: pin.post, 
+                        allPosts: posts, 
+                        currentPostIndex: index 
+                      };
+                      setSelectedPost(postData);
+                    }
+                  }}
+                  onLongPress={() => {
+                    // 길게 누르면 경로 모드가 아니어도 경로에 추가할 수 있도록 (선택사항)
+                    if (!isRouteMode) {
+                      Alert.alert(
+                        '경로 모드',
+                        '경로에 추가하려면 먼저 "경로 만들기" 버튼을 눌러주세요.',
+                        [
+                          { text: '취소', style: 'cancel' },
+                          { text: '경로 모드 켜기', onPress: () => setIsRouteMode(true) }
+                        ]
+                      );
+                    }
                   }}
                 >
                   {pin.image ? (
@@ -328,8 +636,16 @@ const MapScreen = () => {
                       {pin.title}
                     </Text>
                   </View>
+                  {isSelected && (
+                    <View style={styles.pinCardBadge}>
+                      <Text style={styles.pinCardBadgeText}>
+                        {selectedIndex + 1}
+                      </Text>
+                    </View>
+                  )}
                 </TouchableOpacity>
-              ))
+              );
+              })
             ) : (
               <View style={styles.emptyPinsContainer}>
                 <Text style={styles.emptyPinsText}>표시할 장소가 없습니다</Text>
@@ -467,6 +783,7 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: BOTTOM_TAB_HEIGHT,
     zIndex: 1,
+    backgroundColor: COLORS.background,
   },
   loadingContainer: {
     flex: 1,
@@ -495,10 +812,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.textSecondary,
   },
-  // 검색바 (웹과 동일: 투명 배경, blur)
+  // 검색바 (투명 배경, blur)
   searchBarContainer: {
     position: 'absolute',
-    top: 20,
+    top: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 10 : 50,
     left: 16,
     right: 16,
     zIndex: 10,
@@ -534,10 +851,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderRadius: 26,
   },
-  // SOS 버튼 (웹과 동일)
+  // SOS 버튼
   sosButtonContainer: {
     position: 'absolute',
-    top: 88,
+    top: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 70 : 110,
     left: 16,
     zIndex: 10,
   },
@@ -654,6 +971,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 2,
+    flexDirection: 'column', // 사진이 위, 지역명이 아래
   },
   pinCardImage: {
     width: '100%',
@@ -672,6 +990,33 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     color: '#333',
+  },
+  pinCardSelected: {
+    borderWidth: 2,
+    borderColor: COLORS.primary,
+  },
+  pinCardBadge: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: COLORS.primary,
+    borderWidth: 2,
+    borderColor: 'white',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  pinCardBadgeText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    color: 'white',
   },
   emptyPinsContainer: {
     width: SCREEN_WIDTH - 32,
@@ -795,6 +1140,112 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: '600',
+  },
+  // 경로 모드 버튼
+  routeModeButtonContainer: {
+    position: 'absolute',
+    left: 16,
+    zIndex: 30,
+  },
+  routeModeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 24,
+    backgroundColor: 'white',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  routeModeButtonActive: {
+    backgroundColor: COLORS.primary,
+  },
+  routeModeButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  routeModeButtonTextActive: {
+    color: COLORS.textWhite,
+  },
+  // 경로 관리 컨트롤
+  routeControlsContainer: {
+    position: 'absolute',
+    right: 16,
+    zIndex: 30,
+  },
+  routeControls: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 3,
+    gap: 8,
+    alignItems: 'flex-end',
+  },
+  routeActionButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  routeControlButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: '#f5f5f5',
+    alignItems: 'center',
+    minWidth: 60,
+  },
+  routeControlButtonPrimary: {
+    backgroundColor: COLORS.primary,
+  },
+  routeControlButtonSuccess: {
+    backgroundColor: '#4CAF50',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  routeControlButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  routeControlButtonTextPrimary: {
+    color: COLORS.textWhite,
+  },
+  routeControlButtonTextSuccess: {
+    color: COLORS.textWhite,
+  },
+  // 선택된 핀 개수 배지
+  pinCountBadge: {
+    position: 'absolute',
+    left: 16,
+    zIndex: 30,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: COLORS.primary,
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  pinCountBadgeText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.textWhite,
   },
 });
 

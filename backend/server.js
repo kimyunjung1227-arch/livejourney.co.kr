@@ -90,6 +90,7 @@ const searchRouter = require('./routes/search');
 const mapRouter = require('./routes/map');
 const locationsRouter = require('./routes/locations');
 const policiesRouter = require('./routes/policies');
+const feedbackRouter = require('./routes/feedback');
 
 app.use('/api/posts', postsRouter);
 app.use('/api/users', usersRouter);
@@ -101,6 +102,7 @@ app.use('/api/search', searchRouter);
 app.use('/api/map', mapRouter);
 app.use('/api/locations', locationsRouter);
 app.use('/api/policies', policiesRouter);
+app.use('/api/feedback', feedbackRouter);
 
 // API 문서 (루트 경로)
 app.get('/', (req, res) => {
@@ -116,7 +118,8 @@ app.get('/', (req, res) => {
       rewards: '/api/rewards',
       upload: '/api/upload',
       search: '/api/search',
-      map: '/api/map'
+      map: '/api/map',
+      feedback: '/api/feedback'
     },
     documentation: '/api/docs'
   });

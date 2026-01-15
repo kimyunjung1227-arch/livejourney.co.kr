@@ -80,13 +80,44 @@ const PostDetailScreen = () => {
   const commentInputRef = useRef(null);
   const commentInputSectionRef = useRef(null);
 
-  // 슬라이드 가능한 게시물 목록
+  // 슬라이드 가능한 게시물 목록 (allPosts가 없으면 AsyncStorage에서 로드)
+  const [loadedAllPosts, setLoadedAllPosts] = useState(null);
+  
+  useEffect(() => {
+    const loadAllPostsFromStorage = async () => {
+      if (!allPosts || !Array.isArray(allPosts) || allPosts.length === 0) {
+        try {
+          const uploadedPostsJson = await AsyncStorage.getItem('uploadedPosts');
+          const uploadedPosts = uploadedPostsJson ? JSON.parse(uploadedPostsJson) : [];
+          if (uploadedPosts.length > 0) {
+            setLoadedAllPosts(uploadedPosts);
+            
+            // 현재 게시물의 인덱스 찾기
+            const currentPostId = passedPost?.id || postId;
+            if (currentPostId) {
+              const foundIndex = uploadedPosts.findIndex(p => p.id === currentPostId);
+              if (foundIndex >= 0) {
+                setCurrentPostIndexState(foundIndex);
+              }
+            }
+          }
+        } catch (error) {
+          console.error('게시물 목록 로드 실패:', error);
+        }
+      }
+    };
+    loadAllPostsFromStorage();
+  }, [allPosts, passedPost, postId]);
+
   const slideablePosts = useMemo(() => {
     if (allPosts && Array.isArray(allPosts) && allPosts.length > 0) {
       return allPosts;
     }
+    if (loadedAllPosts && Array.isArray(loadedAllPosts) && loadedAllPosts.length > 0) {
+      return loadedAllPosts;
+    }
     return passedPost ? [passedPost] : [];
-  }, [allPosts, passedPost]);
+  }, [allPosts, loadedAllPosts, passedPost]);
 
   // 미디어 배열 (이미지 + 동영상)
   const mediaItems = useMemo(() => {
@@ -282,35 +313,88 @@ const PostDetailScreen = () => {
     }
   }, [currentImageIndex, mediaItems.length]);
 
-  // 상하 스와이프로 게시물 변경
+  // 게시물 변경 (상하/좌우 스와이프 모두 지원)
   const changePost = useCallback(async (direction) => {
-    if (!slideablePosts || slideablePosts.length === 0 || isTransitioning) return;
+    if (!slideablePosts || slideablePosts.length === 0 || isTransitioning) {
+      console.log('게시물 변경 불가:', { slideablePostsLength: slideablePosts?.length, isTransitioning });
+      return;
+    }
     
-    if (slideablePosts.length === 1) return;
+    if (slideablePosts.length === 1) {
+      console.log('게시물이 1개뿐이므로 변경 불가');
+      return;
+    }
     
     setIsTransitioning(true);
     
     let newIndex;
-    if (direction === 'up') {
+    if (direction === 'up' || direction === 'left') {
+      // 위로 또는 왼쪽으로: 이전 게시물
       newIndex = currentPostIndexState > 0 ? currentPostIndexState - 1 : slideablePosts.length - 1;
     } else {
+      // 아래로 또는 오른쪽으로: 다음 게시물
       newIndex = currentPostIndexState < slideablePosts.length - 1 ? currentPostIndexState + 1 : 0;
     }
     
+    console.log('게시물 변경:', { direction, currentIndex: currentPostIndexState, newIndex, totalPosts: slideablePosts.length });
+    
     setCurrentPostIndexState(newIndex);
     const newPost = slideablePosts[newIndex];
+    
+    if (!newPost) {
+      console.error('새 게시물을 찾을 수 없습니다:', newIndex);
+      setIsTransitioning(false);
+      return;
+    }
+    
     setPost(newPost);
     setCurrentImageIndex(0);
     setLiked(await isPostLiked(newPost.id));
     setLikeCount(newPost.likes || 0);
     setComments([...(newPost.comments || []), ...(newPost.qnaList || [])]);
     
+    // 대표 뱃지 / 작성자 정보 로드
+    const postUserId =
+      newPost.userId ||
+      (typeof newPost.user === 'string' ? newPost.user : newPost.user?.id) ||
+      newPost.user;
+    if (postUserId) {
+      await loadRepresentativeBadge(postUserId);
+    }
+    
+    // 즐겨찾기 상태 업데이트
+    isInterestPlace(newPost.location || newPost.placeName).then(setIsFavorited);
+    
     setTimeout(() => {
       setIsTransitioning(false);
     }, 300);
-  }, [slideablePosts, currentPostIndexState, isTransitioning]);
+  }, [slideablePosts, currentPostIndexState, isTransitioning, loadRepresentativeBadge]);
 
-  // PanResponder for swipe gestures
+  // 이미지 영역용 PanResponder (이미지 간 이동 또는 게시물 간 이동)
+  const imagePanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false, // 이미지 영역은 터치를 가로채지 않음
+      onMoveShouldSetPanResponder: (evt, gestureState) => {
+        // 이미지가 여러 개일 때만 이미지 영역에서 처리
+        return mediaItems.length > 1 && Math.abs(gestureState.dx) > 5;
+      },
+      onPanResponderRelease: (evt, gestureState) => {
+        const { dx } = gestureState;
+        const horizontalDistance = Math.abs(dx);
+        
+        if (horizontalDistance > 30 && mediaItems.length > 1) {
+          // 이미지가 여러 개일 때만 이미지 간 이동
+          if (dx > 0) {
+            handleImageSwipe('right');
+          } else {
+            handleImageSwipe('left');
+          }
+        }
+      },
+    })
+  ).current;
+
+  // 전체 화면용 PanResponder (게시물 간 이동)
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
@@ -328,21 +412,37 @@ const PostDetailScreen = () => {
         const horizontalDistance = Math.abs(dx);
         const verticalDistance = Math.abs(dy);
         
-        // 상하 움직임이 좌우 움직임보다 크면 상하 스와이프
-        if (verticalDistance > horizontalDistance && verticalDistance > 30) {
+        console.log('스와이프 감지:', { 
+          dx, 
+          dy, 
+          horizontalDistance, 
+          verticalDistance,
+          slideablePostsLength: slideablePosts.length,
+          mediaItemsLength: mediaItems.length
+        });
+        
+        // 좌우 움직임이 상하 움직임보다 크면 좌우 스와이프 (게시물 간 이동)
+        // 임계값을 낮춰서 더 민감하게 반응하도록 (40 -> 30)
+        if (horizontalDistance > verticalDistance && horizontalDistance > 30) {
+          console.log('좌우 스와이프 감지 - 게시물 간 이동');
+          if (dx > 0) {
+            // 오른쪽으로 스와이프: 이전 게시물
+            console.log('이전 게시물로 이동');
+            changePost('left');
+          } else {
+            // 왼쪽으로 스와이프: 다음 게시물
+            console.log('다음 게시물로 이동');
+            changePost('right');
+          }
+        } else if (verticalDistance > horizontalDistance && verticalDistance > 30) {
+          // 상하 스와이프: 게시물 간 이동 (기존 기능 유지)
+          console.log('상하 스와이프 감지 - 게시물 간 이동');
           if (dy > 0) {
             // 아래로 스와이프: 다음 게시물
             changePost('down');
           } else {
             // 위로 스와이프: 이전 게시물
             changePost('up');
-          }
-        } else if (horizontalDistance > 30) {
-          // 좌우 스와이프: 이미지 간 이동
-          if (dx > 0) {
-            handleImageSwipe('right');
-          } else {
-            handleImageSwipe('left');
           }
         }
       },
@@ -441,8 +541,20 @@ const PostDetailScreen = () => {
 
       {/* 메인 컨텐츠 - 스와이프 가능 */}
       <View style={styles.content} {...panResponder.panHandlers}>
-        {/* 이미지/비디오 영역 */}
-        <View style={styles.mediaContainer}>
+        {/* 게시물 간 이동 가이드 화살표 (가벼운 스타일) */}
+        {slideablePosts.length > 1 && (
+          <>
+            <View style={styles.postNavArrowLeft} pointerEvents="none">
+              <Ionicons name="chevron-back" size={16} color="rgba(255,255,255,0.25)" />
+            </View>
+            <View style={styles.postNavArrowRight} pointerEvents="none">
+              <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.25)" />
+            </View>
+          </>
+        )}
+
+        {/* 이미지/비디오 영역 - 이미지가 여러 개일 때만 별도 처리 */}
+        <View style={styles.mediaContainer} {...(mediaItems.length > 1 ? imagePanResponder.panHandlers : {})}>
           <ScrollView
             horizontal
             pagingEnabled
@@ -482,7 +594,7 @@ const PostDetailScreen = () => {
             </View>
           )}
 
-          {/* 좌우 화살표 버튼 */}
+          {/* 좌우 화살표 버튼 (이미지 간 이동) */}
           {mediaItems.length > 1 && (
             <>
               <TouchableOpacity
@@ -500,6 +612,18 @@ const PostDetailScreen = () => {
             </>
           )}
         </View>
+
+        {/* 게시물 간 이동 가이드 화살표 (가벼운 스타일) */}
+        {slideablePosts.length > 1 && (
+          <>
+            <View style={styles.postNavArrowLeft} pointerEvents="none">
+              <Ionicons name="chevron-back" size={18} color="rgba(255,255,255,0.3)" />
+            </View>
+            <View style={styles.postNavArrowRight} pointerEvents="none">
+              <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.3)" />
+            </View>
+          </>
+        )}
 
         {/* 스크롤 가능한 컨텐츠 - 웹과 동일한 구조 */}
         <ScreenBody>
@@ -846,6 +970,27 @@ const styles = StyleSheet.create({
   },
   arrowRight: {
     right: 12,
+  },
+  // 게시물 간 이동 가이드 화살표 (가벼운 스타일)
+  postNavArrowLeft: {
+    position: 'absolute',
+    left: 6,
+    top: SCREEN_HEIGHT * 0.35,
+    width: 24,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  postNavArrowRight: {
+    position: 'absolute',
+    right: 6,
+    top: SCREEN_HEIGHT * 0.35,
+    width: 24,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
   },
   scrollContent: {
     flex: 1,

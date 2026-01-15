@@ -629,6 +629,17 @@ export const generateMockUploadsForRegion = (region, count = 20) => {
  * @param {number} totalCount - 전체 생성할 게시물 수
  */
 export const seedMockData = (totalCount = 100) => {
+  console.warn('🚫 seedMockData 호출: 현재는 배포 모드에서 목업 데이터를 생성하지 않습니다.');
+  // 배포용: 더 이상 자동 목업 생성은 하지 않도록, 즉시 빈 결과 반환
+  return {
+    total: 0,
+    bloom: 0,
+    landmark: 0,
+    food: 0,
+    general: 0
+  };
+
+  // 아래는 이전 목업 생성 로직 (필요시 개발용으로만 다시 사용할 수 있음)
   // 기존 데이터가 이미 있으면 생성하지 않음
   const existingPosts = JSON.parse(localStorage.getItem('uploadedPosts') || '[]');
   if (existingPosts.length > 0) {
