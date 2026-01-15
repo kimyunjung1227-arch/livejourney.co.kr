@@ -28,12 +28,26 @@
     </style>
     <script>
       // GitHub Pages SPA 라우팅 지원
-      // 404 페이지에서도 index.html로 리다이렉트하여 React Router가 처리하도록 함
+      // 모든 404 요청을 index.html로 리다이렉트
       var path = window.location.pathname;
       var search = window.location.search;
       var hash = window.location.hash;
-      var newPath = '/index.html' + (path !== '/' ? '?path=' + encodeURIComponent(path) : '') + search + hash;
-      window.location.replace(newPath);
+      
+      // base path 제거 (이미 포함되어 있을 수 있음)
+      var basePath = '/livejourney.com';
+      if (path.startsWith(basePath)) {
+        path = path.substring(basePath.length);
+      }
+      
+      // index.html로 리다이렉트
+      var indexPath = basePath + '/index.html';
+      if (path !== '/' && path !== basePath && path !== indexPath) {
+        // 경로 정보를 쿼리 파라미터로 전달
+        var separator = search ? '&' : '?';
+        window.location.replace(indexPath + separator + 'redirect=' + encodeURIComponent(path) + search + hash);
+      } else {
+        window.location.replace(indexPath + search + hash);
+      }
     </script>
   </head>
   <body>
