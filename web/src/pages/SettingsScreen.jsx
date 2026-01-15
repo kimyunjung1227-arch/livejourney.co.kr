@@ -66,7 +66,7 @@ const SettingsScreen = () => {
     // 모달 닫기
     setShowLogoutModal(false);
     
-    console.log('🏠 시작 화면으로 이동');
+    logger.log('🏠 시작 화면으로 이동');
     navigate('/', { replace: true });
   };
 
