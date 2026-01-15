@@ -8,7 +8,7 @@ import { notifyBadge } from '../utils/notifications';
 import { safeSetItem, logLocalStorageStatus } from '../utils/localStorageManager';
 import { checkNewBadges, awardBadge, hasSeenBadge, markBadgeAsSeen, calculateUserStats } from '../utils/badgeSystem';
 import { checkAndNotifyInterestPlace } from '../utils/interestPlaces';
-import { analyzeImageForTags, getRecommendedTags } from '../utils/aiImageAnalyzer';
+import { analyzeImageForTags } from '../utils/aiImageAnalyzer';
 import { getWeatherByRegion } from '../api/weather';
 import { getCurrentTimestamp, getTimeAgo } from '../utils/timeUtils';
 import { gainExp } from '../utils/levelSystem';

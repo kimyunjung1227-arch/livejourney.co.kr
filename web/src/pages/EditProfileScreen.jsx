@@ -157,7 +157,7 @@ const EditProfileScreen = () => {
       // userUpdated 이벤트 발생 (다른 컴포넌트에서 감지)
       window.dispatchEvent(new Event('userUpdated'));
       
-      console.log('✅ 프로필 저장 완료:', updatedUser);
+      logger.log('✅ 프로필 저장 완료:', updatedUser);
       
       setShowSuccessModal(true);
       
@@ -167,7 +167,7 @@ const EditProfileScreen = () => {
         navigate('/profile');
       }, 2000);
     } catch (error) {
-      console.error('프로필 저장 실패:', error);
+      logger.error('프로필 저장 실패:', error);
       alert('프로필 저장에 실패했습니다.');
     }
   };

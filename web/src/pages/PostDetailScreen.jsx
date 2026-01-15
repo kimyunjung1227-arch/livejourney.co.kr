@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import BottomNavigation from '../components/BottomNavigation';
-import { getPost, likePost, addQuestion } from '../api/posts';
+import { getPost } from '../api/posts';
 import { useAuth } from '../contexts/AuthContext';
 import { getWeatherByRegion } from '../api/weather';
 import { getTimeAgo } from '../utils/dateUtils';

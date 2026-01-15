@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import BottomNavigation from '../components/BottomNavigation';
 import { getWeatherByRegion, getTrafficByRegion } from '../api/weather';
-import { seedMockData } from '../utils/mockUploadData';
 import { filterRecentPosts } from '../utils/timeUtils';
 import { toggleInterestPlace, isInterestPlace } from '../utils/interestPlaces';
 import { getLandmarksByRegion, isPostMatchingLandmarks, REGION_LANDMARKS } from '../utils/regionLandmarks';

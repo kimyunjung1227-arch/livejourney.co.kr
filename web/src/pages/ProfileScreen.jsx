@@ -5,7 +5,6 @@ import BottomNavigation from '../components/BottomNavigation';
 import { getUnreadCount } from '../utils/notifications';
 import { getEarnedBadges } from '../utils/badgeSystem';
 import { getUserLevel } from '../utils/levelSystem';
-import { filterRecentPosts } from '../utils/timeUtils';
 import { getCoordinatesByLocation } from '../utils/regionLocationMapping';
 import { logger } from '../utils/logger';
 

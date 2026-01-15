@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import BottomNavigation from '../components/BottomNavigation';
+import { logger } from '../utils/logger';
 
 const SettingsScreen = () => {
   const navigate = useNavigate();
@@ -55,9 +56,9 @@ const SettingsScreen = () => {
   };
 
   const confirmLogout = () => {
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log('👋 로그아웃 & 완전 초기화 시작...');
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    logger.log('👋 로그아웃 & 완전 초기화 시작...');
+    logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     
     // 로그아웃 (내부에서 완전 초기화 수행)
     logout();
