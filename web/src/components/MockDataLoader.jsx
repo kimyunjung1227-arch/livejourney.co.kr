@@ -52,14 +52,14 @@ const MockDataLoader = () => {
   useEffect(() => {
     const existingPosts = JSON.parse(localStorage.getItem('uploadedPosts') || '[]');
     console.log(`📊 현재 게시물: ${existingPosts.length}개`);
-    
-    // ✅ 배포용: 프로덕션에서는 더 이상 Mock 데이터를 자동 생성하지 않음
-    // if (import.meta.env.MODE === 'production' && existingPosts.length === 0) {
-    //   console.log('🌱 프로덕션 최초 접속 - 데모용 Mock 데이터 자동 생성');
-    //   const result = seedMockData(200); // 한국 전역 사진 + 여러 사용자
-    //   setStats(result);
-    // } else 
-    if (existingPosts.length > 0) {
+
+    // 저장된 데이터가 없으면 목업 데이터 자동 생성 (검색/해시태그/실시간 사용자 등에서 바로 활용)
+    if (existingPosts.length === 0) {
+      console.log('🌱 저장된 게시물이 없어 목업 데이터를 생성합니다.');
+      const result = seedMockData(50);
+      setStats(result);
+      window.dispatchEvent(new CustomEvent('postsUpdated'));
+    } else {
       const currentStats = getMockDataStats();
       setStats(currentStats);
     }

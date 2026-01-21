@@ -1,7 +1,28 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { addNotification } from '../utils/notifications';
-import { getLocationByCoordinates } from '../utils/locationCoordinates';
+import { getLocationByCoordinates, getCoordinatesByLocation as getCoordsByRegion } from '../utils/locationCoordinates';
+import { getRegionDefaultImage } from '../utils/regionDefaultImages';
+import { filterRecentPosts } from '../utils/timeUtils';
+import { getRecommendedRegions } from '../utils/recommendationEngine';
+
+// 완성된 단어 → 추천 타입 매핑 (지도 검색 시 단어 기반 추천)
+const KEYWORD_TO_RECOMMENDATION_TYPE = {
+  food: ['맛집', '음식', '식당', '맛', '레스토랑', '맛집정보'],
+  blooming: ['꽃', '개화', '벚꽃', '매화', '진달래', '유채꽃', '코스모스', '개화정보'],
+  scenic: ['명소', '관광', '경치', '가볼만', '산', '바다', '해변', '절', '사찰', '관광지'],
+  waiting: ['웨이팅', '대기', '줄', 'waiting', '웨이트'],
+  popular: ['인기', '핫', '인기있는'],
+  active: ['활발', '최신', '최근', '새로운']
+};
+
+const getRecommendationTypeForKeyword = (query) => {
+  const q = (query || '').toLowerCase().trim();
+  for (const [type, keywords] of Object.entries(KEYWORD_TO_RECOMMENDATION_TYPE)) {
+    if (keywords.some(kw => q.includes(kw) || kw.includes(q))) return type;
+  }
+  return null;
+};
 
 const MapScreen = () => {
   const navigate = useNavigate();
@@ -12,11 +33,445 @@ const MapScreen = () => {
   const dragHandleRef = useRef(null);
   const markersRef = useRef([]);
   const currentLocationMarkerRef = useRef(null);
+  const searchMarkerRef = useRef(null); // 검색 결과 마커
+  const filterScrollRef = useRef(null); // 필터 좌우 스크롤 (마우스 휠용)
+  const hasDraggedFilterRef = useRef(false); // 버튼 위에서 드래그했으면 클릭 방지
   const [map, setMap] = useState(null);
   const [posts, setPosts] = useState([]);
   const [visiblePins, setVisiblePins] = useState([]);
   const [currentLocation, setCurrentLocation] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedFilters, setSelectedFilters] = useState([]); // 필터: ['bloom', 'food', 'scenic', 'waiting'] 중복 선택 가능
+  const [searchResults, setSearchResults] = useState([]); // 검색 결과 게시물
+  const [isSearching, setIsSearching] = useState(false); // 검색 중인지 여부
+  const [kakaoSearchResults, setKakaoSearchResults] = useState([]); // Kakao API 검색 결과 (관광지 등)
+  const [showSearchSheet, setShowSearchSheet] = useState(false); // 검색 시트 표시 여부
+  const [filteredRegions, setFilteredRegions] = useState([]); // 자동완성 필터링된 지역
+  const [searchSuggestions, setSearchSuggestions] = useState([]); // 검색 제안 (지역 + 게시물)
+  const [recentSearches, setRecentSearches] = useState([]); // 최근 검색 지역
+
+  // 추천 지역 데이터
+  const recommendedRegions = useMemo(() => [
+    { id: 1, name: '서울', keywords: ['도시', '쇼핑', '명동', '강남', '홍대', '경복궁', '궁궐', '한강', '야경', '카페', '맛집'] },
+    { id: 2, name: '부산', keywords: ['바다', '해변', '해운대', '광안리', '야경', '횟집', '수산시장', '자갈치', '항구', '서핑'] },
+    { id: 3, name: '대구', keywords: ['도시', '근대', '골목', '김광석길', '동성로', '쇼핑', '약령시', '팔공산', '치맥', '맥주'] },
+    { id: 4, name: '인천', keywords: ['차이나타운', '짜장면', '월미도', '야경', '인천공항', '바다', '항구', '송도', '근대'] },
+    { id: 5, name: '광주', keywords: ['도시', '무등산', '양동시장', '충장로', '예술', '문화', '민주화', '역사'] },
+    { id: 6, name: '대전', keywords: ['도시', '과학', '엑스포', '성심당', '빵', '한밭수목원', '대청호', '계족산'] },
+    { id: 7, name: '울산', keywords: ['공업', '항구', '대왕암공원', '간절곶', '일출', '고래', '울산대교', '태화강'] },
+    { id: 8, name: '세종', keywords: ['행정', '정부', '신도시', '계획도시', '공원', '호수공원', '도담동'] },
+    { id: 9, name: '수원', keywords: ['화성', '성곽', '수원갈비', '행궁', '화성행궁', '전통', '맛집'] },
+    { id: 10, name: '용인', keywords: ['에버랜드', '놀이공원', '민속촌', '한국민속촌', '가족'] },
+    { id: 11, name: '성남', keywords: ['도시', '판교', 'IT', '테크노', '카페'] },
+    { id: 12, name: '고양', keywords: ['일산', '호수공원', '킨텍스', '전시', '꽃축제'] },
+    { id: 13, name: '부천', keywords: ['도시', '만화박물관', '애니메이션', '영화'] },
+    { id: 14, name: '안양', keywords: ['도시', '안양천', '예술공원'] },
+    { id: 15, name: '파주', keywords: ['헤이리', '출판단지', '임진각', 'DMZ', '예술', '북카페'] },
+    { id: 16, name: '평택', keywords: ['항구', '미군기지', '송탄'] },
+    { id: 17, name: '화성', keywords: ['융건릉', '용주사', '제부도', '바다'] },
+    { id: 18, name: '김포', keywords: ['공항', '김포공항', '한강', '애기봉'] },
+    { id: 19, name: '광명', keywords: ['동굴', '광명동굴', 'KTX'] },
+    { id: 20, name: '이천', keywords: ['도자기', '쌀', '온천', '세라피아'] },
+    { id: 21, name: '양평', keywords: ['자연', '두물머리', '세미원', '힐링', '강', '수목원'] },
+    { id: 22, name: '가평', keywords: ['남이섬', '쁘띠프랑스', '아침고요수목원', '자연', '힐링', '계곡'] },
+    { id: 23, name: '포천', keywords: ['아트밸리', '허브아일랜드', '산정호수', '자연'] },
+    { id: 24, name: '춘천', keywords: ['닭갈비', '호수', '남이섬', '소양강', '스카이워크', '맛집'] },
+    { id: 25, name: '강릉', keywords: ['바다', '커피', '카페', '경포대', '정동진', '일출', '해변', '순두부'] },
+    { id: 26, name: '속초', keywords: ['바다', '설악산', '산', '등산', '오징어', '수산시장', '아바이마을', '회'] },
+    { id: 27, name: '원주', keywords: ['치악산', '등산', '산', '자연'] },
+    { id: 28, name: '동해', keywords: ['바다', '해변', '추암', '촛대바위', '일출'] },
+    { id: 29, name: '태백', keywords: ['산', '탄광', '눈꽃축제', '겨울', '스키'] },
+    { id: 30, name: '삼척', keywords: ['바다', '동굴', '환선굴', '대금굴', '해변'] },
+    { id: 31, name: '평창', keywords: ['스키', '겨울', '올림픽', '산', '용평'] },
+    { id: 32, name: '양양', keywords: ['바다', '서핑', '해변', '낙산사', '하조대'] },
+    { id: 33, name: '청주', keywords: ['도시', '직지', '인쇄', '상당산성', '문화'] },
+    { id: 34, name: '충주', keywords: ['호수', '충주호', '탄금대', '사과', '자연'] },
+    { id: 35, name: '제천', keywords: ['약초', '한방', '청풍호', '의림지', '자연'] },
+    { id: 36, name: '천안', keywords: ['호두과자', '독립기념관', '역사', '맛집'] },
+    { id: 37, name: '아산', keywords: ['온양온천', '온천', '현충사', '이순신', '역사'] },
+    { id: 38, name: '공주', keywords: ['역사', '백제', '공산성', '무령왕릉', '전통', '문화재'] },
+    { id: 39, name: '보령', keywords: ['바다', '머드', '축제', '해수욕장', '대천'] },
+    { id: 40, name: '서산', keywords: ['바다', '간월암', '마애삼존불', '석불', '역사'] },
+    { id: 41, name: '당진', keywords: ['바다', '왜목마을', '일출', '일몰'] },
+    { id: 42, name: '부여', keywords: ['역사', '백제', '궁남지', '정림사지', '문화재', '전통'] },
+    { id: 43, name: '전주', keywords: ['한옥', '전통', '한옥마을', '비빔밥', '콩나물국밥', '맛집', '한복'] },
+    { id: 44, name: '군산', keywords: ['근대', '역사', '이성당', '빵', '항구', '경암동'] },
+    { id: 45, name: '익산', keywords: ['역사', '백제', '미륵사지', '보석', '문화재'] },
+    { id: 46, name: '정읍', keywords: ['내장산', '단풍', '산', '등산', '자연'] },
+    { id: 47, name: '남원', keywords: ['춘향', '전통', '광한루', '지리산', '산'] },
+    { id: 48, name: '목포', keywords: ['바다', '항구', '유달산', '갓바위', '회', '해산물'] },
+    { id: 49, name: '여수', keywords: ['바다', '밤바다', '야경', '낭만', '케이블카', '오동도', '향일암'] },
+    { id: 50, name: '순천', keywords: ['순천만', '정원', '갈대', '습지', '자연', '생태'] },
+    { id: 51, name: '광양', keywords: ['매화', '꽃', '섬진강', '불고기', '맛집'] },
+    { id: 52, name: '담양', keywords: ['대나무', '죽녹원', '메타세쿼이아', '자연', '힐링'] },
+    { id: 53, name: '보성', keywords: ['녹차', '차밭', '자연', '힐링', '드라이브'] },
+    { id: 54, name: '포항', keywords: ['바다', '호미곶', '일출', '과메기', '회', '항구'] },
+    { id: 55, name: '경주', keywords: ['역사', '문화재', '불국사', '석굴암', '첨성대', '신라', '전통'] },
+    { id: 56, name: '구미', keywords: ['공업', 'IT', '도시'] },
+    { id: 57, name: '안동', keywords: ['하회마을', '전통', '한옥', '탈춤', '간고등어', '역사'] },
+    { id: 58, name: '김천', keywords: ['직지사', '산', '사찰', '포도'] },
+    { id: 59, name: '영주', keywords: ['부석사', '소수서원', '사찰', '역사', '전통'] },
+    { id: 60, name: '창원', keywords: ['도시', '공업', '진해', '벚꽃', '축제'] },
+    { id: 61, name: '진주', keywords: ['진주성', '역사', '비빔밥', '맛집', '남강'] },
+    { id: 62, name: '통영', keywords: ['바다', '케이블카', '한려수도', '회', '해산물', '섬'] },
+    { id: 63, name: '사천', keywords: ['바다', '해변', '항공', '공항'] },
+    { id: 64, name: '김해', keywords: ['가야', '역사', '공항', '김해공항', '수로왕릉'] },
+    { id: 65, name: '거제', keywords: ['바다', '섬', '해금강', '외도', '조선소'] },
+    { id: 66, name: '양산', keywords: ['통도사', '사찰', '신불산', '산', '자연'] },
+    { id: 67, name: '제주', keywords: ['섬', '바다', '한라산', '오름', '돌하르방', '흑돼지', '감귤', '휴양', '힐링'] },
+    { id: 68, name: '서귀포', keywords: ['바다', '섬', '폭포', '정방폭포', '천지연', '감귤', '자연'] }
+  ], []);
+
+  // 한글 초성 추출 함수
+  const getChosung = useCallback((str) => {
+    const CHOSUNG = ['ㄱ', 'ㄲ', 'ㄴ', 'ㄷ', 'ㄸ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅃ', 'ㅅ', 'ㅆ', 'ㅇ', 'ㅈ', 'ㅉ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ'];
+    let result = '';
+    
+    for (let i = 0; i < str.length; i++) {
+      const code = str.charCodeAt(i) - 44032;
+      if (code > -1 && code < 11172) {
+        result += CHOSUNG[Math.floor(code / 588)];
+      } else {
+        result += str.charAt(i);
+      }
+    }
+    return result;
+  }, []);
+
+  // 초성 매칭 함수
+  const matchChosung = useCallback((text, search) => {
+    const textChosung = getChosung(text);
+    const searchChosung = getChosung(search);
+    
+    return textChosung.includes(searchChosung) || textChosung.includes(search);
+  }, [getChosung]);
+
+  // 검색어 입력 핸들러 (자동완성)
+  const handleSearchInput = useCallback((value) => {
+    setSearchQuery(value);
+    
+    if (!value.trim()) {
+      setFilteredRegions([]);
+      setSearchSuggestions([]);
+      return;
+    }
+
+    const query = value.trim();
+    const queryLower = query.toLowerCase();
+    const suggestions = [];
+    const uniqueNames = new Set();
+
+    // 단어 완성 여부 확인 (한글 2글자 이상 완성형인 경우)
+    // 예: "서울", "경주" 같은 완성된 단어만 자동완성
+    const isWordComplete = /[가-힣]{2,}/.test(query) || query.length >= 3;
+
+    // 단어가 완성된 경우에만 자동완성 표시
+    if (!isWordComplete) {
+      // 단어가 완성되지 않았으면 자동완성 표시하지 않음
+      setSearchSuggestions([]);
+      setFilteredRegions([]);
+      return;
+    }
+
+    // 1. 지역명 검색 (단어가 완성된 경우에만, 초성 검색 없이)
+    const matchedRegions = recommendedRegions.filter(region => {
+      const matchesName = region.name.toLowerCase().includes(queryLower);
+      // 단어가 완성된 경우에는 초성 검색 사용하지 않음 (같은 초성을 사용하는 다른 지역 제외)
+      return matchesName;
+    });
+
+    matchedRegions.forEach(region => {
+      if (!uniqueNames.has(region.name)) {
+        uniqueNames.add(region.name);
+        suggestions.push({
+          type: 'region',
+          name: region.name,
+          display: region.name
+        });
+      }
+    });
+
+    // 2. Kakao Places API로 실시간 장소 검색 (단어가 완성된 경우에만)
+    // 예: "서울" 입력 시 "서울역", "서울광장" 등 "서울"로 시작하는 장소들 추천
+    if (window.kakao && window.kakao.maps && window.kakao.maps.services && isWordComplete) {
+      const placesService = new window.kakao.maps.services.Places();
+      
+      // 검색어로 시작하는 장소들을 찾기 위해 키워드 검색
+      placesService.keywordSearch(query, (data, status) => {
+        if (status === window.kakao.maps.services.Status.OK && data && data.length > 0) {
+          const tempKakaoSuggestions = [];
+          const tempUniqueNames = new Set(uniqueNames);
+          
+          // 검색 결과를 필터링: 검색어로 시작하거나 검색어를 포함하는 장소만
+          data.forEach(place => {
+            const placeName = place.place_name;
+            const categoryCode = place.category_group_code || '';
+            const categoryName = place.category_name || '';
+            
+            // 검색어가 장소명에 포함되어 있는지 확인 (겹치는 단어 검색)
+            const placeNameLower = placeName.toLowerCase();
+            const queryWords = queryLower.split(/\s+/);
+            const hasMatchingKeyword = queryWords.some(word => 
+              placeNameLower.includes(word) || placeNameLower.startsWith(word)
+            );
+            
+            if (hasMatchingKeyword && !tempUniqueNames.has(placeName)) {
+              tempUniqueNames.add(placeName);
+              
+              let placeType = 'kakao_place';
+              
+              // 카테고리별 타입 설정
+              if (categoryCode === 'CT1' || categoryName.includes('관광') || categoryName.includes('명소')) {
+                placeType = 'tourist';
+              } else if (categoryCode === 'FD6' || categoryName.includes('음식점') || categoryName.includes('레스토랑')) {
+                placeType = 'restaurant';
+              } else if (categoryCode === 'CE7' || categoryName.includes('카페')) {
+                placeType = 'cafe';
+              } else if (categoryCode === 'PO3' || categoryName.includes('공원')) {
+                placeType = 'park';
+              }
+              
+              tempKakaoSuggestions.push({
+                type: placeType,
+                name: placeName,
+                display: placeName,
+                address: place.address_name,
+                roadAddress: place.road_address_name,
+                lat: parseFloat(place.y),
+                lng: parseFloat(place.x),
+                category: categoryName,
+                kakaoPlace: true
+              });
+            }
+          });
+          
+          // 검색어로 시작하는 것을 우선순위로 정렬
+          tempKakaoSuggestions.sort((a, b) => {
+            const aStartsWith = a.name.toLowerCase().startsWith(queryLower);
+            const bStartsWith = b.name.toLowerCase().startsWith(queryLower);
+            if (aStartsWith && !bStartsWith) return -1;
+            if (!aStartsWith && bStartsWith) return 1;
+            return a.name.length - b.name.length;
+          });
+          
+          // Kakao 검색 결과를 기존 suggestions와 합치기
+          setSearchSuggestions(prev => {
+            const combined = [...prev, ...tempKakaoSuggestions];
+            // 중복 제거
+            const unique = [];
+            const seen = new Set();
+            combined.forEach(item => {
+              if (!seen.has(item.name)) {
+                seen.add(item.name);
+                unique.push(item);
+              }
+            });
+            return unique.slice(0, 15);
+          });
+        }
+      });
+    }
+
+    // 3. 해시태그 검색 (#로 시작하는 경우)
+    if (value.startsWith('#')) {
+      const postsJson = localStorage.getItem('uploadedPosts');
+      const allPosts = postsJson ? JSON.parse(postsJson) : [];
+      const allTagsSet = new Set();
+      
+      allPosts.forEach(post => {
+        const tags = post.tags || [];
+        const aiLabels = post.aiLabels || [];
+        
+        tags.forEach(tag => {
+          const tagText = typeof tag === 'string' ? tag.replace(/^#+/, '').toLowerCase() : String(tag).replace(/^#+/, '').toLowerCase();
+          if (tagText && tagText.includes(queryLower.replace(/^#+/, ''))) {
+            allTagsSet.add(tagText);
+          }
+        });
+        
+        aiLabels.forEach(label => {
+          const labelText = label.name?.toLowerCase() || String(label).toLowerCase();
+          if (labelText && labelText.includes(queryLower.replace(/^#+/, ''))) {
+            allTagsSet.add(labelText);
+          }
+        });
+      });
+      
+      // 해시태그 제안 추가
+      Array.from(allTagsSet).slice(0, 5).forEach(tag => {
+        if (!uniqueNames.has(`#${tag}`)) {
+          uniqueNames.add(`#${tag}`);
+          suggestions.push({
+            type: 'hashtag',
+            name: `#${tag}`,
+            display: `#${tag}`,
+            tag: tag
+          });
+        }
+      });
+    }
+    
+    // 4. 게시물에서 장소명 검색 (단어가 완성된 경우에만, Kakao 검색 결과와 중복되지 않는 것만)
+    if (isWordComplete) {
+      const matchingPosts = searchInPosts(value);
+      const sortedPosts = matchingPosts.sort((a, b) => {
+        const aPlaceName = (a.placeName || a.detailedLocation || a.location || '').toLowerCase();
+        const bPlaceName = (b.placeName || b.detailedLocation || b.location || '').toLowerCase();
+        const queryLowerForSort = value.toLowerCase().trim();
+        
+        const aStartsWith = aPlaceName.startsWith(queryLowerForSort);
+        const bStartsWith = bPlaceName.startsWith(queryLowerForSort);
+        if (aStartsWith && !bStartsWith) return -1;
+        if (!aStartsWith && bStartsWith) return 1;
+        
+        return aPlaceName.length - bPlaceName.length;
+      });
+      
+      sortedPosts.slice(0, 5).forEach(post => {
+        const placeName = post.placeName || post.detailedLocation || post.location;
+        if (placeName && !uniqueNames.has(placeName)) {
+          uniqueNames.add(placeName);
+          suggestions.push({
+            type: 'place',
+            name: placeName,
+            display: `${placeName}${post.location && placeName !== post.location ? ` (${post.location})` : ''}`,
+            post: post
+          });
+        }
+      });
+    }
+
+    // 완성된 단어 기반 추천: 키워드가 추천 타입에 매핑되면 getRecommendedRegions 결과를 상단에 표시
+    let recommended = [];
+    if (isWordComplete) {
+      const recType = getRecommendationTypeForKeyword(query);
+      if (recType) {
+        try {
+          const postsJson = localStorage.getItem('uploadedPosts');
+          const allPosts = postsJson ? JSON.parse(postsJson) : [];
+          const recList = getRecommendedRegions(allPosts, recType);
+          recommended = recList.map(r => ({
+            type: 'recommended_region',
+            regionName: r.regionName,
+            title: r.title,
+            display: r.badge ? `${r.title} · ${r.badge}` : r.title,
+            badge: r.badge,
+            description: r.description
+          }));
+        } catch (e) {
+          console.warn('단어 기반 추천 조회 실패:', e);
+        }
+      }
+    }
+    const recommendedNames = new Set(recommended.map(r => r.regionName));
+    const others = suggestions.filter(s => !(s.name && recommendedNames.has(s.name)));
+    const finalSuggestions = [...recommended, ...others].slice(0, 15);
+    setSearchSuggestions(finalSuggestions);
+  }, [recommendedRegions, matchChosung]);
+
+  // 자동완성 항목 클릭 핸들러
+  const handleSuggestionClick = useCallback((suggestion) => {
+    const query = suggestion.regionName || suggestion.name || suggestion.title;
+    setSearchQuery(query);
+    
+    // 최근 검색 지역에 추가
+    const updatedRecentSearches = recentSearches.includes(query)
+      ? recentSearches
+      : [query, ...recentSearches.slice(0, 3)];
+    setRecentSearches(updatedRecentSearches);
+    localStorage.setItem('recentSearches', JSON.stringify(updatedRecentSearches));
+    
+    setShowSearchSheet(false);
+    
+    // 검색 실행 - 위치로 이동
+    if (suggestion.kakaoPlace && suggestion.lat && suggestion.lng) {
+      // Kakao Places API에서 가져온 장소의 경우 - 직접 좌표로 이동
+      if (map) {
+        const position = new window.kakao.maps.LatLng(suggestion.lat, suggestion.lng);
+        map.panTo(position);
+        map.setLevel(3);
+        
+        // 검색 마커 표시
+        createSearchMarker(position, suggestion.name, map);
+        
+        setSearchResults([]);
+        setIsSearching(false);
+        if (map) {
+          loadPosts(map);
+        }
+      }
+    } else if (suggestion.type === 'place' && suggestion.post) {
+      // 게시물 장소의 경우
+      const coords = suggestion.post.coordinates || getCoordinatesByLocation(suggestion.post.detailedLocation || suggestion.post.location);
+      if (coords && coords.lat && coords.lng && map) {
+        const position = new window.kakao.maps.LatLng(coords.lat, coords.lng);
+        map.panTo(position);
+        map.setLevel(3);
+        createSearchMarker(position, suggestion.name, map);
+        setSearchResults([suggestion.post]);
+        setIsSearching(true);
+        loadPosts(map, { forceSearch: { results: [suggestion.post] } });
+      }
+    } else if (suggestion.type === 'recommended_region' && suggestion.regionName) {
+      // 완성된 단어 기반 추천 지역: 해당 지역으로 이동하고, 그 지역 게시물만 표시
+      const coords = getCoordsByRegion(suggestion.regionName);
+      if (coords && map) {
+        const position = new window.kakao.maps.LatLng(coords.lat, coords.lng);
+        map.panTo(position);
+        map.setLevel(4);
+        createSearchMarker(position, suggestion.regionName, map);
+        try {
+          const postsJson = localStorage.getItem('uploadedPosts');
+          const allPosts = postsJson ? JSON.parse(postsJson) : [];
+          const regionPosts = allPosts.filter(p =>
+            (p.location && (p.location.includes(suggestion.regionName) || p.location === suggestion.regionName)) ||
+            (p.detailedLocation && (p.detailedLocation.includes(suggestion.regionName) || p.detailedLocation === suggestion.regionName))
+          );
+          setSearchResults(regionPosts);
+          setIsSearching(true);
+          loadPosts(map, { forceSearch: { results: regionPosts } });
+        } catch (e) {
+          console.warn('추천 지역 게시물 로드 실패:', e);
+        }
+      }
+    } else if (suggestion.type === 'hashtag') {
+      // 해시태그의 경우 - 해시태그 검색 실행
+      setTimeout(() => {
+        handleSearch({ preventDefault: () => {} });
+      }, 100);
+    } else {
+      // 지역명 및 기타의 경우 - 검색 실행
+      setTimeout(() => {
+        handleSearch({ preventDefault: () => {} });
+      }, 100);
+    }
+  }, [map, recentSearches]);
+
+  // 최근 검색 지역 로드
+  useEffect(() => {
+    const savedRecentSearches = localStorage.getItem('recentSearches');
+    if (savedRecentSearches) {
+      try {
+        setRecentSearches(JSON.parse(savedRecentSearches));
+      } catch (e) {
+        console.error('최근 검색 지역 로드 실패:', e);
+      }
+    }
+  }, []);
+
+  // 필터 영역 마우스 휠로 좌우 스크롤 (passive: false로 preventDefault 동작)
+  useEffect(() => {
+    const el = filterScrollRef.current;
+    if (!el) return;
+    const onWheel = (e) => {
+      if (el.scrollWidth <= el.clientWidth) return; // 스크롤 불필요 시 휠은 페이지로 전달
+      el.scrollLeft += e.deltaY;
+      e.preventDefault();
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, []);
+
   const [isDragging, setIsDragging] = useState(false);
   const [startY, setStartY] = useState(0);
   const [sheetOffset, setSheetOffset] = useState(0); // 시트 오프셋 (0 = 보임, 큰 값 = 숨김)
@@ -38,7 +493,6 @@ const MapScreen = () => {
   const [selectedRoutePins, setSelectedRoutePins] = useState([]); // 선택된 경로 핀들
   const routePolylineRef = useRef(null); // 경로 선 객체
   const isRouteModeRef = useRef(false); // 최신 경로 모드 상태 저장용 ref
-
   // isRouteMode 값이 바뀔 때마다 ref에도 반영 (마커 클릭 핸들러에서 최신 값 사용)
   useEffect(() => {
     isRouteModeRef.current = isRouteMode;
@@ -234,14 +688,56 @@ const MapScreen = () => {
     currentLocationMarkerRef.current = overlay;
   };
 
-  const loadPosts = async (kakaoMap) => {
+  const loadPosts = async (kakaoMap, options) => {
     try {
+      // 검색 중이면 검색 결과만 사용 (options.forceSearch로 한 번에 반영된 결과 전달 가능)
+      const effectiveSearch = (options?.forceSearch?.results != null)
+        ? { active: true, results: options.forceSearch.results }
+        : (isSearching && searchResults.length > 0 ? { active: true, results: searchResults } : { active: false, results: [] });
+      if (effectiveSearch.active && effectiveSearch.results.length > 0) {
+        let filteredResults = [...effectiveSearch.results];
+        
+        // 필터 적용 (중복 선택 가능)
+        if (selectedFilters.length > 0) {
+          filteredResults = filteredResults.filter(post => {
+            const category = post.category || 'general';
+            // 활성화된 필터 중 하나라도 매칭되면 표시
+            return selectedFilters.some(filter => {
+              if (filter === 'bloom') return category === 'bloom';
+              if (filter === 'food') return category === 'food';
+              if (filter === 'scenic') return category === 'scenic' || category === 'landmark';
+              if (filter === 'waiting') return category === 'waiting' || (post.tags && Array.isArray(post.tags) && post.tags.some(t => /웨이팅|대기|줄|waiting|웨이트/i.test(String(t).trim())));
+              return false;
+            });
+          });
+        }
+        
+        setPosts(filteredResults);
+        createMarkers(filteredResults, kakaoMap, selectedRoutePins);
+        return;
+      }
+
       const postsJson = localStorage.getItem('uploadedPosts');
       const allPosts = postsJson ? JSON.parse(postsJson) : [];
       
-      const validPosts = allPosts.filter(post => {
+      let validPosts = allPosts.filter(post => {
         return post.coordinates || post.location || post.detailedLocation;
       });
+
+      // 필터 적용 (중복 선택 가능)
+      if (selectedFilters.length > 0) {
+        validPosts = validPosts.filter(post => {
+          const category = post.category || 'general';
+          // 활성화된 필터 중 하나라도 매칭되면 표시
+          return selectedFilters.some(filter => {
+            if (filter === 'bloom') return category === 'bloom';
+            if (filter === 'food') return category === 'food';
+            if (filter === 'scenic') return category === 'scenic' || category === 'landmark';
+            if (filter === 'waiting') return category === 'waiting' || (post.tags && Array.isArray(post.tags) && post.tags.some(t => /웨이팅|대기|줄|waiting|웨이트/i.test(String(t).trim())));
+            return false;
+          });
+        });
+      }
 
       setPosts(validPosts);
       createMarkers(validPosts, kakaoMap, selectedRoutePins);
@@ -275,13 +771,544 @@ const MapScreen = () => {
     return { lat: 37.5665, lng: 126.9780 };
   };
 
-  const createMarkers = (posts, kakaoMap, routePins = []) => {
+  // 장소 타입 키워드 매핑
+  const placeTypeKeywords = {
+    '카페': { tags: ['카페', 'coffee', 'cafe'], category: null },
+    '맛집': { tags: ['맛집', 'restaurant', 'food'], category: 'food' },
+    '관광지': { tags: ['관광', 'tourist', 'landmark'], category: 'landmark' },
+    '공원': { tags: ['공원', 'park', 'park'], category: 'scenic' },
+    '가게': { tags: ['가게', 'shop', 'store'], category: null },
+    '음식점': { tags: ['음식', 'restaurant', 'food'], category: 'food' },
+    '식당': { tags: ['식당', 'restaurant', 'food'], category: 'food' },
+    '레스토랑': { tags: ['restaurant', 'food'], category: 'food' }
+  };
+
+  // 게시물에서 장소명 검색 (모든 필드 검색)
+  const searchInPosts = (query) => {
+    const queryLower = query.toLowerCase().trim();
+    const queryWithoutHash = queryLower.replace(/^#+/, ''); // # 제거
+    
+    // 모든 게시물 가져오기
+    const postsJson = localStorage.getItem('uploadedPosts');
+    const allPosts = postsJson ? JSON.parse(postsJson) : [];
+    
+    const validPosts = allPosts.filter(post => {
+      return post.coordinates || post.location || post.detailedLocation;
+    });
+
+    // 해시태그 검색 (#로 시작하거나 해시태그 형식인 경우)
+    const isHashtagSearch = query.startsWith('#') || queryWithoutHash.length > 0;
+    if (isHashtagSearch) {
+      const hashtagResults = validPosts.filter(post => {
+        const tags = post.tags || [];
+        const aiLabels = post.aiLabels || [];
+        
+        // 태그와 AI 라벨에서 검색
+        const allTags = [
+          ...tags.map(t => typeof t === 'string' ? t.toLowerCase().replace(/^#+/, '') : String(t).toLowerCase().replace(/^#+/, '')),
+          ...aiLabels.map(l => l.name?.toLowerCase() || '').filter(Boolean)
+        ];
+        
+        // 정확한 태그 매칭 또는 포함 매칭
+        return allTags.some(tag => 
+          tag === queryWithoutHash || tag.includes(queryWithoutHash)
+        );
+      });
+      
+      if (hashtagResults.length > 0) {
+        return hashtagResults;
+      }
+    }
+
+    // 장소 타입 키워드 확인
+    for (const [type, config] of Object.entries(placeTypeKeywords)) {
+      if (query.includes(type)) {
+        return validPosts.filter(post => {
+          // 카테고리 매칭
+          if (config.category && post.category === config.category) {
+            return true;
+          }
+          // 태그 매칭
+          const tags = post.tags || [];
+          const aiLabels = post.aiLabels || [];
+          const allLabels = [
+            ...tags.map(t => typeof t === 'string' ? t.toLowerCase() : String(t).toLowerCase()),
+            ...aiLabels.map(l => l.name?.toLowerCase() || '').filter(Boolean)
+          ];
+          
+          return config.tags.some(tag => 
+            allLabels.some(label => label.includes(tag.toLowerCase()))
+          );
+        });
+      }
+    }
+
+    // 구체적인 장소명 검색 - 모든 필드에서 검색 (예: "경주 불국사")
+    const matchingPosts = validPosts.filter(post => {
+      const location = (post.location || '').toLowerCase();
+      const detailedLocation = (post.detailedLocation || '').toLowerCase();
+      const placeName = (post.placeName || '').toLowerCase();
+      const address = (post.address || '').toLowerCase();
+      const note = (post.note || '').toLowerCase();
+      
+      // 태그와 AI 라벨도 검색 대상에 포함
+      const tags = post.tags || [];
+      const aiLabels = post.aiLabels || [];
+      const allTags = [
+        ...tags.map(t => typeof t === 'string' ? t.toLowerCase().replace(/^#+/, '') : String(t).toLowerCase().replace(/^#+/, '')),
+        ...aiLabels.map(l => l.name?.toLowerCase() || '').filter(Boolean)
+      ];
+      const tagsText = allTags.join(' ');
+      
+      // 검색어 조합 검색 (예: "경주 불국사" -> "경주"와 "불국사" 모두 포함 또는 연속 검색)
+      const searchTerms = queryLower.split(/\s+/).filter(term => term.length > 0);
+      
+      // 모든 검색어가 포함되어 있는지 확인
+      const allTermsMatch = searchTerms.every(term => {
+        const termWithoutHash = term.replace(/^#+/, '');
+        return location.includes(termWithoutHash) ||
+               detailedLocation.includes(termWithoutHash) ||
+               placeName.includes(termWithoutHash) ||
+               address.includes(termWithoutHash) ||
+               note.includes(termWithoutHash) ||
+               tagsText.includes(termWithoutHash) ||
+               `${location} ${detailedLocation} ${placeName}`.includes(termWithoutHash);
+      });
+      
+      // 또는 단일 검색어가 포함되어 있는지 확인
+      const singleTermMatch = location.includes(queryLower) ||
+             detailedLocation.includes(queryLower) ||
+             placeName.includes(queryLower) ||
+             address.includes(queryLower) ||
+             note.includes(queryLower) ||
+             tagsText.includes(queryWithoutHash) ||
+             `${location} ${detailedLocation} ${placeName}`.includes(queryLower);
+      
+      return allTermsMatch || singleTermMatch;
+    });
+
+    if (matchingPosts.length > 0) {
+      return matchingPosts;
+    }
+
+    // 매칭되는 게시물이 없으면 빈 배열 반환
+    return [];
+  };
+
+  // Kakao Places API를 사용한 장소 검색 (단일 결과)
+  const searchPlaceWithKakao = (query, callback) => {
+    if (!window.kakao || !window.kakao.maps || !window.kakao.maps.services) {
+      callback(null);
+      return;
+    }
+
+    const places = new window.kakao.maps.services.Places();
+    
+    places.keywordSearch(query, (data, status) => {
+      if (status === window.kakao.maps.services.Status.OK && data && data.length > 0) {
+        const firstResult = data[0];
+        callback({
+          name: firstResult.place_name,
+          address: firstResult.address_name,
+          roadAddress: firstResult.road_address_name,
+          lat: parseFloat(firstResult.y),
+          lng: parseFloat(firstResult.x),
+          placeUrl: firstResult.place_url
+        });
+      } else {
+        callback(null);
+      }
+    });
+  };
+
+  // Kakao Places API를 사용한 관광지 다중 검색
+  const searchTouristAttractionsWithKakao = (query, callback) => {
+    if (!window.kakao || !window.kakao.maps || !window.kakao.maps.services) {
+      callback([]);
+      return;
+    }
+
+    const placesService = new window.kakao.maps.services.Places();
+    
+    // 관광지 관련 키워드 확인
+    const isTouristKeyword = ['관광지', '명소', 'tourist', 'attraction', 'landmark'].some(keyword => 
+      query.toLowerCase().includes(keyword.toLowerCase())
+    );
+    
+    // 지역명 제거하고 실제 검색어만 사용 (예: "서울 관광지" -> "서울")
+    let searchQuery = query;
+    if (isTouristKeyword) {
+      // 지역명 추출
+      const regionMatch = query.match(/(서울|부산|대구|인천|광주|대전|울산|경주|제주|전주|강릉|속초|여수|통영|안동|수원|성남|고양|용인|평택|화성)/);
+      if (regionMatch) {
+        searchQuery = regionMatch[1]; // 지역명만 사용
+      } else {
+        // 지역명이 없으면 전체 관광지 검색
+        searchQuery = '관광지';
+      }
+    }
+    
+    // Kakao Places API 키워드 검색 (최대 15개 결과)
+    placesService.keywordSearch(searchQuery, (data, status, pagination) => {
+      if (status === window.kakao.maps.services.Status.OK && data && data.length > 0) {
+        // 관광지 카테고리 필터링 (CT1 = 관광지)
+        const touristResults = data
+          .filter(place => {
+            const categoryCode = place.category_group_code || '';
+            const categoryName = place.category_name || '';
+            
+            // CT1 = 관광지 카테고리이거나, 카테고리명에 '관광' 또는 '명소'가 포함된 경우
+            return categoryCode === 'CT1' || 
+                   categoryName.includes('관광') || 
+                   categoryName.includes('명소') ||
+                   isTouristKeyword; // 관광지 키워드로 검색한 경우 모두 포함
+          })
+          .slice(0, 15) // 최대 15개
+          .map(place => ({
+            name: place.place_name,
+            address: place.address_name,
+            roadAddress: place.road_address_name,
+            lat: parseFloat(place.y),
+            lng: parseFloat(place.x),
+            placeUrl: place.place_url,
+            category: place.category_name || ''
+          }));
+        
+        callback(touristResults.length > 0 ? touristResults : data.slice(0, 10));
+      } else {
+        callback([]);
+      }
+    });
+  };
+
+  // 검색 결과 마커 표시 (하늘색 원점 + 파동 애니메이션)
+  const createSearchMarker = (position, placeName, kakaoMap) => {
+    // 기존 검색 마커 제거
+    if (searchMarkerRef.current) {
+      searchMarkerRef.current.setMap(null);
+      searchMarkerRef.current = null;
+    }
+
+    // 검색 마커 생성 (하늘색 원점 + 여러 파동 - 현재 위치와 동일한 스타일)
+    const el = document.createElement('div');
+    el.innerHTML = `
+      <div style="
+        position: relative;
+        width: 56px;
+        height: 56px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      ">
+        <!-- 파동 1 -->
+        <div style="
+          position: absolute;
+          width: 56px;
+          height: 56px;
+          border-radius: 50%;
+          background-color: rgba(135, 206, 250, 0.25);
+          animation: searchPulse1 2s infinite;
+        "></div>
+        <!-- 파동 2 -->
+        <div style="
+          position: absolute;
+          width: 56px;
+          height: 56px;
+          border-radius: 50%;
+          background-color: rgba(135, 206, 250, 0.2);
+          animation: searchPulse2 2s infinite;
+        "></div>
+        <!-- 파동 3 -->
+        <div style="
+          position: absolute;
+          width: 56px;
+          height: 56px;
+          border-radius: 50%;
+          background-color: rgba(135, 206, 250, 0.15);
+          animation: searchPulse3 2s infinite;
+        "></div>
+        <!-- 하늘색 원점 -->
+        <div style="
+          position: relative;
+          width: 24px;
+          height: 24px;
+          border-radius: 50%;
+          background-color: #87CEEB;
+          border: 4px solid rgba(255, 255, 255, 1);
+          box-shadow: 0 3px 10px rgba(0,0,0,0.4);
+          z-index: 10;
+        "></div>
+      </div>
+      <style>
+        @keyframes searchPulse1 {
+          0% {
+            transform: scale(1);
+            opacity: 0.25;
+          }
+          100% {
+            transform: scale(3);
+            opacity: 0;
+          }
+        }
+        @keyframes searchPulse2 {
+          0% {
+            transform: scale(1);
+            opacity: 0.2;
+          }
+          100% {
+            transform: scale(3.5);
+            opacity: 0;
+          }
+        }
+        @keyframes searchPulse3 {
+          0% {
+            transform: scale(1);
+            opacity: 0.15;
+          }
+          100% {
+            transform: scale(4);
+            opacity: 0;
+          }
+        }
+      </style>
+    `;
+
+    const marker = new window.kakao.maps.CustomOverlay({
+      position: position,
+      content: el,
+      yAnchor: 0.5,
+      xAnchor: 0.5,
+      zIndex: 10000
+    });
+
+    marker.setMap(kakaoMap);
+    searchMarkerRef.current = marker;
+  };
+
+  // 검색 핸들러
+  const handleSearch = (e) => {
+    if (e) e.preventDefault();
+    if (!searchQuery.trim()) {
+      // 검색어가 비어있으면 검색 결과 초기화
+      setSearchResults([]);
+      setKakaoSearchResults([]);
+      setIsSearching(false);
+      // 검색 마커 제거
+      if (searchMarkerRef.current) {
+        searchMarkerRef.current.setMap(null);
+        searchMarkerRef.current = null;
+      }
+      // 관광지 마커 제거
     markersRef.current.forEach(markerData => {
-      if (markerData.overlay) {
+        if (markerData.touristPlace && markerData.overlay) {
         markerData.overlay.setMap(null);
       }
     });
-    markersRef.current = [];
+      markersRef.current = markersRef.current.filter(m => !m.touristPlace);
+      if (map) {
+        loadPosts(map);
+      }
+      return;
+    }
+
+    if (!map) return;
+
+    const query = searchQuery.trim();
+    
+    // 게시물에서 먼저 검색
+    const matchingPosts = searchInPosts(query);
+    
+    if (matchingPosts.length > 0) {
+      // 검색 결과가 있으면 해당 게시물만 표시
+      setSearchResults(matchingPosts);
+      setIsSearching(true);
+      
+      // 첫 번째 게시물의 위치로 지도 이동
+      const firstPost = matchingPosts[0];
+      const coords = firstPost.coordinates || getCoordinatesByLocation(firstPost.detailedLocation || firstPost.location);
+      
+      if (coords && coords.lat && coords.lng) {
+        const position = new window.kakao.maps.LatLng(coords.lat, coords.lng);
+        map.panTo(position);
+        map.setLevel(3);
+        
+        // 검색 마커 표시
+        createSearchMarker(position, firstPost.placeName || firstPost.location, map);
+        
+        // 검색 결과 게시물만 마커로 표시
+        createMarkers(matchingPosts, map, selectedRoutePins);
+      }
+    } else {
+      // 관광지 키워드 확인
+      const isTouristKeyword = ['관광지', '명소', 'tourist', 'attraction', 'landmark'].some(keyword => 
+        query.toLowerCase().includes(keyword.toLowerCase())
+      );
+      
+      if (isTouristKeyword) {
+        // 관광지 다중 검색
+        searchTouristAttractionsWithKakao(query, (touristPlaces) => {
+          if (touristPlaces && touristPlaces.length > 0) {
+            setKakaoSearchResults(touristPlaces);
+            setSearchResults([]);
+            setIsSearching(true);
+            
+            // 모든 관광지 마커 표시
+            const bounds = new window.kakao.maps.LatLngBounds();
+            touristPlaces.forEach((place, index) => {
+              const position = new window.kakao.maps.LatLng(place.lat, place.lng);
+              bounds.extend(position);
+              
+              // 각 관광지에 마커 표시
+              if (index === 0) {
+                // 첫 번째 관광지 위치로 지도 이동
+                map.panTo(position);
+                map.setLevel(5);
+              }
+              
+              // 관광지 마커 생성 (파란색으로 구분)
+              const el = document.createElement('div');
+              el.innerHTML = `
+                <div style="
+                  width: 35px;
+                  height: 35px;
+                  background: #2196F3;
+                  border: 3px solid white;
+                  border-radius: 50%;
+                  box-shadow: 0 3px 12px rgba(33, 150, 243, 0.5);
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  position: relative;
+                ">
+                  <span style="
+                    color: white;
+                    font-size: 20px;
+                    font-weight: bold;
+                  ">🏛️</span>
+                </div>
+              `;
+              
+              const marker = new window.kakao.maps.CustomOverlay({
+                position: position,
+                content: el,
+                yAnchor: 0.5,
+                xAnchor: 0.5,
+                zIndex: 9000 + index
+              });
+              
+              marker.setMap(map);
+              // 마커 참조 저장 (나중에 제거할 수 있도록)
+              if (!markersRef.current.some(m => m.touristPlace && m.touristPlace.name === place.name)) {
+                markersRef.current.push({ overlay: marker, touristPlace: place, position: position });
+              }
+            });
+            
+            // 검색된 관광지가 모두 보이도록 지도 범위 조정
+            if (touristPlaces.length > 1) {
+              map.setBounds(bounds);
+            }
+            
+            // 모든 게시물도 함께 표시
+            if (map) {
+              loadPosts(map);
+            }
+          } else {
+            // 관광지 검색 실패 시 일반 검색 시도
+            searchPlaceWithKakao(query, (place) => {
+              if (place) {
+                const position = new window.kakao.maps.LatLng(place.lat, place.lng);
+                map.panTo(position);
+                map.setLevel(3);
+                createSearchMarker(position, place.name, map);
+                setSearchResults([]);
+                setIsSearching(false);
+                if (map) {
+                  loadPosts(map);
+                }
+              } else {
+                const coords = getCoordinatesByLocation(query);
+                if (coords) {
+                  setSearchResults([]);
+                  setIsSearching(false);
+                  const position = new window.kakao.maps.LatLng(coords.lat, coords.lng);
+                  map.panTo(position);
+                  map.setLevel(4);
+                  createSearchMarker(position, query, map);
+                  if (map) {
+                    loadPosts(map);
+                  }
+                } else {
+                  alert('검색 결과를 찾을 수 없습니다. 다른 검색어를 입력해주세요.');
+                  setSearchResults([]);
+                  setIsSearching(false);
+                }
+              }
+            });
+          }
+        });
+      } else {
+        // 일반 장소 검색
+        searchPlaceWithKakao(query, (place) => {
+          if (place) {
+            // 검색 결과 위치로 이동
+            const position = new window.kakao.maps.LatLng(place.lat, place.lng);
+            map.panTo(position);
+            map.setLevel(3);
+            
+            // 검색 마커 표시
+            createSearchMarker(position, place.name, map);
+            
+            // 검색 결과 초기화 (Kakao 검색은 게시물이 아니므로)
+            setSearchResults([]);
+            setIsSearching(false);
+            
+            // 모든 게시물 표시
+            if (map) {
+              loadPosts(map);
+            }
+          } else {
+            // Kakao 검색도 실패하면 기본 지역명 검색 시도
+            const coords = getCoordinatesByLocation(query);
+            if (coords) {
+              setSearchResults([]);
+              setIsSearching(false);
+              const position = new window.kakao.maps.LatLng(coords.lat, coords.lng);
+              map.panTo(position);
+              map.setLevel(4);
+              
+              // 검색 마커 표시
+              createSearchMarker(position, query, map);
+              
+              if (map) {
+                loadPosts(map);
+              }
+            } else {
+              alert('검색 결과를 찾을 수 없습니다. 다른 검색어를 입력해주세요.');
+              setSearchResults([]);
+              setIsSearching(false);
+            }
+          }
+        });
+      }
+    }
+  };
+
+  // 필터 변경 시 게시물 다시 로드
+  useEffect(() => {
+    if (map) {
+      loadPosts(map);
+    }
+  }, [selectedFilters, map, isSearching, searchResults]);
+
+  const createMarkers = (posts, kakaoMap, routePins = []) => {
+    // 기존 게시물 마커만 제거 (관광지 마커는 유지)
+    markersRef.current = markersRef.current.filter(markerData => {
+      if (markerData.overlay && !markerData.touristPlace) {
+        markerData.overlay.setMap(null);
+        return false;
+      }
+      return true;
+    });
 
     const bounds = new window.kakao.maps.LatLngBounds();
     let hasValidMarker = false;
@@ -397,6 +1424,7 @@ const MapScreen = () => {
       hasValidMarker = true;
     });
 
+    // 선택된 핀/위치로 지도 자동 이동
     const selectedPin = location.state?.selectedPin;
     const sosLocation = location.state?.sosLocation;
     if (selectedPin) {
@@ -535,14 +1563,92 @@ const MapScreen = () => {
     setShowSOSModal(true);
   };
 
-  // 도움 요청 위치 마커 업데이트
+  // 도움 요청 위치 마커 업데이트 (내 위치 표시와 동일한 스타일: 하늘색 원점 + 파동)
   const updateSOSMarker = (kakaoMap, location) => {
     // 기존 마커 제거
     if (sosMarkerRef.current) {
       sosMarkerRef.current.setMap(null);
       sosMarkerRef.current = null;
     }
-    // 핀 마커 생성 코드 삭제됨
+
+    const position = new window.kakao.maps.LatLng(location.lat, location.lng);
+
+    // 내 위치 마커와 동일: 하늘색 원점 + 여러 파동
+    const el = document.createElement('div');
+    el.innerHTML = `
+      <div style="
+        position: relative;
+        width: 56px;
+        height: 56px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      ">
+        <!-- 파동 1 -->
+        <div style="
+          position: absolute;
+          width: 56px;
+          height: 56px;
+          border-radius: 50%;
+          background-color: rgba(135, 206, 250, 0.25);
+          animation: pulse1 2s infinite;
+        "></div>
+        <!-- 파동 2 -->
+        <div style="
+          position: absolute;
+          width: 56px;
+          height: 56px;
+          border-radius: 50%;
+          background-color: rgba(135, 206, 250, 0.2);
+          animation: pulse2 2s infinite;
+        "></div>
+        <!-- 파동 3 -->
+        <div style="
+          position: absolute;
+          width: 56px;
+          height: 56px;
+          border-radius: 50%;
+          background-color: rgba(135, 206, 250, 0.15);
+          animation: pulse3 2s infinite;
+        "></div>
+        <!-- 하늘색 원점 -->
+        <div style="
+          position: relative;
+          width: 24px;
+          height: 24px;
+          border-radius: 50%;
+          background-color: #87CEEB;
+          border: 4px solid rgba(255, 255, 255, 1);
+          box-shadow: 0 3px 10px rgba(0,0,0,0.4);
+          z-index: 10;
+        "></div>
+      </div>
+      <style>
+        @keyframes pulse1 {
+          0% { transform: scale(1); opacity: 0.25; }
+          100% { transform: scale(3); opacity: 0; }
+        }
+        @keyframes pulse2 {
+          0% { transform: scale(1); opacity: 0.2; }
+          100% { transform: scale(3.5); opacity: 0; }
+        }
+        @keyframes pulse3 {
+          0% { transform: scale(1); opacity: 0.15; }
+          100% { transform: scale(4); opacity: 0; }
+        }
+      </style>
+    `;
+
+    const overlay = new window.kakao.maps.CustomOverlay({
+      position: position,
+      content: el,
+      yAnchor: 0.5,
+      xAnchor: 0.5,
+      zIndex: 1000
+    });
+
+    overlay.setMap(kakaoMap);
+    sosMarkerRef.current = overlay;
   };
 
   // 지도 중심 마커 표시/제거 (위치 선택 모드일 때)
@@ -707,28 +1813,33 @@ const MapScreen = () => {
         level: 4
       });
 
-      // 커스텀 핀 마커 생성 (메인 컬러, 가운데 원은 흰색, 가로 넓게)
+      // 내 위치와 동일: 하늘색 원점 + 파동
       const markerEl = document.createElement('div');
       markerEl.innerHTML = `
         <div style="
           position: relative;
-          width: 48px;
-          height: 40px;
+          width: 56px;
+          height: 56px;
           display: flex;
           align-items: center;
           justify-content: center;
         ">
-          <svg width="48" height="40" viewBox="0 0 48 40" fill="none" xmlns="http://www.w3.org/2000/svg" style="filter: drop-shadow(0 2px 8px rgba(0,0,0,0.3));">
-            <path d="M24 0C18.477 0 14 4.477 14 10C14 17 24 40 24 40C24 40 34 17 34 10C34 4.477 29.523 0 24 0Z" fill="#00BCD4"/>
-            <circle cx="24" cy="10" r="6" fill="white"/>
-          </svg>
+          <div style="position: absolute; width: 56px; height: 56px; border-radius: 50%; background-color: rgba(135, 206, 250, 0.25); animation: previewPulse1 2s infinite;"></div>
+          <div style="position: absolute; width: 56px; height: 56px; border-radius: 50%; background-color: rgba(135, 206, 250, 0.2); animation: previewPulse2 2s infinite;"></div>
+          <div style="position: absolute; width: 56px; height: 56px; border-radius: 50%; background-color: rgba(135, 206, 250, 0.15); animation: previewPulse3 2s infinite;"></div>
+          <div style="position: relative; width: 24px; height: 24px; border-radius: 50%; background-color: #87CEEB; border: 4px solid rgba(255,255,255,1); box-shadow: 0 3px 10px rgba(0,0,0,0.4); z-index: 10;"></div>
         </div>
+        <style>
+          @keyframes previewPulse1 { 0% { transform: scale(1); opacity: 0.25; } 100% { transform: scale(3); opacity: 0; } }
+          @keyframes previewPulse2 { 0% { transform: scale(1); opacity: 0.2; } 100% { transform: scale(3.5); opacity: 0; } }
+          @keyframes previewPulse3 { 0% { transform: scale(1); opacity: 0.15; } 100% { transform: scale(4); opacity: 0; } }
+        </style>
       `;
 
       const marker = new window.kakao.maps.CustomOverlay({
         position: new window.kakao.maps.LatLng(selectedSOSLocation.lat, selectedSOSLocation.lng),
         content: markerEl,
-        yAnchor: 1,
+        yAnchor: 0.5,
         xAnchor: 0.5,
         zIndex: 1001
       });
@@ -1143,6 +2254,9 @@ const MapScreen = () => {
           .sheet-scroll-container::-webkit-scrollbar-thumb:hover {
             background: #a1a1aa;
           }
+          .filter-scroll::-webkit-scrollbar {
+            display: none;
+          }
         `}
       </style>
       <div className="phone-screen" style={{ 
@@ -1221,7 +2335,9 @@ const MapScreen = () => {
             arrow_back
           </span>
         </button>
-        <div style={{
+        <div
+          onClick={() => setShowSearchSheet(true)}
+          style={{
           flex: 1,
           display: 'flex',
           alignItems: 'center',
@@ -1232,27 +2348,21 @@ const MapScreen = () => {
           gap: '12px',
           minHeight: '52px',
           boxShadow: '0 2px 12px rgba(0,0,0,0.1)',
-          pointerEvents: 'auto'
-        }}>
+            pointerEvents: 'auto',
+            cursor: 'pointer'
+          }}
+        >
           <span className="material-symbols-outlined" style={{ fontSize: '24px', color: '#666' }}>
             search
           </span>
-          <input
-            type="text"
-            placeholder="지역 검색"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onFocus={() => navigate('/search')}
-            style={{
+          <span style={{
               flex: 1,
-              border: 'none',
-              background: 'transparent',
-              outline: 'none',
               fontSize: '16px',
-              color: '#333',
+            color: '#999',
               fontWeight: '400'
-            }}
-          />
+          }}>
+            {searchQuery || "지역 검색"}
+          </span>
         </div>
         <button
           onClick={() => {
@@ -1282,52 +2392,241 @@ const MapScreen = () => {
         </button>
       </div>
 
-      {/* 도움 요청 버튼 - 검색창과 분리, 투명 배경, 지도 위에 오버레이 */}
-      <div style={{
-        padding: '8px 16px',
-        background: 'transparent',
-        display: 'flex',
-        justifyContent: 'flex-start',
-        position: 'relative',
-        zIndex: 10,
-        pointerEvents: 'none'
-      }}>
+      {/* 상황 물어보기 버튼과 필터 버튼들 - 메인 추천여행지처럼 좌우 슬라이드(마우스 드래그·휠·터치 스와이프) */}
+      <div
+        ref={filterScrollRef}
+        className="filter-scroll"
+        style={{
+          display: 'flex',
+          flexDirection: 'row',
+          flexWrap: 'nowrap',
+          gap: '8px',
+          alignItems: 'center',
+          padding: '8px 16px',
+          background: 'transparent',
+          position: 'relative',
+          zIndex: 10,
+          width: '100%',
+          minWidth: 0,
+          flexShrink: 0,
+          overflowX: 'scroll',
+          overflowY: 'hidden',
+          scrollbarWidth: 'none',
+          msOverflowStyle: 'none',
+          scrollBehavior: 'smooth',
+          WebkitOverflowScrolling: 'touch',
+          cursor: 'grab',
+          touchAction: 'pan-x'
+        }}
+        onMouseDown={(e) => {
+          e.preventDefault();
+          hasDraggedFilterRef.current = false;
+          const slider = e.currentTarget;
+          let isDown = true;
+          const startX = e.pageX;
+          const startScrollLeft = slider.scrollLeft;
+          slider.style.cursor = 'grabbing';
+          slider.style.userSelect = 'none';
+
+          const handleMouseMove = (ev) => {
+            if (!isDown) return;
+            ev.preventDefault();
+            const walk = (ev.pageX - startX) * 1.2;
+            if (Math.abs(walk) > 5) hasDraggedFilterRef.current = true;
+            slider.scrollLeft = startScrollLeft - walk;
+          };
+
+          const handleMouseUp = () => {
+            isDown = false;
+            slider.style.cursor = 'grab';
+            slider.style.userSelect = 'auto';
+            document.removeEventListener('mousemove', handleMouseMove);
+            document.removeEventListener('mouseup', handleMouseUp);
+          };
+
+          document.addEventListener('mousemove', handleMouseMove);
+          document.addEventListener('mouseup', handleMouseUp);
+        }}
+        onTouchStart={(e) => {
+          hasDraggedFilterRef.current = false;
+          const slider = e.currentTarget;
+          if (slider.scrollWidth <= slider.clientWidth) return;
+          const startX = e.touches[0].pageX;
+          const startScrollLeft = slider.scrollLeft;
+          slider._touchStartX = startX;
+          slider._touchStartScroll = startScrollLeft;
+        }}
+        onTouchMove={(e) => {
+          const slider = e.currentTarget;
+          if (slider.scrollWidth <= slider.clientWidth) return;
+          if (slider._touchStartX == null) return;
+          e.preventDefault();
+          hasDraggedFilterRef.current = true;
+          const x = e.touches[0].pageX;
+          const walk = (x - slider._touchStartX) * 1.2;
+          slider.scrollLeft = slider._touchStartScroll - walk;
+        }}
+        onTouchEnd={(e) => {
+          e.currentTarget._touchStartX = null;
+          e.currentTarget._touchStartScroll = null;
+        }}
+        onTouchCancel={(e) => {
+          e.currentTarget._touchStartX = null;
+          e.currentTarget._touchStartScroll = null;
+        }}
+      >
+        {/* 상황 물어보기 버튼 - 가장 앞에 배치 */}
         <button
-          onClick={handleSOSRequest}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '8px 12px',
-            background: 'rgba(255, 255, 255, 0.95)',
-            backdropFilter: 'blur(10px)',
-            borderRadius: '20px',
-            border: 'none',
-            cursor: 'pointer',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-            transition: 'all 0.2s',
-            width: 'fit-content',
-            pointerEvents: 'auto'
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = 'rgba(255, 255, 255, 1)';
-            e.currentTarget.style.transform = 'scale(1.02)';
-            e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.95)';
-            e.currentTarget.style.transform = 'scale(1)';
-            e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)';
-          }}
-        >
-          <span style={{
-            fontSize: '13px',
-            fontWeight: '600',
-            color: '#00BCD4'
-          }}>
-            지금 상황 알아보기
-          </span>
-        </button>
+            onClick={() => {
+              if (hasDraggedFilterRef.current) { hasDraggedFilterRef.current = false; return; }
+              handleSOSRequest();
+            }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '8px 12px',
+              background: 'rgba(255, 255, 255, 0.95)',
+              backdropFilter: 'blur(10px)',
+              borderRadius: '20px',
+              border: 'none',
+              cursor: 'pointer',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+              transition: 'all 0.2s',
+              whiteSpace: 'nowrap',
+              flexShrink: 0
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'rgba(255, 255, 255, 1)';
+              e.currentTarget.style.transform = 'scale(1.02)';
+              e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.95)';
+              e.currentTarget.style.transform = 'scale(1)';
+              e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)';
+            }}
+          >
+            <span style={{
+              fontSize: '13px',
+              fontWeight: '600',
+              color: '#00BCD4'
+            }}>
+              지금 상황 알아보기
+            </span>
+          </button>
+          
+          {/* 필터 버튼들 - 중복 선택 가능, 좌우 스크롤 */}
+          <button
+            onClick={() => {
+              if (hasDraggedFilterRef.current) { hasDraggedFilterRef.current = false; return; }
+              setSelectedFilters(prev => 
+                prev.includes('bloom') 
+                  ? prev.filter(f => f !== 'bloom')
+                  : [...prev, 'bloom']
+              );
+            }}
+            style={{
+              padding: '6px 14px',
+              borderRadius: '20px',
+              border: 'none',
+              background: selectedFilters.includes('bloom') ? '#00BCD4' : 'rgba(255, 255, 255, 0.95)',
+              color: selectedFilters.includes('bloom') ? 'white' : '#666',
+              fontSize: '13px',
+              fontWeight: '600',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+              backdropFilter: 'blur(10px)',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+              transition: 'all 0.2s',
+              flexShrink: 0
+            }}
+          >
+            🌸 개화정보
+          </button>
+          <button
+            onClick={() => {
+              if (hasDraggedFilterRef.current) { hasDraggedFilterRef.current = false; return; }
+              setSelectedFilters(prev => 
+                prev.includes('food') 
+                  ? prev.filter(f => f !== 'food')
+                  : [...prev, 'food']
+              );
+            }}
+            style={{
+              padding: '6px 14px',
+              borderRadius: '20px',
+              border: 'none',
+              background: selectedFilters.includes('food') ? '#00BCD4' : 'rgba(255, 255, 255, 0.95)',
+              color: selectedFilters.includes('food') ? 'white' : '#666',
+              fontSize: '13px',
+              fontWeight: '600',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+              backdropFilter: 'blur(10px)',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+              transition: 'all 0.2s',
+              flexShrink: 0
+            }}
+          >
+            🍜 맛집정보
+          </button>
+          <button
+            onClick={() => {
+              if (hasDraggedFilterRef.current) { hasDraggedFilterRef.current = false; return; }
+              setSelectedFilters(prev => 
+                prev.includes('scenic') 
+                  ? prev.filter(f => f !== 'scenic')
+                  : [...prev, 'scenic']
+              );
+            }}
+            style={{
+              padding: '6px 14px',
+              borderRadius: '20px',
+              border: 'none',
+              background: selectedFilters.includes('scenic') ? '#00BCD4' : 'rgba(255, 255, 255, 0.95)',
+              color: selectedFilters.includes('scenic') ? 'white' : '#666',
+              fontSize: '13px',
+              fontWeight: '600',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+              backdropFilter: 'blur(10px)',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+              transition: 'all 0.2s',
+              flexShrink: 0
+            }}
+          >
+            🏞️ 가볼만한 곳
+          </button>
+          <button
+            onClick={() => {
+              if (hasDraggedFilterRef.current) { hasDraggedFilterRef.current = false; return; }
+              setSelectedFilters(prev => 
+                prev.includes('waiting') 
+                  ? prev.filter(f => f !== 'waiting')
+                  : [...prev, 'waiting']
+              );
+            }}
+            style={{
+              padding: '6px 14px',
+              borderRadius: '20px',
+              border: 'none',
+              background: selectedFilters.includes('waiting') ? '#00BCD4' : 'rgba(255, 255, 255, 0.95)',
+              color: selectedFilters.includes('waiting') ? 'white' : '#666',
+              fontSize: '13px',
+              fontWeight: '600',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+              backdropFilter: 'blur(10px)',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+              transition: 'all 0.2s',
+              flexShrink: 0
+            }}
+          >
+            ⏱️ 웨이팅
+          </button>
+        {/* 스크롤 끝 여백 (메인 추천여행지 슬라이드와 동일) */}
+        <div style={{ width: '16px', flexShrink: 0 }} aria-hidden="true" />
       </div>
 
       {/* 경로 모드 토글 버튼 */}
@@ -1588,6 +2887,7 @@ const MapScreen = () => {
               justifyContent: 'center',
               cursor: 'pointer'
             }}
+            title="내 위치"
           >
             <span className="material-symbols-outlined" style={{ fontSize: '20px', color: '#00BCD4' }}>
               my_location
@@ -2323,6 +3623,284 @@ const MapScreen = () => {
           </div>
         </div>
         </>
+      )}
+
+      {/* 검색 시트 모달 */}
+      {showSearchSheet && (
+        <div
+          onClick={() => setShowSearchSheet(false)}
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.8)',
+            zIndex: 2000,
+            display: 'flex',
+            alignItems: 'flex-start',
+            pointerEvents: 'auto'
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: 'white',
+              width: '100%',
+              height: '100vh',
+              borderBottomLeftRadius: '0',
+              borderBottomRightRadius: '0',
+              boxShadow: '0 -4px 20px rgba(0,0,0,0.2)',
+              display: 'flex',
+              flexDirection: 'column'
+            }}
+          >
+            {/* 헤더 */}
+            <div style={{
+              padding: '20px',
+              borderBottom: '1px solid #f0f0f0',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px'
+            }}>
+              <div style={{
+                flex: 1,
+                display: 'flex',
+                alignItems: 'center',
+                background: '#f5f5f5',
+                borderRadius: '24px',
+                padding: '12px 20px',
+                gap: '12px'
+              }}>
+                <span className="material-symbols-outlined" style={{ fontSize: '24px', color: '#666' }}>
+                  search
+                </span>
+                <input
+                  type="text"
+                  placeholder="지역 또는 장소명 검색 (예: 서울 올림픽 공원, 카페, 맛집)"
+                  value={searchQuery}
+                  onChange={(e) => handleSearchInput(e.target.value)}
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter') {
+                      handleSearch(e);
+                      setShowSearchSheet(false);
+                    }
+                  }}
+                  autoFocus
+                  style={{
+                    flex: 1,
+                    border: 'none',
+                    background: 'transparent',
+                    outline: 'none',
+                    fontSize: '16px',
+                    color: '#333',
+                    fontWeight: '400'
+                  }}
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => {
+                      setSearchQuery('');
+                      setFilteredRegions([]);
+                      setSearchSuggestions([]);
+                    }}
+                    style={{
+                      border: 'none',
+                      background: 'transparent',
+                      cursor: 'pointer',
+                      padding: '4px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: '20px', color: '#666' }}>
+                      close
+                    </span>
+                  </button>
+                )}
+              </div>
+              <button
+                onClick={() => setShowSearchSheet(false)}
+                style={{
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: '20px',
+                  border: 'none',
+                  background: '#f5f5f5',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer'
+                }}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: '24px', color: '#666' }}>
+                  close
+                </span>
+              </button>
+            </div>
+
+            {/* 검색 결과 또는 최근 검색 지역 */}
+            <div style={{
+              flex: 1,
+              overflowY: 'auto',
+              padding: '20px'
+            }}>
+              {searchQuery.trim() ? (
+                // 검색어가 있을 때 자동완성 결과
+                (searchSuggestions.length > 0 ? (
+                  <div>
+                    {searchSuggestions.map((suggestion, index) => (
+                      <div
+                        key={index}
+                        onClick={() => handleSuggestionClick(suggestion)}
+                        style={{
+                          padding: '12px 16px',
+                          borderRadius: '12px',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '12px',
+                          marginBottom: '8px',
+                          transition: 'background 0.2s',
+                          background: '#fafafa'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = '#f0f0f0';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = '#fafafa';
+                        }}
+                      >
+                        <span className="material-symbols-outlined" style={{ 
+                          fontSize: '24px', 
+                          color: suggestion.type === 'recommended_region' ? '#9C27B0'
+                            : suggestion.type === 'region' ? '#00BCD4' 
+                            : suggestion.type === 'hashtag' ? '#9C27B0' 
+                            : suggestion.type === 'tourist' ? '#2196F3'
+                            : suggestion.type === 'restaurant' ? '#FF5722'
+                            : suggestion.type === 'cafe' ? '#795548'
+                            : suggestion.type === 'park' ? '#4CAF50'
+                            : '#FF9800' 
+                        }}>
+                          {suggestion.type === 'recommended_region' ? 'recommendation'
+                            : suggestion.type === 'region' ? 'location_on' 
+                            : suggestion.type === 'hashtag' ? 'tag' 
+                            : suggestion.type === 'tourist' ? 'tour'
+                            : suggestion.type === 'restaurant' ? 'restaurant'
+                            : suggestion.type === 'cafe' ? 'local_cafe'
+                            : suggestion.type === 'park' ? 'park'
+                            : 'place'}
+                        </span>
+                        <span style={{
+                          fontSize: '16px',
+                          fontWeight: '500',
+                          color: '#333',
+                          flex: 1
+                        }}>
+                          {suggestion.display}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{
+                    padding: '40px 20px',
+                    textAlign: 'center',
+                    color: '#999',
+                    fontSize: '14px'
+                  }}>
+                    검색 결과가 없습니다
+                  </div>
+                ))
+              ) : (
+                // 검색어가 없을 때 최근 검색 지역
+                <div>
+                  {recentSearches.length > 0 ? (
+                    <div>
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        marginBottom: '16px'
+                      }}>
+                        <h2 style={{
+                          fontSize: '18px',
+                          fontWeight: 'bold',
+                          color: '#333'
+                        }}>
+                          최근 검색한 지역
+                        </h2>
+                        <button
+                          onClick={() => {
+                            setRecentSearches([]);
+                            localStorage.removeItem('recentSearches');
+                          }}
+                          style={{
+                            border: 'none',
+                            background: 'transparent',
+                            cursor: 'pointer',
+                            fontSize: '14px',
+                            color: '#666',
+                            padding: '4px 8px'
+                          }}
+                        >
+                          지우기
+                        </button>
+                      </div>
+                      <div style={{
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        gap: '8px'
+                      }}>
+                        {recentSearches.map((search, index) => (
+                          <button
+                            key={index}
+                            onClick={() => {
+                              setSearchQuery(search);
+                              setTimeout(() => {
+                                handleSearch({ preventDefault: () => {} });
+                                setShowSearchSheet(false);
+                              }, 100);
+                            }}
+                            style={{
+                              padding: '10px 16px',
+                              borderRadius: '20px',
+                              border: 'none',
+                              background: index === 0 ? '#00BCD4' : '#f5f5f5',
+                              color: index === 0 ? 'white' : '#333',
+                              fontSize: '14px',
+                              fontWeight: '500',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '8px',
+                              transition: 'all 0.2s'
+                            }}
+                          >
+                            <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
+                              history
+                            </span>
+                            {search}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{
+                      padding: '40px 20px',
+                      textAlign: 'center',
+                      color: '#999',
+                      fontSize: '14px'
+                    }}>
+                      최근 검색한 지역이 없습니다
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* 광고 모달 */}

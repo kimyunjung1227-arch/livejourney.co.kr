@@ -82,6 +82,26 @@ export const uploadProfileImage = async (file) => {
   }
 };
 
+// 단일 동영상 업로드 (최대 100MB)
+export const uploadVideo = async (file) => {
+  try {
+    const formData = new FormData();
+    formData.append('video', file);
+
+    const response = await api.post('/upload/video', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    const data = response.data;
+    return { success: true, url: data.url || data.videoUrl, ...data };
+  } catch (error) {
+    console.log('⚠️ 동영상 백엔드 없음 - Blob URL 반환');
+    const blobUrl = URL.createObjectURL(file);
+    return { success: true, url: blobUrl, isTemporary: true };
+  }
+};
+
 
 
 

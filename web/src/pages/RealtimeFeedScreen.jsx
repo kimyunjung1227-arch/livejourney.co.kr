@@ -268,14 +268,17 @@ const RealtimeFeedScreen = () => {
                         )}
                       </div>
                       
-                      {/* 해시태그 */}
+                      {/* 해시태그 - 눌러서 검색 */}
                       {item.tags && item.tags.length > 0 && (
                         <div className="flex gap-1.5 overflow-x-auto [-ms-scrollbar-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                          {item.tags.slice(0, 5).map((tag, tagIndex) => (
-                            <span key={tagIndex} className="text-[11px] font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full whitespace-nowrap flex-shrink-0">
-                              #{typeof tag === 'string' ? tag.replace('#', '') : tag}
-                            </span>
-                          ))}
+                          {item.tags.slice(0, 5).map((tag, tagIndex) => {
+                            const t = typeof tag === 'string' ? tag.replace(/^#+/, '') : tag;
+                            return (
+                              <button key={tagIndex} type="button" onClick={() => navigate(`/search?q=${encodeURIComponent('#' + t)}`)} className="text-[11px] font-medium text-primary bg-primary/10 hover:bg-primary/20 px-2 py-0.5 rounded-full whitespace-nowrap flex-shrink-0 cursor-pointer transition-colors">
+                                #{t}
+                              </button>
+                            );
+                          })}
                         </div>
                       )}
                     </div>

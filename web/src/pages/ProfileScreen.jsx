@@ -3,9 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import BottomNavigation from '../components/BottomNavigation';
 import { getUnreadCount } from '../utils/notifications';
-import { getEarnedBadges } from '../utils/badgeSystem';
+import { getEarnedBadges, getBadgeDisplayName } from '../utils/badgeSystem';
 import { getUserLevel } from '../utils/levelSystem';
 import { getCoordinatesByLocation } from '../utils/regionLocationMapping';
+import { follow, unfollow, isFollowing, getFollowerCount, getFollowingCount, getFollowerIds, getFollowingIds } from '../utils/followSystem';
 import { logger } from '../utils/logger';
 
 const ProfileScreen = () => {
@@ -34,6 +35,11 @@ const ProfileScreen = () => {
   const [availableDates, setAvailableDates] = useState([]);
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState('');
+  const [followerCount, setFollowerCount] = useState(0);
+  const [followingCount, setFollowingCount] = useState(0);
+  const [showFollowListModal, setShowFollowListModal] = useState(false);
+  const [followListType, setFollowListType] = useState('follower'); // 'follower' | 'following'
+  const [followListIds, setFollowListIds] = useState([]);
 
   // 모든 Hook을 먼저 선언한 후 useEffect 실행
   useEffect(() => {
@@ -211,6 +217,20 @@ const ProfileScreen = () => {
       window.removeEventListener('userUpdated', handleUserUpdate);
     };
   }, [isAuthenticated, authUser]);
+
+  // 팔로워/팔로잉 수 로드 및 followsUpdated 구독
+  useEffect(() => {
+    const u = authUser || user;
+    const uid = u?.id;
+    if (!isAuthenticated || !uid) return;
+    const load = () => {
+      setFollowerCount(getFollowerCount(uid));
+      setFollowingCount(getFollowingCount(uid));
+    };
+    load();
+    window.addEventListener('followsUpdated', load);
+    return () => window.removeEventListener('followsUpdated', load);
+  }, [isAuthenticated, authUser, user?.id]);
 
   // 날짜 필터 적용
   useEffect(() => {
@@ -1011,6 +1031,36 @@ const ProfileScreen = () => {
             </div>
           </div>
 
+          {/* 게시물 / 팔로워 / 팔로잉 - 게시물이 맨 앞 */}
+          <div className="flex items-center justify-around py-4 border-t border-gray-100 dark:border-gray-800">
+            <div className="text-center min-w-[52px]">
+              <div className="text-xl font-bold text-text-primary-light dark:text-text-primary-dark">{myPosts.length}</div>
+              <div className="text-[10px] text-gray-600 dark:text-gray-400 mt-0.5">게시물</div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                const uid = (authUser || user)?.id;
+                if (uid) { setFollowListIds(getFollowerIds(uid)); setFollowListType('follower'); setShowFollowListModal(true); }
+              }}
+              className="text-center min-w-[52px] hover:opacity-80 transition-opacity"
+            >
+              <div className="text-xl font-bold text-text-primary-light dark:text-text-primary-dark">{followerCount}</div>
+              <div className="text-[10px] text-gray-600 dark:text-gray-400 mt-0.5">팔로워</div>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const uid = (authUser || user)?.id;
+                if (uid) { setFollowListIds(getFollowingIds(uid)); setFollowListType('following'); setShowFollowListModal(true); }
+              }}
+              className="text-center min-w-[52px] hover:opacity-80 transition-opacity"
+            >
+              <div className="text-xl font-bold text-text-primary-light dark:text-text-primary-dark">{followingCount}</div>
+              <div className="text-[10px] text-gray-600 dark:text-gray-400 mt-0.5">팔로잉</div>
+            </button>
+          </div>
+
           {/* 프로필 편집 버튼 */}
           <button
             onClick={() => {
@@ -1454,10 +1504,10 @@ const ProfileScreen = () => {
                     }`}
                   >
                     <div className="flex flex-col items-center gap-2">
-                      <span className="text-5xl leading-none" role="img" aria-label={badge.name}>
+                      <span className="text-5xl leading-none" role="img" aria-label={getBadgeDisplayName(badge)}>
                         {badge.icon || '🏆'}
                       </span>
-                      <p className="text-sm font-bold text-center">{badge.name}</p>
+                      <p className="text-sm font-bold text-center">{getBadgeDisplayName(badge)}</p>
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
                         badge.difficulty === '상' ? 'bg-primary-dark text-white' :
                         badge.difficulty === '중' ? 'bg-blue-500 text-white' :
@@ -1472,6 +1522,137 @@ const ProfileScreen = () => {
             </div>
           </div>
         </div>
+        )}
+
+        {/* 팔로워 / 팔로잉 목록 모달 - 핸드폰 화면사이즈에 맞춤 */}
+        {showFollowListModal && (
+          <div
+            className="fixed inset-0 z-[100] flex flex-col bg-white dark:bg-gray-900 w-full max-w-[414px] mx-auto min-h-[100dvh] pt-[env(safe-area-inset-top,0px)] pb-[env(safe-area-inset-bottom,0px)]"
+            onClick={() => setShowFollowListModal(false)}
+          >
+            <div
+              className="flex-1 min-h-0 w-full flex flex-col overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+                <h2 className="text-lg font-bold text-text-primary-light dark:text-text-primary-dark">
+                  {followListType === 'follower' ? '팔로워' : '팔로잉'}
+                </h2>
+                <button
+                  onClick={() => setShowFollowListModal(false)}
+                  className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
+                >
+                  <span className="material-symbols-outlined text-xl">close</span>
+                </button>
+              </div>
+              <div className="px-4 pt-4 pb-6 overflow-y-auto flex-1 min-h-0">
+                {followListIds.length === 0 ? (
+                  <p className="text-center py-8 text-text-secondary-light dark:text-text-secondary-dark text-sm">
+                    {followListType === 'follower' ? '팔로워가 없습니다' : '팔로우 중인 사용자가 없습니다'}
+                  </p>
+                ) : (
+                  (() => {
+                    const posts = JSON.parse(localStorage.getItem('uploadedPosts') || '[]');
+                    const currentUserData = authUser || user;
+                    const myId = currentUserData?.id;
+
+                    const resolveUserInfo = (uid) => {
+                      if (String(uid) === String(myId) && currentUserData) {
+                        return {
+                          username: currentUserData.username || '사용자',
+                          profileImage: currentUserData.profileImage || null,
+                        };
+                      }
+                      const p = posts.find((post) => {
+                        const pu = post.userId || (typeof post.user === 'string' ? post.user : post.user?.id);
+                        return String(pu) === String(uid);
+                      });
+                      if (!p) return { username: '사용자', profileImage: null };
+                      if (!p.user) return { username: '사용자', profileImage: null };
+                      if (typeof p.user === 'string') {
+                        return { username: p.user, profileImage: null };
+                      }
+                      return {
+                        username: p.user?.username || '사용자',
+                        profileImage: p.user?.profileImage || null,
+                      };
+                    };
+
+                    const getRepBadge = (uid) => {
+                      try {
+                        const j = localStorage.getItem(`representativeBadge_${uid}`);
+                        return j ? JSON.parse(j) : null;
+                      } catch {
+                        return null;
+                      }
+                    };
+
+                    return followListIds.map((uid) => {
+                      const { username, profileImage } = resolveUserInfo(uid);
+                      const repBadge = getRepBadge(uid);
+                      return (
+                        <div
+                          key={uid}
+                          className="flex items-center justify-between gap-3 py-3 pb-4 border-b border-gray-100 dark:border-gray-800 last:border-b-0 last:pb-3"
+                        >
+                          <button
+                            type="button"
+                            onClick={() => { setShowFollowListModal(false); navigate(`/user/${uid}`); }}
+                            className="flex items-center gap-3 flex-1 min-w-0 text-left"
+                          >
+                            {/* 프로필 이미지 */}
+                            <div className="w-11 h-11 rounded-full overflow-hidden flex-shrink-0 bg-teal-100 dark:bg-teal-900 flex items-center justify-center">
+                              {profileImage ? (
+                                <img src={profileImage} alt="" className="w-full h-full object-cover" />
+                              ) : (
+                                <span className="material-symbols-outlined text-teal-600 dark:text-teal-400 text-2xl">person</span>
+                              )}
+                            </div>
+                            {/* 사용자 이름 + 대표 뱃지 */}
+                            <div className="flex-1 min-w-0 flex flex-col items-start gap-1">
+                              <span className="font-semibold text-text-primary-light dark:text-text-primary-dark truncate w-full text-left">
+                                {username}
+                              </span>
+                              {repBadge && (
+                                <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary/20 border border-primary/50 flex-shrink-0">
+                                  <span className="text-sm">{repBadge.icon}</span>
+                                  <span className="text-xs font-semibold text-primary truncate max-w-[100px]">{repBadge.name}</span>
+                                </div>
+                              )}
+                            </div>
+                          </button>
+                          {/* 팔로우 버튼: 언제든 팔로우/팔로잉 취소 가능 */}
+                          {myId && String(uid) !== String(myId) && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (isFollowing(null, uid)) {
+                                  unfollow(uid);
+                                  if (followListType === 'following') {
+                                    setFollowListIds((prev) => prev.filter((id) => String(id) !== String(uid)));
+                                  }
+                                } else {
+                                  follow(uid);
+                                }
+                              }}
+                              className={`shrink-0 py-2 px-4 rounded-xl text-sm font-semibold transition-colors ${
+                                isFollowing(null, uid)
+                                  ? 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700 hover:bg-gray-200 dark:hover:bg-gray-700'
+                                  : 'bg-primary text-white hover:bg-primary/90'
+                              }`}
+                            >
+                              {isFollowing(null, uid) ? '팔로잉' : '팔로우'}
+                            </button>
+                          )}
+                        </div>
+                      );
+                    });
+                  })()
+                )}
+              </div>
+            </div>
+          </div>
         )}
       </div>
 

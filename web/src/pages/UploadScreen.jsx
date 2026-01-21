@@ -2,7 +2,7 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import BottomNavigation from '../components/BottomNavigation';
 import { createPost } from '../api/posts';
-import { uploadImage } from '../api/upload';
+import { uploadImage, uploadVideo } from '../api/upload';
 import { useAuth } from '../contexts/AuthContext';
 import { notifyBadge } from '../utils/notifications';
 import { safeSetItem, logLocalStorageStatus } from '../utils/localStorageManager';
@@ -14,6 +14,7 @@ import { getCurrentTimestamp, getTimeAgo } from '../utils/timeUtils';
 import { gainExp } from '../utils/levelSystem';
 import { getBadgeCongratulationMessage, getBadgeDifficultyEffects } from '../utils/badgeMessages';
 import { logger } from '../utils/logger';
+import { extractExifData, convertGpsToAddress } from '../utils/exifExtractor';
 
 const UploadScreen = () => {
   const navigate = useNavigate();
@@ -32,7 +33,10 @@ const UploadScreen = () => {
     coordinates: null,
     aiCategory: 'scenic',
     aiCategoryName: '추천 장소',
-    aiCategoryIcon: '📍'
+    aiCategoryIcon: '📍',
+    exifData: null, // EXIF 데이터 (날짜, GPS 등)
+    photoDate: null, // 사진 촬영 날짜
+    verifiedLocation: null // EXIF에서 추출한 검증된 위치
   });
   const [tagInput, setTagInput] = useState('');
   const [uploading, setUploading] = useState(false);
@@ -113,11 +117,6 @@ const UploadScreen = () => {
   const [earnedBadge, setEarnedBadge] = useState(null);
   const reanalysisTimerRef = useRef(null);
 
-  // 지도 관련 ref
-  const mapContainerRef = useRef(null);
-  const mapInstanceRef = useRef(null);
-  const markerRef = useRef(null);
-
   const getCurrentLocation = useCallback(async () => {
     if (!navigator.geolocation) return;
 
@@ -194,117 +193,6 @@ const UploadScreen = () => {
       setLoadingLocation(false);
     }
   }, []);
-
-  // 업로드 화면 내 소형 지도 초기화
-  useEffect(() => {
-    if (!window.kakao || !window.kakao.maps) return;
-
-    const initSmallMap = () => {
-      if (!mapContainerRef.current) return;
-
-      const kakao = window.kakao;
-
-      // 초기 중심: 선택된 좌표 또는 서울
-      const centerLat = formData.coordinates?.lat || 37.5665;
-      const centerLng = formData.coordinates?.lng || 126.9780;
-
-      let map = mapInstanceRef.current;
-
-      if (!map) {
-        map = new kakao.maps.Map(mapContainerRef.current, {
-          center: new kakao.maps.LatLng(centerLat, centerLng),
-          level: 5
-        });
-        mapInstanceRef.current = map;
-
-        // 클릭으로 위치 선택
-        kakao.maps.event.addListener(map, 'click', (mouseEvent) => {
-          const latlng = mouseEvent.latLng;
-
-          // 마커 없으면 생성, 있으면 위치만 이동
-          if (!markerRef.current) {
-            markerRef.current = new kakao.maps.Marker({
-              position: latlng,
-              map
-            });
-          } else {
-            markerRef.current.setPosition(latlng);
-          }
-
-          // 좌표 → 주소 변환
-          if (kakao.maps.services) {
-            const geocoder = new kakao.maps.services.Geocoder();
-            geocoder.coord2Address(latlng.getLng(), latlng.getLat(), (result, status) => {
-              if (status === kakao.maps.services.Status.OK && result[0]) {
-                const address = result[0].address;
-                const roadAddress = result[0].road_address;
-
-                let locationName = '';
-                let detailedAddress = '';
-
-                if (roadAddress) {
-                  const parts = roadAddress.address_name.split(' ');
-                  locationName = parts.slice(0, 3).join(' ')
-                    .replace('특별시', '')
-                    .replace('광역시', '')
-                    .replace('특별자치시', '')
-                    .replace('특별자치도', '')
-                    .trim();
-                  detailedAddress = roadAddress.address_name;
-                } else if (address) {
-                  const parts = address.address_name.split(' ');
-                  locationName = parts.slice(0, 3).join(' ')
-                    .replace('특별시', '')
-                    .replace('광역시', '')
-                    .replace('특별자치시', '')
-                    .replace('특별자치도', '')
-                    .trim();
-                  detailedAddress = address.address_name;
-                }
-
-                setFormData(prev => ({
-                  ...prev,
-                  location: locationName,
-                  coordinates: { lat: latlng.getLat(), lng: latlng.getLng() },
-                  address: detailedAddress,
-                  detailedLocation: locationName
-                }));
-              } else {
-                setFormData(prev => ({
-                  ...prev,
-                  coordinates: { lat: latlng.getLat(), lng: latlng.getLng() }
-                }));
-              }
-            });
-          } else {
-            setFormData(prev => ({
-              ...prev,
-              coordinates: { lat: latlng.getLat(), lng: latlng.getLng() }
-            }));
-          }
-        });
-      } else {
-        // 이미 생성된 경우 중심만 이동
-        map.setCenter(new kakao.maps.LatLng(centerLat, centerLng));
-      }
-
-      // 선택된 좌표가 있으면 마커 위치 동기화
-      if (formData.coordinates) {
-        const pos = new kakao.maps.LatLng(formData.coordinates.lat, formData.coordinates.lng);
-        if (!markerRef.current) {
-          markerRef.current = new kakao.maps.Marker({
-            position: pos,
-            map
-          });
-        } else {
-          markerRef.current.setPosition(pos);
-        }
-      }
-    };
-
-    // 카카오맵이 로드되어 있으면 바로, 아니면 약간 대기
-    setTimeout(initSmallMap, 200);
-  }, [formData.coordinates, formData.location]);
 
   const analyzeImageAndGenerateTags = useCallback(async (file, location = '', note = '') => {
     // 사진 파일이 없으면 분석하지 않음
@@ -508,11 +396,79 @@ const UploadScreen = () => {
     }));
 
     if (isFirstMedia && (imageFiles.length > 0 || videoFiles.length > 0)) {
-      getCurrentLocation();
-      // 사진 파일만 분석 (동영상은 제외)
+      // 첫 번째 이미지 파일에서 EXIF 데이터 추출
       const firstImageFile = imageFiles[0];
       if (firstImageFile && !firstImageFile.type.startsWith('video/')) {
+        try {
+          logger.log('📸 EXIF 데이터 추출 시작...');
+          const exifData = await extractExifData(firstImageFile);
+          
+          if (exifData) {
+            logger.log('✅ EXIF 데이터 추출 성공:', {
+              hasDate: !!exifData.photoDate,
+              hasGPS: !!exifData.gpsCoordinates,
+              photoDate: exifData.photoDate,
+              gps: exifData.gpsCoordinates
+            });
+            
+            // EXIF에서 날짜 정보가 있으면 사용
+            let photoDate = null;
+            if (exifData.photoDate) {
+              photoDate = exifData.photoDate;
+            }
+            
+            // EXIF에서 GPS 좌표가 있으면 주소로 변환
+            let verifiedLocation = null;
+            let exifCoordinates = null;
+            
+            if (exifData.gpsCoordinates) {
+              exifCoordinates = {
+                lat: exifData.gpsCoordinates.lat,
+                lng: exifData.gpsCoordinates.lng
+              };
+              
+              // GPS 좌표를 주소로 변환
+              try {
+                verifiedLocation = await convertGpsToAddress(
+                  exifData.gpsCoordinates.lat,
+                  exifData.gpsCoordinates.lng
+                );
+                
+                if (verifiedLocation) {
+                  logger.log('📍 EXIF GPS 주소 변환 성공:', verifiedLocation);
+                }
+              } catch (error) {
+                logger.warn('GPS 주소 변환 실패:', error);
+              }
+            }
+            
+            // formData 업데이트
+            setFormData(prev => ({
+              ...prev,
+              exifData: exifData,
+              photoDate: photoDate,
+              verifiedLocation: verifiedLocation,
+              // EXIF에서 위치 정보가 있으면 자동으로 설정 (사용자가 입력하지 않은 경우)
+              location: prev.location || verifiedLocation || '',
+              // EXIF에서 좌표가 있으면 사용
+              coordinates: prev.coordinates || exifCoordinates || null
+            }));
+          } else {
+            logger.log('ℹ️ EXIF 데이터 없음 - 기본 위치 감지 사용');
+            // EXIF 데이터가 없으면 기본 위치 감지 사용
+            getCurrentLocation();
+          }
+        } catch (error) {
+          logger.warn('EXIF 추출 실패:', error);
+          // EXIF 추출 실패 시 기본 위치 감지 사용
+          getCurrentLocation();
+        }
+        
+        // AI 이미지 분석
         analyzeImageAndGenerateTags(firstImageFile, formData.location, formData.note);
+      } else {
+        // 동영상만 있는 경우 기본 위치 감지
+        getCurrentLocation();
       }
     }
   }, [formData.images.length, formData.videos.length, formData.location, formData.note, getCurrentLocation, analyzeImageAndGenerateTags]);
@@ -657,8 +613,7 @@ const UploadScreen = () => {
           logger.debug(`   난이도: ${badge.difficulty}`);
           logger.debug(`   설명: ${badge.description}`);
           
-          const awarded = awardBadge(badge);
-          
+          const awarded = awardBadge(badge, { region: stats?.topRegionName });
           if (awarded) {
             awardedCount++;
             logger.log(`   ✅ 뱃지 획득 성공: ${badge.name}`);
@@ -722,7 +677,6 @@ const UploadScreen = () => {
       
       const aiCategory = formData.aiCategory || 'scenic';
       const aiCategoryName = formData.aiCategoryName || '추천 장소';
-      const aiLabels = formData.tags || [];
       
       logger.debug('AI category:', aiCategoryName);
       
@@ -749,7 +703,7 @@ const UploadScreen = () => {
         uploadedImageUrls.push(...formData.images);
       }
       
-      // 동영상 업로드 (동일한 uploadImage 함수 사용, 백엔드에서 처리)
+      // 동영상 업로드 (uploadVideo 사용)
       if (formData.videoFiles.length > 0) {
         for (let i = 0; i < formData.videoFiles.length; i++) {
           const file = formData.videoFiles[i];
@@ -757,9 +711,11 @@ const UploadScreen = () => {
           setUploadProgress(20 + (uploadedCount * 40 / totalFiles));
           
           try {
-            const uploadResult = await uploadImage(file);
+            const uploadResult = await uploadVideo(file);
             if (uploadResult.success && uploadResult.url) {
               uploadedVideoUrls.push(uploadResult.url);
+            } else {
+              uploadedVideoUrls.push(formData.videos[i]);
             }
           } catch (uploadError) {
             uploadedVideoUrls.push(formData.videos[i]);
@@ -771,19 +727,32 @@ const UploadScreen = () => {
       
       setUploadProgress(60);
       
+      // EXIF에서 추출한 좌표 사용 (없으면 기본값)
+      const coordinates = formData.coordinates || (formData.exifData?.gpsCoordinates ? {
+        lat: formData.exifData.gpsCoordinates.lat,
+        lng: formData.exifData.gpsCoordinates.lng
+      } : { lat: 37.5665, lng: 126.9780 });
+      
       const postData = {
         images: uploadedImageUrls.length > 0 ? uploadedImageUrls : formData.images,
         videos: uploadedVideoUrls.length > 0 ? uploadedVideoUrls : formData.videos,
         content: formData.note || `${formData.location}에서의 여행 기록`,
         location: {
-          name: formData.location,
-          lat: 37.5665,
-          lon: 126.9780,
-          region: '지역',
+          name: formData.verifiedLocation || formData.location,
+          lat: coordinates.lat,
+          lon: coordinates.lng,
+          region: formData.location?.split(' ')[0] || '지역',
           country: '대한민국'
         },
         tags: formData.tags.map(tag => tag.replace('#', '')),
-        isRealtime: true
+        isRealtime: true,
+        photoDate: formData.photoDate || null, // EXIF 촬영 날짜
+        exifData: formData.exifData ? {
+          photoDate: formData.exifData.photoDate,
+          gpsCoordinates: formData.exifData.gpsCoordinates,
+          cameraMake: formData.exifData.cameraMake,
+          cameraModel: formData.exifData.cameraModel
+        } : null // EXIF 메타데이터
       };
       
       setUploadProgress(80);
@@ -826,6 +795,11 @@ const UploadScreen = () => {
           // 지역 정보 추출 (첫 번째 단어를 지역으로 사용)
           const region = formData.location?.split(' ')[0] || '기타';
           
+          // EXIF에서 추출한 촬영 날짜 사용 (없으면 현재 시간)
+          const photoTimestamp = formData.photoDate 
+            ? new Date(formData.photoDate).getTime() 
+            : (backendPost?.createdAt ? new Date(backendPost.createdAt).getTime() : Date.now());
+          
           const uploadedPost = {
             id: backendPost?._id || backendPost?.id || `backend-${Date.now()}`,
             userId: currentUserId,
@@ -834,20 +808,30 @@ const UploadScreen = () => {
             location: formData.location,
             tags: formData.tags,
             note: formData.note,
-            timestamp: backendPost?.createdAt || getCurrentTimestamp(),
+            timestamp: photoTimestamp,
             createdAt: backendPost?.createdAt || getCurrentTimestamp(),
-            timeLabel: getTimeAgo(new Date(backendPost?.createdAt || Date.now())),
+            photoDate: formData.photoDate || null, // EXIF에서 추출한 촬영 날짜
+            timeLabel: getTimeAgo(new Date(photoTimestamp)),
             user: username,
             likes: backendPost?.likesCount || 0,
             isNew: true,
             isLocal: false,
             category: aiCategory,
             categoryName: aiCategoryName,
-            aiLabels: aiLabels,
-            coordinates: formData.coordinates,
-            detailedLocation: formData.location,
+            coordinates: formData.coordinates || (formData.exifData?.gpsCoordinates ? {
+              lat: formData.exifData.gpsCoordinates.lat,
+              lng: formData.exifData.gpsCoordinates.lng
+            } : null),
+            detailedLocation: formData.verifiedLocation || formData.location,
             placeName: formData.location,
-            region: region // 지역 정보 추가
+            region: region, // 지역 정보 추가
+            exifData: formData.exifData ? {
+              photoDate: formData.exifData.photoDate,
+              gpsCoordinates: formData.exifData.gpsCoordinates,
+              cameraMake: formData.exifData.cameraMake,
+              cameraModel: formData.exifData.cameraModel
+            } : null, // EXIF 메타데이터 (신뢰할 수 있는 정보)
+            verifiedLocation: formData.verifiedLocation || null // EXIF에서 검증된 위치
           };
           
           // localStorage에는 이미지를 저장하지 않음 (용량 문제)
@@ -996,6 +980,11 @@ const UploadScreen = () => {
         // 지역 정보 추출 (첫 번째 단어를 지역으로 사용)
         const region = formData.location?.split(' ')[0] || '기타';
         
+        // EXIF에서 추출한 촬영 날짜 사용 (없으면 현재 시간)
+        const photoTimestamp = formData.photoDate 
+          ? new Date(formData.photoDate).getTime() 
+          : Date.now();
+        
         const uploadedPost = {
           id: `local-${Date.now()}`,
           userId: currentUserId,
@@ -1004,20 +993,30 @@ const UploadScreen = () => {
           location: formData.location,
           tags: formData.tags,
           note: formData.note,
-          timestamp: getCurrentTimestamp(),
+          timestamp: photoTimestamp,
           createdAt: getCurrentTimestamp(),
-          timeLabel: getTimeAgo(new Date()),
+          photoDate: formData.photoDate || null, // EXIF에서 추출한 촬영 날짜
+          timeLabel: getTimeAgo(new Date(photoTimestamp)),
           user: username,
           likes: 0,
           isNew: true,
           isLocal: true,
           category: aiCategory,
           categoryName: aiCategoryName,
-          aiLabels: aiLabels,
-          coordinates: formData.coordinates,
-          detailedLocation: formData.location,
+          coordinates: formData.coordinates || (formData.exifData?.gpsCoordinates ? {
+            lat: formData.exifData.gpsCoordinates.lat,
+            lng: formData.exifData.gpsCoordinates.lng
+          } : null),
+          detailedLocation: formData.verifiedLocation || formData.location,
           placeName: formData.location,
-          region: region // 지역 정보 추가
+          region: region, // 지역 정보 추가
+          exifData: formData.exifData ? {
+            photoDate: formData.exifData.photoDate,
+            gpsCoordinates: formData.exifData.gpsCoordinates,
+            cameraMake: formData.exifData.cameraMake,
+            cameraModel: formData.exifData.cameraModel
+          } : null, // EXIF 메타데이터 (신뢰할 수 있는 정보)
+          verifiedLocation: formData.verifiedLocation || null // EXIF에서 검증된 위치
         };
         
         logLocalStorageStatus();
@@ -1114,7 +1113,7 @@ const UploadScreen = () => {
   return (
     <>
       <div className="phone-screen" style={{ 
-        background: '#f8fafc',
+        background: '#ffffff',
         borderRadius: '32px',
         overflow: 'hidden',
         height: '100vh',
@@ -1125,14 +1124,15 @@ const UploadScreen = () => {
         {/* 상태바 영역 (시스템 UI 제거, 공간만 유지) */}
         <div style={{ height: '20px' }} />
         
-        {/* 앱 헤더 */}
+        {/* 앱 헤더 - 개인 기록 느낌 */}
         <header className="app-header" style={{ 
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
           padding: '12px 16px',
           background: 'transparent',
-          color: '#111827'
+          color: '#111827',
+          borderBottom: '1px solid rgba(0, 0, 0, 0.05)'
         }}>
           <button 
             onClick={() => {
@@ -1142,16 +1142,22 @@ const UploadScreen = () => {
                 navigate(-1);
               }
             }}
-            className="flex size-10 shrink-0 items-center justify-center text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+            className="flex size-12 shrink-0 items-center justify-center text-content-light dark:text-content-dark hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors cursor-pointer"
           >
-            <span className="text-xl">←</span>
+            <span className="material-symbols-outlined text-2xl">arrow_back</span>
           </button>
-          <h1 className="flex-1 text-center text-lg font-bold" style={{ 
+          <div className="flex-1 text-center">
+            <h1 className="text-lg font-bold" style={{ 
             fontSize: '18px',
             fontWeight: 700,
-            color: '#111827',
-            fontFamily: "'Noto Sans KR', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
-          }}>업로드: 여행 기록</h1>
+              color: '#00BCD4',
+              fontFamily: "'Noto Sans KR', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+              marginBottom: '2px'
+            }}>나의 여행 기록</h1>
+            <p className="text-xs text-gray-500" style={{ fontSize: '11px' }}>
+              {new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' })}
+            </p>
+          </div>
           <div className="w-10"></div>
         </header>
 
@@ -1160,20 +1166,23 @@ const UploadScreen = () => {
           flex: 1,
           overflowY: 'auto',
           paddingBottom: '100px',
-          padding: '0 16px 100px 16px'
+          padding: '0 16px 100px 16px',
+          background: 'transparent'
         }}>
-          <div className="p-4 space-y-5">
-            {/* 1단계: 사진 / 동영상 선택 */}
+          <div className="pt-4 space-y-5">
+            {/* 사진 / 동영상 선택 */}
             <div>
-              <p className="text-xs font-semibold text-gray-500 mb-1">STEP 1</p>
-              <p className="text-base font-bold mb-2">사진 / 동영상 선택</p>
+              <p className="text-sm font-semibold text-gray-800 mb-3">사진 / 동영상</p>
               {(formData.images.length === 0 && formData.videos.length === 0) ? (
                 <button
                   onClick={() => setShowPhotoOptions(true)}
-                  className="flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-subtle-light dark:border-subtle-dark px-6 py-12 text-center w-full hover:border-primary transition-colors"
+                  className="flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-primary-soft bg-primary-soft/30 px-4 py-10 text-center w-full hover:border-primary hover:bg-primary-soft/50 transition-all"
                 >
-                  <p className="text-base font-bold">사진 또는 동영상 추가</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">최대 10개까지</p>
+                  <div className="w-12 h-12 rounded-full bg-primary-soft flex items-center justify-center">
+                    <span className="text-2xl">📷</span>
+                  </div>
+                  <p className="text-sm font-medium text-gray-700">사진 또는 동영상 추가</p>
+                  <p className="text-xs text-gray-500">최대 10개 (동영상 100MB까지)</p>
                 </button>
               ) : (
                 <div 
@@ -1227,7 +1236,7 @@ const UploadScreen = () => {
                 >
                   {/* 이미지들 */}
                   {formData.images.map((image, index) => (
-                    <div key={`img-${index}`} className="relative w-24 h-24 flex-shrink-0 rounded overflow-hidden border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 snap-start">
+                    <div key={`img-${index}`} className="relative w-28 h-28 flex-shrink-0 rounded-md overflow-hidden border border-primary-soft bg-white snap-start">
                       <img 
                         src={image} 
                         alt={`preview-${index}`} 
@@ -1243,23 +1252,23 @@ const UploadScreen = () => {
                           }));
                         }}
                         onMouseDown={(e) => e.stopPropagation()}
-                        className="absolute top-1 right-1 bg-black/70 text-white rounded-full p-1 hover:bg-black/90 transition-colors z-10"
+                        className="absolute top-1 right-1 bg-primary/90 text-white rounded-full w-5 h-5 flex items-center justify-center hover:bg-primary transition-colors z-10"
                       >
-                        <span className="text-xs">×</span>
+                        <span className="text-xs font-bold">×</span>
                       </button>
                     </div>
                   ))}
                   
                   {/* 동영상들 */}
                   {formData.videos.map((video, index) => (
-                    <div key={`vid-${index}`} className="relative w-24 h-24 flex-shrink-0 rounded overflow-hidden border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 snap-start">
+                    <div key={`vid-${index}`} className="relative w-28 h-28 flex-shrink-0 rounded-md overflow-hidden border border-primary-soft bg-white snap-start">
                       <video 
                         src={video} 
                         className="w-full h-full object-cover"
                         muted
                       />
-                      <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-                        <span className="text-white text-lg drop-shadow-lg">▶</span>
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/10">
+                        <span className="text-white text-base drop-shadow-lg">▶</span>
                       </div>
                       <button
                         onClick={(e) => {
@@ -1271,9 +1280,9 @@ const UploadScreen = () => {
                           }));
                         }}
                         onMouseDown={(e) => e.stopPropagation()}
-                        className="absolute top-1 right-1 bg-black/70 text-white rounded-full p-1 hover:bg-black/90 transition-colors z-10"
+                        className="absolute top-1 right-1 bg-primary/90 text-white rounded-full w-5 h-5 flex items-center justify-center hover:bg-primary transition-colors z-10"
                       >
-                        <span className="text-xs">×</span>
+                        <span className="text-xs font-bold">×</span>
                       </button>
                     </div>
                   ))}
@@ -1286,7 +1295,7 @@ const UploadScreen = () => {
                         setShowPhotoOptions(true);
                       }}
                       onMouseDown={(e) => e.stopPropagation()}
-                      className="w-24 h-24 flex-shrink-0 rounded border-2 border-dashed border-subtle-light dark:border-subtle-dark flex items-center justify-center hover:border-primary transition-colors bg-gray-50 dark:bg-gray-800/50 snap-start z-10"
+                      className="w-28 h-28 flex-shrink-0 rounded-md border-2 border-dashed border-primary-soft flex items-center justify-center hover:border-primary hover:bg-primary-soft/50 transition-colors bg-primary-soft/30 snap-start z-10"
                     >
                       <span className="text-xl text-primary">+</span>
                     </button>
@@ -1295,80 +1304,80 @@ const UploadScreen = () => {
               )}
             </div>
 
-            {/* 2단계: 지도에서 위치 선택 */}
+            {/* 위치 입력 */}
             <div>
               <label className="flex flex-col">
-                <div className="flex items-center justify-between pb-2">
-                  <div>
-                    <p className="text-xs font-semibold text-gray-500 mb-1">STEP 2</p>
-                    <p className="text-base font-medium">지도로 위치 선택</p>
-                  </div>
-                  {loadingLocation && (
-                    <span className="text-xs text-primary">위치 감지 중...</span>
-                  )}
-                </div>
-                {/* 지도 미리보기 영역 */}
-                <div className="w-full rounded-xl overflow-hidden border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 mb-3">
-                  <div 
-                    ref={mapContainerRef}
-                    style={{
-                      width: '100%',
-                      height: '200px'
-                    }}
-                  />
-                </div>
-                {/* 현재 선택된 위치 텍스트 & 현재 위치 버튼 */}
+                <p className="text-sm font-semibold text-gray-800 mb-3">위치</p>
                 <div className="flex flex-col gap-2">
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm text-gray-600 dark:text-gray-300">
-                      {formData.location
-                        ? `선택된 위치: ${formData.location}`
-                        : '지도를 눌러 위치를 선택해주세요.'}
-                    </p>
+                  <div className="flex items-center gap-2">
+                    <input
+                      className="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg border border-primary-soft bg-white focus:border-primary focus:ring-2 focus:ring-primary-soft h-10 px-3 text-sm font-normal placeholder:text-gray-400"
+                      placeholder="위치를 입력하세요"
+                      value={formData.location}
+                      onChange={(e) => setFormData(prev => ({ ...prev, location: e.target.value }))}
+                    />
                     <button
                       type="button"
                       onClick={getCurrentLocation}
                       disabled={loadingLocation}
-                      className="flex items-center justify-center rounded-full border border-subtle-light dark:border-subtle-dark bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 px-3 h-8 text-xs font-medium text-primary transition-colors disabled:opacity-50"
-                      title="현재 위치로 지도 이동"
+                      style={{
+                        width: '40px',
+                        height: '40px',
+                        borderRadius: '20px',
+                        border: 'none',
+                        background: 'white',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: loadingLocation ? 'not-allowed' : 'pointer',
+                        opacity: loadingLocation ? 0.5 : 1,
+                        transition: 'all 0.2s'
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!loadingLocation) {
+                          e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.2)';
+                          e.currentTarget.style.transform = 'scale(1.05)';
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
+                        e.currentTarget.style.transform = 'scale(1)';
+                      }}
+                      title="현재 위치 자동 입력"
                     >
-                      내 위치
+                      <span className="material-symbols-outlined" style={{ fontSize: '20px', color: '#00BCD4' }}>
+                        {loadingLocation ? 'hourglass_empty' : 'my_location'}
+                      </span>
                     </button>
                   </div>
-                  {/* 텍스트 입력은 보조로 유지 (자동 완성된 위치 수정용) */}
-                  <input
-                    className="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg border border-subtle-light dark:border-subtle-dark bg-background-light dark:bg-background-dark focus:border-primary focus:ring-0 h-10 px-3 text-sm font-normal placeholder:text-placeholder-light dark:placeholder:text-placeholder-dark"
-                    placeholder="위치 이름을 수정하거나 직접 입력할 수 있어요 (예: 서울 남산, 부산 해운대)"
-                    value={formData.location}
-                    onChange={(e) => setFormData(prev => ({ ...prev, location: e.target.value }))}
-                  />
+                  {loadingLocation && (
+                    <p className="text-xs text-primary mt-1">위치를 찾고 있어요...</p>
+                  )}
                 </div>
               </label>
             </div>
 
-            {/* 3단계: 태그 & 설명 */}
+            {/* 태그 */}
             <div>
               <label className="flex flex-col">
-                <div className="flex items-center justify-between pb-2">
-                  <div>
-                    <p className="text-xs font-semibold text-gray-500 mb-1">STEP 3</p>
-                    <p className="text-base font-medium">태그 추가</p>
-                  </div>
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-sm font-semibold text-gray-800">태그</p>
                   {loadingAITags && (
                     <span className="text-xs text-primary">AI 분석 중...</span>
                   )}
                 </div>
                 <div className="flex w-full items-stretch gap-2">
                   <input
-                    className="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg border border-subtle-light dark:border-subtle-dark bg-background-light dark:bg-background-dark focus:border-primary focus:ring-0 h-12 p-3 text-sm font-normal placeholder:text-placeholder-light dark:placeholder:text-placeholder-dark"
-                    placeholder="#맑음 #화창한날씨 #일출"
+                    className="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg border border-primary-soft bg-white focus:border-primary focus:ring-2 focus:ring-primary-soft h-10 px-3 text-sm font-normal placeholder:text-gray-400"
+                    placeholder="#맑음 #화창한날씨"
                     value={tagInput}
                     onChange={(e) => setTagInput(e.target.value)}
                     onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addTag())}
                   />
                   <button
                     onClick={addTag}
-                    className="flex shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-lg h-12 px-4 bg-primary text-white text-sm font-bold hover:bg-primary/90 transition-colors"
+                    className="flex shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-primary text-white text-xs font-semibold hover:bg-primary-dark transition-all"
                   >
                     <span>추가</span>
                   </button>
@@ -1376,11 +1385,11 @@ const UploadScreen = () => {
               </label>
               
               {loadingAITags && (
-                <div className="mt-3 p-3 bg-primary/5 dark:bg-primary/10 rounded-lg border border-primary/15 dark:border-primary/25">
+                <div className="mt-3 p-3 bg-primary-soft/50 rounded-lg border border-primary-soft">
                   <div className="flex items-center gap-2">
                     <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
-                    <p className="text-sm font-medium text-primary dark:text-primary-soft">
-                      AI가 이미지를 분석하고 있습니다...
+                    <p className="text-xs font-medium text-primary">
+                      AI 분석 중...
                     </p>
                   </div>
                 </div>
@@ -1388,14 +1397,14 @@ const UploadScreen = () => {
               
               
               {!loadingAITags && autoTags.length > 0 && (
-                <div className="mt-2">
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-1.5">AI 추천 태그</p>
+                <div className="mt-3">
+                  <p className="text-xs text-gray-500 mb-1.5">추천 태그</p>
                   <div className="flex flex-wrap gap-1.5">
                     {autoTags.map((tag) => (
                       <button
                         key={tag}
                         onClick={() => addAutoTag(tag)}
-                        className="rounded-full bg-primary/10 dark:bg-primary/15 hover:bg-primary/15 dark:hover:bg-primary/20 py-1 px-2.5 text-xs font-medium text-primary dark:text-primary-soft transition-all border border-primary/20 dark:border-primary/30"
+                        className="rounded-full bg-primary-soft hover:bg-primary/10 border border-primary-soft hover:border-primary py-1 px-2.5 text-xs font-medium text-primary transition-all"
                       >
                         {tag}
                       </button>
@@ -1406,17 +1415,17 @@ const UploadScreen = () => {
               
               {formData.tags.length > 0 && (
                 <div className="mt-3">
-                  <p className="text-sm text-zinc-600 dark:text-zinc-400 mb-2">내 태그</p>
-                  <div className="flex flex-wrap gap-2">
+                  <p className="text-xs text-gray-600 mb-1.5">내 태그</p>
+                  <div className="flex flex-wrap gap-1.5">
                     {formData.tags.map((tag) => (
                       <div
                         key={tag}
-                        className="flex items-center gap-1.5 rounded-full bg-primary/20 dark:bg-primary/30 py-1.5 pl-3 pr-2 text-sm text-primary dark:text-orange-300"
+                        className="flex items-center gap-1 rounded-full bg-primary-soft border border-primary/20 py-1 pl-2.5 pr-1.5 text-xs text-primary font-medium"
                       >
                         <span>{tag}</span>
                         <button
                           onClick={() => removeTag(tag)}
-                          className="flex items-center justify-center text-primary dark:text-orange-300 hover:opacity-70"
+                          className="flex items-center justify-center text-primary hover:text-primary-dark hover:bg-primary/20 rounded-full w-4 h-4 transition-colors"
                         >
                           ×
                         </button>
@@ -1427,24 +1436,21 @@ const UploadScreen = () => {
               )}
             </div>
 
+            {/* 설명 (선택) */}
             <div>
               <label className="flex flex-col">
-                <div className="flex items-center justify-between pb-2">
-                  <div>
-                    <p className="text-xs font-semibold text-gray-500 mb-1">STEP 4 (선택)</p>
-                    <p className="text-base font-medium">지역 / 상황 설명</p>
-                  </div>
-                </div>
+                <p className="text-sm font-semibold text-gray-800 mb-3">설명 (선택)</p>
                 <div className="relative">
                   <textarea
-                    className="form-textarea w-full rounded-lg border border-subtle-light dark:border-subtle-dark bg-background-light dark:bg-background-dark focus:border-primary focus:ring-0 p-3 text-sm font-normal placeholder:text-placeholder-light dark:placeholder:text-placeholder-dark resize-none"
-                    placeholder="지금 이 지역과 상황이 어떤지(분위기, 사람, 날씨 등)를 간단히 적어주세요"
+                    className="form-textarea w-full rounded-lg border border-primary-soft bg-white focus:border-primary focus:ring-2 focus:ring-primary-soft p-3 text-sm font-normal placeholder:text-gray-400 resize-none leading-relaxed"
+                    placeholder="이 순간의 느낌이나 생각을 적어보세요"
                     rows="3"
                     value={formData.note}
                     onChange={(e) => setFormData(prev => ({ ...prev, note: e.target.value }))}
                     style={{ 
                       maxHeight: '100px',
-                      overflowY: 'auto'
+                      overflowY: 'auto',
+                      lineHeight: '1.5'
                     }}
                   />
                 </div>
@@ -1452,37 +1458,38 @@ const UploadScreen = () => {
             </div>
 
             {/* 업로드 버튼 */}
-            <div className="mt-6">
-              <button
-                onClick={() => {
-                  logger.debug('Upload button clicked');
-                  logger.debug('Current state:', { 
-                    uploading, 
-                    imageCount: formData.images.length,
-                    location: formData.location,
-                    disabled: uploading || formData.images.length === 0 
-                  });
-                  handleSubmit();
-                }}
-                disabled={uploading || formData.images.length === 0 || !formData.location.trim()}
-                className={`flex w-full items-center justify-center rounded-xl h-14 px-4 text-lg font-bold transition-all shadow-lg ${
-                  uploading || formData.images.length === 0 || !formData.location.trim()
-                    ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 cursor-not-allowed'
-                    : 'bg-primary text-white hover:bg-primary/90 hover:shadow-xl active:scale-95'
-                }`}
-              >
-                {uploading ? (
-                  <>
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-                    <span>업로드 중...</span>
-                  </>
-                ) : (
-                  <span>📤 여행 기록 업로드하기</span>
-                )}
-              </button>
-              {(formData.images.length === 0 || !formData.location.trim()) && (
+            <div className="mt-4 mb-4">
+                <button
+                  onClick={() => {
+                    logger.debug('Upload button clicked');
+                    logger.debug('Current state:', { 
+                      uploading, 
+                      imageCount: formData.images.length,
+                      videoCount: formData.videos.length,
+                      location: formData.location,
+                      disabled: uploading || (formData.images.length + formData.videos.length) === 0 
+                    });
+                    handleSubmit();
+                  }}
+                  disabled={uploading || (formData.images.length + formData.videos.length) === 0 || !formData.location.trim()}
+                  className={`flex w-full items-center justify-center rounded-xl h-12 px-4 text-base font-bold text-white transition-all shadow-lg ${
+                    uploading || (formData.images.length + formData.videos.length) === 0 || !formData.location.trim()
+                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed shadow-none'
+                      : 'bg-primary hover:bg-primary-dark hover:shadow-xl active:scale-[0.98] transform'
+                  }`}
+                >
+                  {uploading ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                      <span>업로드 중...</span>
+                    </>
+                  ) : (
+                    <span>업로드하기</span>
+                  )}
+                </button>
+              {((formData.images.length + formData.videos.length) === 0 || !formData.location.trim()) && (
                 <p className="text-xs text-gray-500 dark:text-gray-400 text-center mt-2">
-                  {formData.images.length === 0 ? '사진을 추가해주세요' : '위치를 입력해주세요'}
+                  {(formData.images.length + formData.videos.length) === 0 ? '사진 또는 동영상을 추가해주세요' : '위치를 입력해주세요'}
                 </p>
               )}
             </div>
@@ -1503,7 +1510,7 @@ const UploadScreen = () => {
               onClick={(e) => e.stopPropagation()}
               style={{ marginBottom: '80px', maxWidth: '100%' }}
             >
-              <h3 className="text-lg font-bold text-center mb-4">사진 선택</h3>
+              <h3 className="text-lg font-bold text-center mb-4">사진 또는 동영상 선택</h3>
               <button
                 onClick={() => handlePhotoOptionSelect('camera')}
                 className="w-full flex items-center justify-center gap-3 bg-white dark:bg-gray-800 border border-subtle-light dark:border-subtle-dark rounded-lg h-14 px-4 text-base font-semibold hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"

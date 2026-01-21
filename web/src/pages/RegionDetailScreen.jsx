@@ -4,7 +4,7 @@ import BottomNavigation from '../components/BottomNavigation';
 import { getWeatherByRegion, getTrafficByRegion } from '../api/weather';
 import { filterRecentPosts } from '../utils/timeUtils';
 import { toggleInterestPlace, isInterestPlace } from '../utils/interestPlaces';
-import { getLandmarksByRegion, isPostMatchingLandmarks, REGION_LANDMARKS } from '../utils/regionLandmarks';
+import { getLandmarksByRegion } from '../utils/regionLandmarks';
 
 const RegionDetailScreen = () => {
   const navigate = useNavigate();
@@ -91,30 +91,30 @@ const RegionDetailScreen = () => {
       console.log(`🎯 상세 위치 필터 적용: ${focusLocation} → ${regionPosts.length}개 게시물`);
     }
 
-    // 선택된 명소로 필터링 (모든 지역의 명소 지원)
+    // 선택된 명소로 필터링 (현재 지역의 명소만 사용)
     if (selectedLandmarks.length > 0) {
-      regionPosts = regionPosts.filter(post => {
-        // 선택된 명소 ID 형식: "지역명_명소ID"
-        return selectedLandmarks.some(landmarkId => {
-          const [landmarkRegion, landmarkIdOnly] = landmarkId.split('_');
-          const landmarks = getLandmarksByRegion(landmarkRegion);
-          const landmark = landmarks.find(l => l.id === landmarkIdOnly);
-          
-          if (!landmark) return false;
-          
+      const currentRegionLandmarks = getLandmarksByRegion(region.name);
+      const selectedLandmarkObjects = currentRegionLandmarks.filter(l => 
+        selectedLandmarks.includes(l.id)
+      );
+      
+      if (selectedLandmarkObjects.length > 0) {
+        regionPosts = regionPosts.filter(post => {
           // 게시물의 위치 정보
           const postLocation = (post.detailedLocation || post.placeName || post.location || '').toLowerCase();
           const postTags = (post.tags || []).join(' ').toLowerCase();
           const postNote = (post.note || post.content || '').toLowerCase();
           const searchText = `${postLocation} ${postTags} ${postNote}`;
           
-          // 명소의 키워드와 일치하는지 확인
-          return landmark.keywords.some(keyword => {
-            return searchText.includes(keyword.toLowerCase());
+          // 선택된 명소 중 하나라도 키워드와 일치하면 true
+          return selectedLandmarkObjects.some(landmark => {
+            return landmark.keywords.some(keyword => {
+              return searchText.includes(keyword.toLowerCase());
+            });
           });
         });
-      });
-      console.log(`🏛️ 명소 필터 적용: ${selectedLandmarks.length}개 명소 → ${regionPosts.length}개 게시물`);
+        console.log(`🏛️ ${region.name} 명소 필터 적용: ${selectedLandmarks.length}개 명소 → ${regionPosts.length}개 게시물`);
+      }
     }
 
     regionPosts = regionPosts
@@ -409,8 +409,8 @@ const RegionDetailScreen = () => {
               className="px-3 py-1.5 rounded-lg text-sm font-semibold text-primary bg-primary-soft hover:bg-primary/20 transition-colors"
             >
               {selectedLandmarks.length > 0 
-                ? `주요 명소 (${selectedLandmarks.length})`
-                : '모든 지역 명소보기'
+                ? `${region.name} 명소 (${selectedLandmarks.length})`
+                : `${region.name} 명소보기`
               }
             </button>
           </div>
@@ -584,14 +584,17 @@ const RegionDetailScreen = () => {
                         )}
                       </div>
                       
-                      {/* 해시태그 - 지역 이름 밑에 (줄 바꿈 없이) */}
+                      {/* 해시태그 - 눌러서 검색 */}
                       {photo.tags && photo.tags.length > 0 && (
                         <div className="flex gap-1.5 overflow-x-auto [-ms-scrollbar-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                          {photo.tags.slice(0, 5).map((tag, tagIndex) => (
-                            <span key={tagIndex} className="text-xs font-medium text-primary bg-primary/10 px-2.5 py-1 rounded-full whitespace-nowrap flex-shrink-0">
-                              #{typeof tag === 'string' ? tag.replace('#', '') : tag}
-                            </span>
-                          ))}
+                          {photo.tags.slice(0, 5).map((tag, tagIndex) => {
+                            const t = typeof tag === 'string' ? tag.replace(/^#+/, '') : tag;
+                            return (
+                              <button key={tagIndex} type="button" onClick={() => navigate(`/search?q=${encodeURIComponent('#' + t)}`)} className="text-xs font-medium text-primary bg-primary/10 hover:bg-primary/20 px-2.5 py-1 rounded-full whitespace-nowrap flex-shrink-0 cursor-pointer transition-colors">
+                                #{t}
+                              </button>
+                            );
+                          })}
                         </div>
                       )}
                       
@@ -628,7 +631,7 @@ const RegionDetailScreen = () => {
             {/* 헤더 */}
             <div className="flex items-center justify-between p-4 border-b border-border-light dark:border-border-dark">
               <h3 className="text-lg font-bold text-text-headings dark:text-gray-100">
-                모든 지역 주요 명소
+                {region.name} 대표 명소
               </h3>
               <button
                 onClick={() => setShowLandmarkModal(false)}
@@ -641,37 +644,38 @@ const RegionDetailScreen = () => {
             {/* 설명 */}
             <div className="px-4 pt-4">
               <p className="text-sm text-text-secondary-light dark:text-text-secondary-dark">
-                보고 싶은 명소를 선택하세요. 선택한 명소의 사진만 표시됩니다.
+                {region.name}의 대표 명소를 선택하세요. 선택한 명소의 사진만 표시됩니다.
               </p>
             </div>
 
-            {/* 명소 목록 - 모든 지역 */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {Object.entries(REGION_LANDMARKS).map(([regionName, landmarks]) => (
-                <div key={regionName} className="space-y-2">
-                  {/* 지역 헤더 */}
-                  <div className="flex items-center gap-2 pb-2 border-b border-gray-200 dark:border-gray-700">
-                    <h4 className="text-base font-bold text-text-headings dark:text-gray-100">
-                      {regionName}
-                    </h4>
-                    <span className="text-xs text-text-secondary-light dark:text-text-secondary-dark">
-                      ({landmarks.length}개)
-                    </span>
-                  </div>
-                  
-                  {/* 해당 지역의 명소들 */}
-                  <div className="space-y-2 pl-2">
-                    {landmarks.map((landmark) => {
-                      const landmarkId = `${regionName}_${landmark.id}`;
-                      const isSelected = selectedLandmarks.includes(landmarkId);
+            {/* 명소 목록 - 현재 지역만 */}
+            <div className="flex-1 overflow-y-auto p-4">
+              {(() => {
+                const currentLandmarks = getLandmarksByRegion(region.name);
+                
+                if (currentLandmarks.length === 0) {
+                  return (
+                    <div className="flex flex-col items-center justify-center py-12">
+                      <span className="material-symbols-outlined text-6xl text-gray-300 dark:text-gray-600 mb-4">location_off</span>
+                      <p className="text-base font-medium text-gray-700 dark:text-gray-300 text-center">
+                        {region.name}의 대표 명소 정보가 없습니다.
+                      </p>
+                    </div>
+                  );
+                }
+                
+                return (
+                  <div className="space-y-2">
+                    {currentLandmarks.map((landmark) => {
+                      const isSelected = selectedLandmarks.includes(landmark.id);
                       return (
                         <button
-                          key={landmarkId}
+                          key={landmark.id}
                           onClick={() => {
                             if (isSelected) {
-                              setSelectedLandmarks(selectedLandmarks.filter(id => id !== landmarkId));
+                              setSelectedLandmarks(selectedLandmarks.filter(id => id !== landmark.id));
                             } else {
-                              setSelectedLandmarks([...selectedLandmarks, landmarkId]);
+                              setSelectedLandmarks([...selectedLandmarks, landmark.id]);
                             }
                           }}
                           className={`w-full flex items-center justify-between p-3 rounded-lg border transition-colors ${
@@ -690,8 +694,8 @@ const RegionDetailScreen = () => {
                       );
                     })}
                   </div>
-                </div>
-              ))}
+                );
+              })()}
             </div>
 
             {/* 푸터 */}

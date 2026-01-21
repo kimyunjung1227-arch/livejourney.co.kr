@@ -111,14 +111,11 @@ export const toggleLike = (postId) => {
         
         const newBadges = checkNewBadges(stats);
         console.log(`📋 발견된 새 뱃지: ${newBadges.length}개`);
-        
+
         if (newBadges.length > 0) {
-          // 첫 좋아요 뱃지를 우선적으로 찾기
-          const firstLikeBadge = newBadges.find(b => b.name === '첫 좋아요');
-          const badge = firstLikeBadge || newBadges[0];
-          
+          const badge = newBadges[0];
           console.log(`🎁 뱃지 획득 시도: ${badge.name}`);
-          const awarded = awardBadge(badge);
+          const awarded = awardBadge(badge, { region: stats?.topRegionName });
           
           if (awarded) {
             console.log(`✅ 뱃지 획득 성공: ${badge.name}`);

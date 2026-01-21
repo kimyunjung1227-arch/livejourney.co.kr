@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import BottomNavigation from '../components/BottomNavigation';
-import { getAvailableBadges, getEarnedBadges, calculateUserStats } from '../utils/badgeSystem';
+import { getAvailableBadges, getEarnedBadges, calculateUserStats, getBadgeDisplayName } from '../utils/badgeSystem';
 
 const BadgeListScreen = () => {
   const navigate = useNavigate();
@@ -88,12 +88,11 @@ const BadgeListScreen = () => {
     })
     .filter(badge => !badge.hidden) // 히든 뱃지는 기본적으로 숨김
     .sort((a, b) => {
-      // 카테고리순으로 정렬
-      const categoryOrder = { '시작': 1, '활동': 2, '전문가': 3, '마스터': 4, '지역': 5, '특별': 6, '숨김': 7 };
+      const categoryOrder = { '온보딩': 1, '지역 가이드': 2, '실시간 정보': 3, '도움 지수': 4, '정확한 정보': 5, '친절한 여행자': 6, '기여도': 7 };
       const orderA = categoryOrder[a.category] || 999;
       const orderB = categoryOrder[b.category] || 999;
       if (orderA !== orderB) return orderA - orderB;
-      return a.difficulty - b.difficulty;
+      return (a.difficulty || 1) - (b.difficulty || 1);
     });
 
   // 삭제된 긴 badgeDefinitions 배열
@@ -517,18 +516,18 @@ const BadgeListScreen = () => {
                 {/* 뱃지 정보 */}
                 <div className="flex flex-col gap-1">
                   <p className={`text-sm font-bold leading-tight ${badge.isEarned ? 'text-primary' : 'text-gray-600 dark:text-gray-400'}`}>
-                    {badge.name}
+                    {getBadgeDisplayName(badge)}
                   </p>
                   
-                  {/* 난이도 */}
+                  {/* 난이도 (1=하, 2=중, 3=상, 4=최상) */}
                   {badge.isEarned ? (
                     <div className="flex items-center justify-center gap-1.5 mt-1">
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                        badge.difficulty === '상' ? 'bg-primary-dark text-white' :
-                        badge.difficulty === '중' ? 'bg-blue-500 text-white' :
+                        [3, 4].includes(badge.difficulty) ? 'bg-primary-dark text-white' :
+                        badge.difficulty === 2 ? 'bg-blue-500 text-white' :
                         'bg-green-500 text-white'
                       }`}>
-                        {badge.difficulty}
+                        {typeof badge.difficulty === 'number' ? ({ 1: '하', 2: '중', 3: '상', 4: '최상' }[badge.difficulty] || '중') : (badge.difficulty || '중')}
                       </span>
                     </div>
                   ) : (
@@ -589,17 +588,17 @@ const BadgeListScreen = () => {
               
               {/* 뱃지 이름 */}
               <h2 className={`mt-4 text-xl font-bold ${selectedBadge.isEarned ? 'text-primary' : 'text-gray-700 dark:text-gray-300'}`}>
-                {selectedBadge.name}
+                {getBadgeDisplayName(selectedBadge)}
               </h2>
               
-              {/* 난이도 */}
+              {/* 난이도 (1=하, 2=중, 3=상, 4=최상) */}
               <div className="flex items-center justify-center gap-2 mt-3">
                 <span className={`text-sm font-bold px-3 py-1 rounded-full ${
-                  selectedBadge.difficulty === '상' ? 'bg-primary-dark text-white' :
-                  selectedBadge.difficulty === '중' ? 'bg-blue-500 text-white' :
+                  [3, 4].includes(selectedBadge.difficulty) ? 'bg-primary-dark text-white' :
+                  selectedBadge.difficulty === 2 ? 'bg-blue-500 text-white' :
                   'bg-green-500 text-white'
                 }`}>
-                  난이도: {selectedBadge.difficulty}
+                  난이도: {typeof selectedBadge.difficulty === 'number' ? ({ 1: '하', 2: '중', 3: '상', 4: '최상' }[selectedBadge.difficulty] || '중') : (selectedBadge.difficulty || '중')}
                 </span>
               </div>
               

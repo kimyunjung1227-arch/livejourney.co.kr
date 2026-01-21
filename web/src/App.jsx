@@ -12,6 +12,7 @@ import AuthCallbackScreen from './pages/AuthCallbackScreen'
 import MainScreen from './pages/MainScreen'
 import MagazineDetailScreen from './pages/MagazineDetailScreen'
 import SearchScreen from './pages/SearchScreen'
+import HashtagScreen from './pages/HashtagScreen'
 import DetailScreen from './pages/DetailScreen'
 import PostDetailScreen from './pages/PostDetailScreen'
 import RegionDetailScreen from './pages/RegionDetailScreen'
@@ -64,6 +65,7 @@ function App() {
               <Route path="/magazine/:id" element={<MagazineDetailScreen />} />
               <Route path="/realtime-feed" element={<RealtimeFeedScreen />} />
               <Route path="/search" element={<SearchScreen />} />
+              <Route path="/hashtags" element={<HashtagScreen />} />
               <Route path="/detail" element={<DetailScreen />} />
               <Route path="/post/:id" element={<PostDetailScreen />} />
               <Route path="/region/:regionName" element={<RegionDetailScreen />} />

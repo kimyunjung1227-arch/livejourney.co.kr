@@ -1,336 +1,170 @@
 /**
- * 라이브저니 뱃지 시스템 v3.0
- * 단순하고 재미있게! 자부심과 성취감 중심
- * 달성 기준이 명확한 뱃지만!
+ * 라이브저니 뱃지 시스템 v5.0
+ * 7 카테고리: 온보딩, 지역 가이드, 실시간 정보, 도움 지수, 정확한 정보, 친절한 여행자, 기여도 (20개)
+ * - [지역명] 뱃지: regionAware + opts.region 저장 → getBadgeDisplayName으로 "[지역명] 가이드" 등 표기
  */
 import { logger } from './logger';
 
-/**
- * 뱃지 정의
- * - 명확한 숫자 기준만 사용
- * - 게시물 수, 좋아요 수, 지역 수
- */
+/** [지역명] 뱃지일 때 표시명 반환. 그 외는 name 그대로 */
+export const getBadgeDisplayName = (badge) => {
+  if (badge?.region && badge?.name && /^지역\s/.test(badge.name))
+    return `${badge.region} ${badge.name.replace(/^지역\s/, '')}`;
+  return badge?.name || '';
+};
+
+const REGION_AWARE_NAMES = ['지역 가이드', '지역 지킴이', '지역 통신원', '지역 마스터'];
+
 export const BADGES = {
-  // ========================================
-  // 🌱 시작 단계 (3개)
-  // ========================================
-  
-  '첫 걸음': {
-    name: '첫 걸음',
-    description: '첫 번째 여행 사진을 올렸어요!',
-    icon: '🌱',
-    category: '시작',
-    difficulty: 1,
-    gradient: 'from-green-400 to-emerald-500',
-    condition: (stats) => stats.totalPosts >= 1,
-    getProgress: (stats) => Math.min(100, (stats.totalPosts / 1) * 100)
-  },
-  
-  '여행 시작': {
-    name: '여행 시작',
-    description: '3개의 여행 기록을 남겼어요',
-    icon: '🎒',
-    category: '시작',
-    difficulty: 1,
-    gradient: 'from-blue-400 to-cyan-500',
-    condition: (stats) => stats.totalPosts >= 3,
-    getProgress: (stats) => Math.min(100, (stats.totalPosts / 3) * 100)
-  },
-  
-  '첫 좋아요': {
-    name: '첫 좋아요',
-    description: '다른 사람이 내 사진을 좋아해줬어요!',
-    icon: '💖',
-    category: '시작',
-    difficulty: 1,
-    gradient: 'from-pink-400 to-rose-500',
-    condition: (stats) => stats.totalLikes >= 1,
-    getProgress: (stats) => Math.min(100, (stats.totalLikes / 1) * 100)
-  },
-  
-  // ========================================
-  // 🎯 활동 단계 (3개)
-  // ========================================
-  
-  '여행 애호가': {
-    name: '여행 애호가',
-    description: '10개의 여행 기록을 남겼어요',
-    icon: '✈️',
-    category: '활동',
-    difficulty: 2,
-    gradient: 'from-sky-400 to-blue-500',
-    condition: (stats) => stats.totalPosts >= 10,
-    getProgress: (stats) => Math.min(100, (stats.totalPosts / 10) * 100)
-  },
-  
-  '사진 수집가': {
-    name: '사진 수집가',
-    description: '25개의 여행 사진을 모았어요',
-    icon: '📷',
-    category: '활동',
-    difficulty: 2,
-    gradient: 'from-purple-400 to-violet-500',
-    condition: (stats) => stats.totalPosts >= 25,
-    getProgress: (stats) => Math.min(100, (stats.totalPosts / 25) * 100)
-  },
-  
-  '인기 여행자': {
-    name: '인기 여행자',
-    description: '좋아요를 50개 받았어요!',
-    icon: '⭐',
-    category: '활동',
-    difficulty: 2,
-    gradient: 'from-yellow-400 to-orange-500',
-    condition: (stats) => stats.totalLikes >= 50,
-    getProgress: (stats) => Math.min(100, (stats.totalLikes / 50) * 100)
-  },
-  
-  // ========================================
-  // 🏆 전문가 단계 (3개)
-  // ========================================
-  
-  '여행 전문가': {
-    name: '여행 전문가',
-    description: '50개의 여행 기록! 진정한 여행 전문가예요',
-    icon: '🏆',
-    category: '전문가',
-    difficulty: 3,
-    gradient: 'from-amber-400 to-yellow-600',
-    condition: (stats) => stats.totalPosts >= 50,
-    getProgress: (stats) => Math.min(100, (stats.totalPosts / 50) * 100)
-  },
-  
-  '슈퍼 인기': {
-    name: '슈퍼 인기',
-    description: '좋아요를 100개나 받았어요!',
-    icon: '🌟',
-    category: '전문가',
-    difficulty: 3,
-    gradient: 'from-yellow-500 to-amber-600',
-    condition: (stats) => stats.totalLikes >= 100,
-    getProgress: (stats) => Math.min(100, (stats.totalLikes / 100) * 100)
-  },
-  
-  '지역 탐험가': {
-    name: '지역 탐험가',
-    description: '5개 이상의 다른 지역을 방문했어요',
-    icon: '🗺️',
-    category: '전문가',
-    difficulty: 3,
-    gradient: 'from-teal-400 to-cyan-600',
-    condition: (stats) => (stats.visitedRegions || 0) >= 5,
-    getProgress: (stats) => Math.min(100, ((stats.visitedRegions || 0) / 5) * 100)
-  },
-  
-  // ========================================
-  // 👑 마스터 단계 (3개)
-  // ========================================
-  
-  '여행 마스터': {
-    name: '여행 마스터',
-    description: '100개의 여행 기록! 정말 대단해요!',
-    icon: '👑',
-    category: '마스터',
-    difficulty: 4,
-    gradient: 'from-purple-500 to-pink-600',
-    condition: (stats) => stats.totalPosts >= 100,
-    getProgress: (stats) => Math.min(100, (stats.totalPosts / 100) * 100)
-  },
-  
-  '전국 정복자': {
-    name: '전국 정복자',
-    description: '10개 이상의 지역을 모두 방문했어요!',
-    icon: '🌍',
-    category: '마스터',
-    difficulty: 4,
-    gradient: 'from-green-500 to-teal-600',
-    condition: (stats) => (stats.visitedRegions || 0) >= 10,
-    getProgress: (stats) => Math.min(100, ((stats.visitedRegions || 0) / 10) * 100)
-  },
-  
-  '메가 스타': {
-    name: '메가 스타',
-    description: '좋아요를 500개나 받았어요! 슈퍼스타!',
-    icon: '🌠',
-    category: '마스터',
-    difficulty: 4,
-    gradient: 'from-yellow-400 via-orange-500 to-red-600',
-    condition: (stats) => stats.totalLikes >= 500,
-    getProgress: (stats) => Math.min(100, (stats.totalLikes / 500) * 100)
-  },
-  
-  // ========================================
-  // 🏠 지역 단계 (2개)
-  // ========================================
-  
-  '내 지역 알리미': {
-    name: '내 지역 알리미',
-    description: '한 지역에서 30개 이상 게시했어요! 지역 홍보 대사!',
-    icon: '📍',
-    category: '지역',
-    difficulty: 3,
-    gradient: 'from-red-400 to-pink-500',
-    condition: (stats) => {
-      if (!stats.posts || stats.posts.length === 0) return false;
-      const regionCounts = {};
-      stats.posts.forEach(post => {
-        const region = post.region || post.location?.split(' ')[0] || 'unknown';
-        regionCounts[region] = (regionCounts[region] || 0) + 1;
-      });
-      const maxCount = Math.max(...Object.values(regionCounts));
-      return maxCount >= 30;
-    },
-    getProgress: (stats) => {
-      if (!stats.posts || stats.posts.length === 0) return 0;
-      const regionCounts = {};
-      stats.posts.forEach(post => {
-        const region = post.region || post.location?.split(' ')[0] || 'unknown';
-        regionCounts[region] = (regionCounts[region] || 0) + 1;
-      });
-      const maxCount = Math.max(...Object.values(regionCounts));
-      return Math.min(100, (maxCount / 30) * 100);
-    }
-  },
-  
-  '도시 홍보대사': {
-    name: '도시 홍보대사',
-    description: '한 지역에서 50개 이상! 이제 그 지역의 전문가예요',
-    icon: '🏙️',
-    category: '지역',
-    difficulty: 4,
-    gradient: 'from-cyan-400 to-blue-600',
-    condition: (stats) => {
-      if (!stats.posts || stats.posts.length === 0) return false;
-      const regionCounts = {};
-      stats.posts.forEach(post => {
-        const region = post.region || post.location?.split(' ')[0] || 'unknown';
-        regionCounts[region] = (regionCounts[region] || 0) + 1;
-      });
-      const maxCount = Math.max(...Object.values(regionCounts));
-      return maxCount >= 50;
-    },
-    getProgress: (stats) => {
-      if (!stats.posts || stats.posts.length === 0) return 0;
-      const regionCounts = {};
-      stats.posts.forEach(post => {
-        const region = post.region || post.location?.split(' ')[0] || 'unknown';
-        regionCounts[region] = (regionCounts[region] || 0) + 1;
-      });
-      const maxCount = Math.max(...Object.values(regionCounts));
-      return Math.min(100, (maxCount / 50) * 100);
-    }
-  },
-  
-  // ========================================
-  // 🎁 숨겨진 뱃지 (4개)
-  // ========================================
-  
-  '행운아': {
-    name: '행운아',
-    description: '게시물 하나가 좋아요 100개를 받았어요!',
-    icon: '🍀',
-    category: '숨김',
-    difficulty: 4,
-    gradient: 'from-green-400 via-emerald-500 to-teal-600',
-    hidden: true,
-    condition: (stats) => (stats.maxLikes || 0) >= 100,
-    getProgress: (stats) => Math.min(100, ((stats.maxLikes || 0) / 100) * 100)
-  },
-  
-  '신속 게시자': {
-    name: '신속 게시자',
-    description: '하루에 게시물을 5개 올렸어요!',
-    icon: '⚡',
-    category: '숨김',
-    difficulty: 3,
-    gradient: 'from-yellow-300 to-orange-500',
-    hidden: true,
-    condition: (stats) => {
-      if (!stats.posts || stats.posts.length === 0) return false;
-      const postsByDate = {};
-      stats.posts.forEach(post => {
-        const date = new Date(post.createdAt).toDateString();
-        postsByDate[date] = (postsByDate[date] || 0) + 1;
-      });
-      return Math.max(...Object.values(postsByDate)) >= 5;
-    },
-    getProgress: (stats) => {
-      if (!stats.posts || stats.posts.length === 0) return 0;
-      const postsByDate = {};
-      stats.posts.forEach(post => {
-        const date = new Date(post.createdAt).toDateString();
-        postsByDate[date] = (postsByDate[date] || 0) + 1;
-      });
-      const max = Math.max(...Object.values(postsByDate));
-      return Math.min(100, (max / 5) * 100);
-    }
-  },
-  
-  '전설의 여행자': {
-    name: '전설의 여행자',
-    description: '200개의 여행 기록! 당신은 전설입니다!',
-    icon: '🦄',
-    category: '숨김',
-    difficulty: 5,
-    gradient: 'from-pink-400 via-purple-500 to-indigo-600',
-    hidden: true,
-    condition: (stats) => stats.totalPosts >= 200,
-    getProgress: (stats) => Math.min(100, (stats.totalPosts / 200) * 100)
-  },
-  
-  '도시 탐험가': {
-    name: '도시 탐험가',
-    description: '한 지역에서 20개 이상 게시! 숨겨진 명소를 찾았어요',
-    icon: '🌃',
-    category: '숨김',
-    difficulty: 3,
-    gradient: 'from-indigo-400 to-purple-600',
-    hidden: true,
-    condition: (stats) => {
-      if (!stats.posts || stats.posts.length === 0) return false;
-      const regionCounts = {};
-      stats.posts.forEach(post => {
-        const region = post.region || post.location?.split(' ')[0] || 'unknown';
-        regionCounts[region] = (regionCounts[region] || 0) + 1;
-      });
-      const maxCount = Math.max(...Object.values(regionCounts));
-      return maxCount >= 20;
-    },
-    getProgress: (stats) => {
-      if (!stats.posts || stats.posts.length === 0) return 0;
-      const regionCounts = {};
-      stats.posts.forEach(post => {
-        const region = post.region || post.location?.split(' ')[0] || 'unknown';
-        regionCounts[region] = (regionCounts[region] || 0) + 1;
-      });
-      const maxCount = Math.max(...Object.values(regionCounts));
-      return Math.min(100, (maxCount / 20) * 100);
-    }
-  }
+  // 🌱 온보딩
+  '첫 걸음': { name: '첫 걸음', description: '첫 번째 실시간 여행 정보를 공유했어요. 여행의 첫걸음을 내딛었어요!', icon: '👣', category: '온보딩', difficulty: 1, gradient: 'from-green-400 to-emerald-500', condition: (s) => (s.totalPosts || 0) >= 1, getProgress: (s) => Math.min(100, ((s.totalPosts || 0) / 1) * 100) },
+
+  // 🗺️ 1. 지역 가이드 (Locality) — regionAware, 획득 시 region 저장
+  '지역 가이드': { name: '지역 가이드', description: '해당 지역 실시간 제보 10회 이상. 가장 직관적인 로컬 전문가 인증', icon: '🗺️', category: '지역 가이드', difficulty: 2, gradient: 'from-indigo-600 to-blue-800', regionAware: true, condition: (s) => (s.maxRegionReports || 0) >= 10, getProgress: (s) => Math.min(100, ((s.maxRegionReports || 0) / 10) * 100) },
+  '지역 지킴이': { name: '지역 지킴이', description: '해당 지역의 중요 정보(폐업, 혼잡 등) 5회 이상 공유. 지역의 실패 없는 여행을 수호', icon: '🛡️', category: '지역 가이드', difficulty: 2, gradient: 'from-amber-600 to-amber-800', regionAware: true, condition: (s) => (s.regionImportantInfo || 0) >= 5, getProgress: (s) => Math.min(100, ((s.regionImportantInfo || 0) / 5) * 100) },
+  '지역 통신원': { name: '지역 통신원', description: '해당 지역에서 3일 연속 실시간 중계. 지역 소식을 실시간으로 전하는 특파원', icon: '📡', category: '지역 가이드', difficulty: 3, gradient: 'from-cyan-500 to-blue-600', regionAware: true, condition: (s) => (s.regionConsecutiveDays || 0) >= 3, getProgress: (s) => Math.min(100, ((s.regionConsecutiveDays || 0) / 3) * 100) },
+  '지역 마스터': { name: '지역 마스터', description: '해당 지역 활동량 상위 1% 기록. 그 지역에 대해선 모르는 게 없는 권위자', icon: '👑', category: '지역 가이드', difficulty: 4, gradient: 'from-purple-600 to-fuchsia-700', regionAware: true, condition: (s) => (s.regionTop1Percent || 0) >= 1, getProgress: (s) => Math.min(100, (s.regionTop1Percent || 0) * 100) },
+
+  // ⚡ 2. 실시간 정보 (Speed)
+  '날씨요정': { name: '날씨요정', description: '비/눈 등 기상 변화 시 10분 이내 현장 제보 5회. 친근하고 확실한 날씨 알림이', icon: '🌦️', category: '실시간 정보', difficulty: 2, gradient: 'from-cyan-400 to-blue-600', condition: (s) => (s.weatherReports || 0) >= 5, getProgress: (s) => Math.min(100, ((s.weatherReports || 0) / 5) * 100) },
+  '웨이팅 요정': { name: '웨이팅 요정', description: '실시간 대기 줄 상황과 예상 시간 10회 공유. 헛걸음과 시간 낭비를 막아주는 구세주', icon: '⏱️', category: '실시간 정보', difficulty: 2, gradient: 'from-lime-400 to-green-600', condition: (s) => (s.waitingShares || 0) >= 10, getProgress: (s) => Math.min(100, ((s.waitingShares || 0) / 10) * 100) },
+  '0.1초 셔터': { name: '0.1초 셔터', description: '현장 도착 즉시 실시간 라이브 사진 업로드. 누구보다 빠르게 현장을 중계하는 유저', icon: '⚡', category: '실시간 정보', difficulty: 3, gradient: 'from-yellow-300 to-amber-500', condition: (s) => (s.fastUploads || 0) >= 5, getProgress: (s) => Math.min(100, ((s.fastUploads || 0) / 5) * 100) },
+
+  // 🏆 3. 도움 지수 (Impact)
+  '베스트 나침반': { name: '베스트 나침반', description: '실시간 게시글 총 조회수 10,000회 돌파. 많은 이들의 길잡이가 된 영향력 인증', icon: '🧭', category: '도움 지수', difficulty: 4, gradient: 'from-amber-400 to-yellow-600', condition: (s) => (s.totalInfoViews || 0) >= 10000, getProgress: (s) => Math.min(100, ((s.totalInfoViews || 0) / 10000) * 100) },
+  '실패 구조대': { name: '실패 구조대', description: '내 정보로 헛걸음을 피한 감사 피드백 50회. 라이브저니의 사명을 가장 잘 실천한 유저', icon: '🫀', category: '도움 지수', difficulty: 3, gradient: 'from-red-400 to-rose-600', condition: (s) => (s.preventedFailFeedback || s.totalLikes || 0) >= 50, getProgress: (s) => Math.min(100, ((s.preventedFailFeedback || s.totalLikes || 0) / 50) * 100) },
+  '라이트하우스': { name: '라이트하우스', description: '정보가 귀한 시점(밤, 악천후)에 유용한 정보 제공. 어려운 상황에서 타인의 여행을 밝혀준 존재', icon: '🗼', category: '도움 지수', difficulty: 3, gradient: 'from-cyan-400 to-blue-600', condition: (s) => (s.nightWeatherUseful || 0) >= 5, getProgress: (s) => Math.min(100, ((s.nightWeatherUseful || 0) / 5) * 100) },
+
+  // ✅ 4. 정확한 정보 제공 (Trust)
+  '팩트 체크 마스터': { name: '팩트 체크 마스터', description: '잘못된 과거 정보를 최신으로 수정/갱신 10회. 정보의 최신성을 유지하는 커뮤니티의 기둥', icon: '✅', category: '정확한 정보', difficulty: 3, gradient: 'from-emerald-600 to-teal-700', condition: (s) => (s.factCheckEdits || 0) >= 10, getProgress: (s) => Math.min(100, ((s.factCheckEdits || 0) / 10) * 100) },
+  '인간 GPS': { name: '인간 GPS', description: '제보 위치와 실제 GPS 일치율 100% 유지. 데이터 신뢰도를 보장하는 물리적 인증', icon: '🛡️', category: '정확한 정보', difficulty: 2, gradient: 'from-slate-500 to-slate-700', condition: (s) => (s.gpsVerifiedCount || 0) >= (s.totalPosts || 1) && (s.totalPosts || 0) >= 5, getProgress: (s) => { const t = s.totalPosts || 0, v = s.gpsVerifiedCount || 0; if (t < 5) return Math.min(100, (t / 5) * 50); return Math.min(100, (v / Math.max(t, 1)) * 100); } },
+  '트래블 셜록': { name: '트래블 셜록', description: '주차 꿀팁, 숨은 입구 등 디테일한 정보 공유. 남들이 놓치는 세밀한 부분까지 챙기는 유저', icon: '🔍', category: '정확한 정보', difficulty: 2, gradient: 'from-amber-600 to-amber-800', condition: (s) => (s.detailShares || 0) >= 5, getProgress: (s) => Math.min(100, ((s.detailShares || 0) / 5) * 100) },
+
+  // 🤝 5. 친절한 여행자 (Kindness)
+  '실시간 답변러': { name: '실시간 답변러', description: '질문 게시글에 10분 이내로 답변 5회 이상. 여행자의 궁금증을 즉시 해결해 주는 해결사', icon: '💬', category: '친절한 여행자', difficulty: 2, gradient: 'from-sky-400 to-blue-500', condition: (s) => (s.questionAnswersFast || 0) >= 5, getProgress: (s) => Math.min(100, ((s.questionAnswersFast || 0) / 5) * 100) },
+  '길 위의 천사': { name: '길 위의 천사', description: '타인의 게시글에 응원 및 격려 댓글 50회 이상. 커뮤니티의 긍정적인 활력을 불어넣는 유저', icon: '👼', category: '친절한 여행자', difficulty: 1, gradient: 'from-yellow-400 to-orange-500', condition: (s) => (s.cheerAndComments || s.totalComments || 0) >= 50, getProgress: (s) => Math.min(100, ((s.cheerAndComments || s.totalComments || 0) / 50) * 100) },
+  '동행 가이드': { name: '동행 가이드', description: '사진을 포함한 정성스러운 답변으로 도움 제공. 가장 헌신적으로 정보를 나누는 친절한 유저', icon: '🤝', category: '친절한 여행자', difficulty: 3, gradient: 'from-violet-500 to-purple-600', condition: (s) => (s.helpfulAnswersWithPhoto || 0) >= 5, getProgress: (s) => Math.min(100, ((s.helpfulAnswersWithPhoto || 0) / 5) * 100) },
+
+  // 🔥 6. 기여도 (Loyalty)
+  '라이브 기록가': { name: '라이브 기록가', description: '총 실시간 제보 게시글 100개 달성. 서비스의 성장을 이끄는 핵심 기여자', icon: '📝', category: '기여도', difficulty: 3, gradient: 'from-blue-600 to-indigo-700', condition: (s) => (s.totalPosts || 0) >= 100, getProgress: (s) => Math.min(100, ((s.totalPosts || 0) / 100) * 100) },
+  '연속 중계 마스터': { name: '연속 중계 마스터', description: '30일 연속으로 실시간 상황 1회 이상 공유. 변함없는 성실함으로 신뢰를 쌓는 유저', icon: '📅', category: '기여도', difficulty: 4, gradient: 'from-emerald-500 to-green-700', condition: (s) => (s.consecutiveDays || 0) >= 30, getProgress: (s) => Math.min(100, ((s.consecutiveDays || 0) / 30) * 100) },
+  '지도 개척자': { name: '지도 개척자', description: '정보가 없던 새로운 장소의 첫 실시간 정보 등록. 라이브저니의 지도를 확장하는 선구자', icon: '🗺️', category: '기여도', difficulty: 2, gradient: 'from-amber-600 to-orange-700', condition: (s) => (s.firstReportNewPlace || 0) >= 1, getProgress: (s) => Math.min(100, ((s.firstReportNewPlace || 0) / 1) * 100) }
 };
 
 /**
- * 사용자 통계 계산
+ * 사용자 통계 계산 (v5 뱃지용)
+ * - 지역: maxRegionReports, topRegionName, regionImportantInfo, regionConsecutiveDays, regionTop1Percent
+ * - 실시간: weatherReports, waitingShares, fastUploads
+ * - 도움: totalInfoViews, preventedFailFeedback, nightWeatherUseful
+ * - 정확: gpsVerifiedCount, detailShares, factCheckEdits
+ * - 친절: cheerAndComments(←totalComments), questionAnswersFast, helpfulAnswersWithPhoto
+ * - 기여: totalPosts, consecutiveDays, firstReportNewPlace
  */
 export const calculateUserStats = (posts = [], user = {}) => {
   logger.log('📊 사용자 통계 계산 시작');
-  
+
+  const regionCounts = {};
+  const byRegionAndDate = {};
+  const byDate = {};
+  const dateSet = new Set();
+
+  (posts || []).forEach((p) => {
+    const r = p.region || (p.location && p.location.split(' ')[0]) || null;
+    if (r) {
+      regionCounts[r] = (regionCounts[r] || 0) + 1;
+      const createdAt = p.createdAt || p.created;
+      if (createdAt) {
+        const d = new Date(createdAt).toDateString();
+        if (!byRegionAndDate[r]) byRegionAndDate[r] = new Set();
+        byRegionAndDate[r].add(d);
+      }
+    }
+    const createdAt = p.createdAt || p.created;
+    if (createdAt) {
+      const d = new Date(createdAt).toDateString();
+      dateSet.add(d);
+      if (!byDate[d]) byDate[d] = new Set();
+      const placeKey = p.placeId || p.location || p.region || (p.coordinates && String(p.coordinates)) || 'unknown';
+      byDate[d].add(placeKey);
+    }
+  });
+
+  const regionValues = Object.values(regionCounts);
+  const maxRegionReports = regionValues.length > 0 ? Math.max(...regionValues) : 0;
+  const topRegionName = regionValues.length > 0
+    ? Object.entries(regionCounts).find(([, c]) => c === maxRegionReports)?.[0] || null
+    : null;
+
+  let regionConsecutiveDays = 0;
+  for (const region of Object.keys(byRegionAndDate)) {
+    const sorted = [...byRegionAndDate[region]].sort();
+    let run = 1;
+    for (let i = 1; i < sorted.length; i++) {
+      const prev = new Date(sorted[i - 1]).getTime();
+      const curr = new Date(sorted[i]).getTime();
+      const diffDays = (curr - prev) / (24 * 60 * 60 * 1000);
+      if (diffDays === 1) run += 1;
+      else run = 1;
+      regionConsecutiveDays = Math.max(regionConsecutiveDays, run);
+    }
+    regionConsecutiveDays = Math.max(regionConsecutiveDays, run);
+  }
+
+  const sortedDates = [...dateSet].sort();
+  let consecutiveDays = 0;
+  if (sortedDates.length > 0) {
+    let run = 1;
+    for (let i = 1; i < sortedDates.length; i++) {
+      const prev = new Date(sortedDates[i - 1]).getTime();
+      const curr = new Date(sortedDates[i]).getTime();
+      const diffDays = (curr - prev) / (24 * 60 * 60 * 1000);
+      if (diffDays === 1) run += 1;
+      else run = 1;
+      consecutiveDays = Math.max(consecutiveDays, run);
+    }
+    consecutiveDays = Math.max(consecutiveDays, run);
+  }
+
+  const totalComments = (posts || []).reduce(
+    (sum, p) => sum + (Array.isArray(p.comments) ? p.comments.length : 0),
+    0
+  );
+
   const stats = {
-    totalPosts: posts.length,
-    posts: posts,
-    userId: user.id || user._id,
-    
-    // 좋아요 통계
-    totalLikes: posts.reduce((sum, p) => sum + (p.likes || 0), 0),
-    maxLikes: Math.max(...posts.map(p => p.likes || 0), 0),
-    avgLikes: posts.length > 0 ? posts.reduce((sum, p) => sum + (p.likes || 0), 0) / posts.length : 0,
-    
-    // 지역 통계
-    visitedRegions: new Set(posts.map(p => p.region || p.location?.split(' ')[0]).filter(Boolean)).size
+    totalPosts: (posts || []).length,
+    posts: posts || [],
+    userId: user?.id || user?._id,
+    totalLikes: (posts || []).reduce((sum, p) => sum + (p.likes || 0), 0),
+    maxLikes: (posts || []).length > 0 ? Math.max(0, ...(posts || []).map((p) => p.likes || 0)) : 0,
+    visitedRegions: new Set((posts || []).map((p) => p.region || (p.location && p.location.split(' ')[0])).filter(Boolean)).size,
+    totalComments,
+
+    maxRegionReports,
+    topRegionName,
+    regionImportantInfo: 0,
+    regionConsecutiveDays,
+    regionTop1Percent: 0,
+
+    weatherReports: 0,
+    waitingShares: 0,
+    fastUploads: 0,
+
+    totalInfoViews: 0,
+    preventedFailFeedback: 0,
+    nightWeatherUseful: 0,
+
+    gpsVerifiedCount: 0,
+    detailShares: 0,
+    factCheckEdits: 0,
+
+    cheerAndComments: totalComments,
+    questionAnswersFast: 0,
+    helpfulAnswersWithPhoto: 0,
+
+    consecutiveDays,
+    firstReportNewPlace: 0
   };
-  
+
   logger.log(`✅ 통계 계산 완료: 총 ${stats.totalPosts}개 게시물, ${stats.visitedRegions}개 지역`);
-  
   return stats;
 };
 
@@ -376,25 +210,25 @@ export const checkNewBadges = (stats) => {
 
 /**
  * 뱃지 획득 처리
+ * @param {object} opts - { region } 지역 뱃지일 때 획득 지역명 (예: stats.topRegionName)
  */
-export const awardBadge = (badge) => {
+export const awardBadge = (badge, opts = {}) => {
   logger.log(`🎁 뱃지 획득 처리 시작: ${badge.name}`);
-  
+
   try {
     const earnedBadges = JSON.parse(localStorage.getItem('earnedBadges') || '[]');
-    
-    // 이미 획득한 뱃지인지 확인
-    if (earnedBadges.some(b => b.name === badge.name)) {
+
+    if (earnedBadges.some((b) => b.name === badge.name)) {
       logger.warn(`⚠️ 이미 획득한 뱃지: ${badge.name}`);
       return false;
     }
-    
-    // 뱃지 추가
+
     const newBadge = {
       ...badge,
-      earnedAt: new Date().toISOString()
+      earnedAt: new Date().toISOString(),
+      ...(opts?.region && (badge.regionAware || REGION_AWARE_NAMES.includes(badge.name)) && { region: opts.region })
     };
-    
+
     earnedBadges.push(newBadge);
     
     // localStorage 저장
@@ -541,43 +375,40 @@ export const getEarnedBadgesForUser = (userId) => {
 
 /**
  * 사용 가능한 모든 뱃지 목록
+ * - regionAware: isEarned이면 earned.region, 아니면 stats?.topRegionName → displayRegion
  */
 export const getAvailableBadges = (stats = null) => {
   const earnedBadges = getEarnedBadges();
-  const earnedBadgeNames = earnedBadges.map(b => b.name);
-  
+
   return Object.entries(BADGES).map(([name, badge]) => {
-    const isEarned = earnedBadgeNames.includes(name);
-    const progress = stats ? getBadgeProgress(name, stats) : 0;
-    
+    const earnedBadge = earnedBadges.find((b) => b.name === name);
+    const isEarned = !!earnedBadge;
     return {
       ...badge,
       name,
       isEarned,
-      progress
+      progress: stats ? getBadgeProgress(name, stats) : 0,
+      ...(isEarned && earnedBadge?.region && { region: earnedBadge.region }),
+      ...(!isEarned && stats?.topRegionName && (badge.regionAware || REGION_AWARE_NAMES.includes(name)) && { displayRegion: stats.topRegionName })
     };
   });
 };
 
 /**
- * 뱃지 통계
+ * 뱃지 통계 (카테고리: 온보딩, 지역 가이드, 실시간 정보, 도움 지수, 정확한 정보, 친절한 여행자, 기여도)
  */
 export const getBadgeStats = () => {
   const earnedBadges = getEarnedBadges();
-  
   const categoryCounts = {
-    '시작': earnedBadges.filter(b => b.category === '시작').length,
-    '활동': earnedBadges.filter(b => b.category === '활동').length,
-    '전문가': earnedBadges.filter(b => b.category === '전문가').length,
-    '마스터': earnedBadges.filter(b => b.category === '마스터').length,
-    '지역': earnedBadges.filter(b => b.category === '지역').length,
-    '숨김': earnedBadges.filter(b => b.category === '숨김').length
+    '온보딩': earnedBadges.filter((b) => b.category === '온보딩').length,
+    '지역 가이드': earnedBadges.filter((b) => b.category === '지역 가이드').length,
+    '실시간 정보': earnedBadges.filter((b) => b.category === '실시간 정보').length,
+    '도움 지수': earnedBadges.filter((b) => b.category === '도움 지수').length,
+    '정확한 정보': earnedBadges.filter((b) => b.category === '정확한 정보').length,
+    '친절한 여행자': earnedBadges.filter((b) => b.category === '친절한 여행자').length,
+    '기여도': earnedBadges.filter((b) => b.category === '기여도').length
   };
-  
-  return {
-    total: earnedBadges.length,
-    categoryCounts
-  };
+  return { total: earnedBadges.length, categoryCounts };
 };
 
 export default BADGES;

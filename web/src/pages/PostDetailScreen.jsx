@@ -9,6 +9,7 @@ import { toggleLike, isPostLiked, addComment } from '../utils/socialInteractions
 import { toggleInterestPlace, isInterestPlace } from '../utils/interestPlaces';
 import { getEarnedBadgesForUser } from '../utils/badgeSystem';
 import { getUserLevel } from '../utils/levelSystem';
+import { follow, unfollow, isFollowing } from '../utils/followSystem';
 
 // 영어 태그를 한국어로 번역
 const tagTranslations = {
@@ -131,6 +132,7 @@ const PostDetailScreen = () => {
   const [userBadges, setUserBadges] = useState([]);
   const [authorLevelInfo, setAuthorLevelInfo] = useState(null);
   const [showHeartAnimation, setShowHeartAnimation] = useState(false);
+  const [isFollowAuthor, setIsFollowAuthor] = useState(false);
   const [weatherInfo, setWeatherInfo] = useState({
     icon: '☀️',
     condition: '맑음',
@@ -616,8 +618,19 @@ const PostDetailScreen = () => {
   const addressText = useMemo(() => post?.address || null, [post]);
   const userName = useMemo(() => post?.user?.username || post?.user || '실시간정보왕', [post]);
   const userBadge = useMemo(() => post?.user?.badges?.[0] || post?.badge || '여행러버', [post]);
-  const timeText = useMemo(() => post?.time || (post?.createdAt ? getTimeAgo(post.createdAt) : '방금 전'), [post]);
+  // EXIF에서 추출한 촬영 날짜 우선 사용, 없으면 업로드 시간
+  const photoDate = useMemo(() => post?.photoDate || post?.exifData?.photoDate || null, [post]);
+  const timeText = useMemo(() => {
+    if (photoDate) {
+      const date = new Date(photoDate);
+      return getTimeAgo(date);
+    }
+    return post?.time || (post?.createdAt ? getTimeAgo(post.createdAt) : '방금 전');
+  }, [post, photoDate]);
   const categoryName = useMemo(() => post?.categoryName || null, [post]);
+  // EXIF에서 검증된 위치 정보
+  const verifiedLocation = useMemo(() => post?.verifiedLocation || post?.exifData?.gpsCoordinates ? locationText : null, [post, locationText]);
+  const hasExifData = useMemo(() => !!(post?.exifData || post?.photoDate || post?.verifiedLocation), [post]);
 
   // 공유 기능 - useMemo 정의 후에!
   const handleShare = useCallback(async () => {
@@ -675,6 +688,16 @@ const PostDetailScreen = () => {
       fetchWeather();
     }
   }, [post, locationText]);
+
+  // 작성자 팔로우 여부 로드 및 followsUpdated 구독
+  const postUserId = post ? (post.userId || (typeof post.user === 'string' ? post.user : post.user?.id) || post.user) : null;
+  useEffect(() => {
+    if (!postUserId) return;
+    const load = () => setIsFollowAuthor(isFollowing(null, postUserId));
+    load();
+    window.addEventListener('followsUpdated', load);
+    return () => window.removeEventListener('followsUpdated', load);
+  }, [postUserId]);
 
   if (loading) {
     return (
@@ -884,6 +907,15 @@ const PostDetailScreen = () => {
                   </div>
                 </div>
               </div>
+              {/* 팔로우 버튼: 로그인 + 다른 사용자 게시물일 때만 */}
+              {postUserId && user?.id && String(postUserId) !== String(user.id) && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); if (isFollowAuthor) { unfollow(postUserId); setIsFollowAuthor(false); } else { follow(postUserId); setIsFollowAuthor(true); } }}
+                  className={`shrink-0 py-2 px-4 rounded-xl text-sm font-semibold ${isFollowAuthor ? 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400' : 'bg-primary text-white'}`}
+                >
+                  {isFollowAuthor ? '팔로잉' : '팔로우'}
+                </button>
+              )}
             </div>
           </div>
 
@@ -897,8 +929,14 @@ const PostDetailScreen = () => {
                 <div className="flex-1">
                   <div className="flex items-center flex-wrap gap-2 mb-2">
                     <p className="text-base font-bold text-zinc-900 dark:text-zinc-100">
-                      {detailedLocationText || locationText}
+                      {verifiedLocation || detailedLocationText || locationText}
                     </p>
+                    {hasExifData && (
+                      <span className="text-xs font-semibold text-white bg-green-600 px-2 py-1 rounded-full flex items-center gap-1">
+                        <span className="text-[10px]">✓</span>
+                        <span>검증됨</span>
+                      </span>
+                    )}
                     {categoryName && (
                       <span className="text-xs font-semibold text-white bg-primary px-3 py-1 rounded-full">
                         {categoryName === '개화 상황' && '🌸'}
@@ -917,7 +955,14 @@ const PostDetailScreen = () => {
                   <div className="flex items-center flex-wrap gap-3 text-sm mb-3">
                     <div className="flex items-center gap-1.5 text-zinc-600 dark:text-zinc-400">
                       <span className="material-symbols-outlined !text-lg">schedule</span>
-                      <span>{timeText}</span>
+                      <span>
+                        {timeText}
+                        {photoDate && (
+                          <span className="ml-1 text-xs text-green-600 dark:text-green-400" title={`촬영: ${new Date(photoDate).toLocaleString('ko-KR')}`}>
+                            (EXIF)
+                          </span>
+                        )}
+                      </span>
                     </div>
                     <div className="flex items-center gap-1.5 text-zinc-600 dark:text-zinc-400">
                       {weatherInfo.loading ? (
@@ -950,40 +995,36 @@ const PostDetailScreen = () => {
               <div className="flex items-start gap-3">
                 <span className="material-symbols-outlined text-primary text-2xl flex-shrink-0">tag</span>
                 <div className="flex-1">
-                  {((post?.tags && post.tags.length > 0) || (post?.aiLabels && post.aiLabels.length > 0)) ? (
-                    <div className="flex flex-wrap gap-2">
-                      {/* 모든 태그를 동일한 스타일로 표시 (한국어로 번역) */}
-                      {(post?.tags || []).map((tag, index) => {
-                        const tagText = typeof tag === 'string' ? tag.replace('#', '') : tag.name || '태그';
-                        const koreanTag = tagTranslations[tagText.toLowerCase()] || tagText;
-                        return (
-                          <span 
-                            key={`tag-${index}`}
-                            className="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-semibold bg-primary/10 text-primary hover:bg-primary/20 transition-colors cursor-pointer"
-                          >
-                            #{koreanTag}
-                          </span>
-                        );
-                      })}
-                      {/* AI 라벨도 같은 스타일로 (한국어로 번역) */}
-                      {(post?.aiLabels || []).map((label, index) => {
-                        const labelText = typeof label === 'string' ? label.replace('#', '') : label.name || '라벨';
-                        const koreanLabel = tagTranslations[labelText.toLowerCase()] || labelText;
-                        return (
-                          <span 
-                            key={`ai-${index}`}
-                            className="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-semibold bg-primary/10 text-primary hover:bg-primary/20 transition-colors cursor-pointer"
-                          >
-                            #{koreanLabel}
-                          </span>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-gray-400 dark:text-gray-500">
-                      태그가 없습니다
-                    </p>
-                  )}
+                  {(() => {
+                    const getText = (t) => (typeof t === 'string' ? (t || '').replace(/^#+/, '').trim() : String(t?.name ?? t?.label ?? '').replace(/^#+/, '').trim());
+                    const seen = new Set();
+                    const merged = [];
+                    [...(post?.tags || []), ...(post?.aiLabels || [])].forEach((t) => {
+                      const k = getText(t).toLowerCase();
+                      if (!k || seen.has(k)) return;
+                      seen.add(k);
+                      merged.push(getText(t));
+                    });
+                    return merged.length > 0 ? (
+                      <div className="flex flex-wrap gap-2">
+                        {merged.map((tagText, index) => {
+                          const korean = tagTranslations[tagText.toLowerCase()] || tagText;
+                          return (
+                            <button
+                              key={`tag-${index}`}
+                              type="button"
+                              onClick={() => navigate(`/search?q=${encodeURIComponent('#' + tagText)}`)}
+                              className="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-semibold bg-primary/10 text-primary hover:bg-primary/20 active:bg-primary/30 transition-colors cursor-pointer"
+                            >
+                              #{korean}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-400 dark:text-gray-500">태그가 없습니다</p>
+                    );
+                  })()}
                 </div>
               </div>
 

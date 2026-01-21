@@ -172,7 +172,11 @@ const DetailScreen = () => {
         comments: post.comments || [],
         questions: post.questions || [],
         qnaList: [],
-        aiLabels: post.aiLabels
+        aiLabels: post.aiLabels,
+        // EXIF 데이터 추가
+        photoDate: post.photoDate || null,
+        verifiedLocation: post.verifiedLocation || null,
+        exifData: post.exifData || null
       };
     });
     
@@ -552,12 +556,22 @@ const DetailScreen = () => {
                       <div>
                         <div className="flex items-center gap-2 flex-wrap">
                           <p className="text-sm font-semibold text-text-primary-light dark:text-text-primary-dark">
-                            {item.detailedLocation || item.placeName || item.location || '여행지'}
+                            {item.verifiedLocation || item.detailedLocation || item.placeName || item.location || '여행지'}
                           </p>
+                          {(item.exifData || item.verifiedLocation || item.photoDate) && (
+                            <span className="text-[9px] font-semibold text-white bg-green-600 px-1.5 py-0.5 rounded-full">
+                              ✓ 검증
+                            </span>
+                          )}
                           {/* 업로드 시간 - 지역 옆에 */}
                           {item.time && (
                             <p className="text-[11px] text-text-secondary-light dark:text-text-secondary-dark">
                               {item.time}
+                              {item.photoDate && (
+                                <span className="ml-0.5 text-[9px] text-green-600 dark:text-green-400" title={`촬영: ${new Date(item.photoDate).toLocaleString('ko-KR')}`}>
+                                  (EXIF)
+                                </span>
+                              )}
                             </p>
                           )}
                         </div>

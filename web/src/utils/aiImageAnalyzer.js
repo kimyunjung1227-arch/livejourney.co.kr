@@ -290,20 +290,62 @@ const analyzeImageColors = async (imageFile) => {
   });
 };
 
-// 메인 AI 분석 함수 (정교한 버전)
+// 메인 AI 분석 함수 (멀티모달 AI 우선, 실패 시 기존 방식)
 export const analyzeImageForTags = async (imageFile, location = '', existingNote = '') => {
   try {
     logger.log('🤖 AI 이미지 분석 시작...');
     logger.debug('  📍 위치:', location);
     logger.debug('  📝 노트:', existingNote);
     
+    // EXIF 데이터 추출 (멀티모달 AI에 전달하기 위해)
+    const exifData = await readExifData(imageFile);
+    
+    // 1차 시도: 멀티모달 AI 기반 태그 생성 (백엔드 API)
+    try {
+      logger.log('🤖 멀티모달 AI 태그 생성 시도 중...');
+      const { generateAITags } = await import('../api/aiTags');
+      logger.debug('  API 함수 로드 완료');
+      
+      const aiResult = await generateAITags(imageFile, location, exifData);
+      logger.debug('  API 호출 결과:', aiResult);
+      
+      if (aiResult && aiResult.success && aiResult.tags && aiResult.tags.length > 0) {
+        logger.log('✅ 멀티모달 AI 태그 생성 성공!');
+        logger.debug('  생성된 태그:', aiResult.tags);
+        logger.debug('  이미지 묘사:', aiResult.caption?.substring(0, 100) + '...');
+        
+        // 카테고리 자동 분류
+        const categoryResult = detectCategory(new Set(aiResult.tags), location, existingNote, { brightness: 0.5 });
+        
+        return {
+          success: true,
+          tags: aiResult.tags.slice(0, 10), // 최대 10개
+          category: categoryResult.category,
+          categoryName: categoryResult.categoryName,
+          categoryIcon: categoryResult.icon,
+          caption: aiResult.caption,
+          method: 'multimodal-ai'
+        };
+      } else {
+        logger.warn('⚠️ AI 결과가 비어있거나 실패:', {
+          aiResult,
+          success: aiResult?.success,
+          tagsCount: aiResult?.tags?.length || 0
+        });
+      }
+    } catch (aiError) {
+      logger.warn('⚠️ 멀티모달 AI 실패, 기존 방식으로 폴백:');
+      logger.warn('  에러:', aiError);
+      logger.warn('  메시지:', aiError.message);
+      logger.warn('  스택:', aiError.stack);
+    }
+    
+    // 2차 시도: 기존 방식 (색상 분석 기반)
+    logger.log('🔄 기존 방식으로 태그 생성...');
     const keywords = new Set();
     
     // 병렬 처리로 속도 향상
-    const [colorAnalysis, exifData] = await Promise.all([
-      analyzeImageColors(imageFile),
-      readExifData(imageFile)
-    ]);
+    const colorAnalysis = await analyzeImageColors(imageFile);
     
     logger.debug('🎨 색상 분석 결과:');
     logger.debug('  RGB:', colorAnalysis.dominantColor);
@@ -600,7 +642,7 @@ export const analyzeImageForTags = async (imageFile, location = '', existingNote
       .slice(0, 5); // 최대 5개로 제한
     
     logger.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    logger.log('✅ AI 분석 완료!');
+    logger.log('✅ AI 분석 완료! (기존 방식)');
     logger.debug('📍 위치:', location || '없음');
     logger.debug('📝 노트:', existingNote || '없음');
     logger.log('🏷️ 추천 태그 (' + finalTags.length + '개):', finalTags);
@@ -615,7 +657,8 @@ export const analyzeImageForTags = async (imageFile, location = '', existingNote
       categoryIcon: categoryResult.icon,
       brightness: colorAnalysis.brightness,
       colorAnalysis,
-      metadata: exifData
+      metadata: exifData,
+      method: 'color-analysis' // 기존 방식 표시
     };
     
   } catch (error) {

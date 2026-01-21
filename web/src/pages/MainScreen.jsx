@@ -7,6 +7,7 @@ import { getTimeAgo, filterRecentPosts } from '../utils/timeUtils';
 import { getInterestPlaces, toggleInterestPlace } from '../utils/interestPlaces';
 import { getRegionIcon } from '../utils/regionIcons';
 import { logger } from '../utils/logger';
+import { getRecommendedRegions, RECOMMENDATION_TYPES } from '../utils/recommendationEngine';
 
 const MainScreen = () => {
   const navigate = useNavigate();
@@ -183,70 +184,17 @@ const MainScreen = () => {
     });
   }, [recommendedData, selectedTag]);
 
-  // 상황별 추천 테마 (가벼운 추천 여행지)
-  const travelThemes = useMemo(() => [
-    {
-      id: 'weekend_nearby',
-      name: '주말 근교',
-      description: '서울 기준 2시간 이내',
-      regions: ['서울', '강릉', '춘천'],
-    },
-    {
-      id: 'one_day',
-      name: '당일치기',
-      description: '아침에 떠나서 밤에 돌아오기',
-      regions: ['인천', '수원', '속초'],
-    },
-    {
-      id: 'healing_2days',
-      name: '1박 2일 힐링',
-      description: '조용히 쉬고 오는 여행',
-      regions: ['제주', '여수', '남해'],
-    },
-    {
-      id: 'solo_trip',
-      name: '혼자 가기 좋아요',
-      description: '혼자서도 부담 없는 동선',
-      regions: ['부산', '전주', '광주'],
-    },
-    {
-      id: 'couple_trip',
-      name: '커플 여행',
-      description: '함께 걷기 좋은 감성 코스',
-      regions: ['여수', '부산', '제주'],
-    },
-  ], []);
-
-  // 지역별 한 줄 카피
-  const regionCopyMap = useMemo(
-    () => ({
-      서울: '야경과 맛집이 가까운 도심 여행',
-      부산: '해운대와 광안리를 걷는 바다 여행',
-      제주: '섬을 한 바퀴 도는 힐링 드라이브',
-      강릉: '바다와 카페를 동시에 즐기는 해변 도시',
-      여수: '야경과 해산물이 맛있는 항구 여행',
-      속초: '설악산과 동해를 함께 보는 힐링 여행',
-      춘천: '호수와 카페가 어우러진 감성 여행',
-      인천: '바다와 거리 산책이 함께 있는 근교 여행',
-      수원: '화성과 구도심을 도는 역사 여행',
-      남해: '조용한 남쪽 바다 마을로 떠나는 휴식',
-      전주: '한옥마을에서 즐기는 전통 도시 여행',
-      광주: '카페와 예술 공간을 걷는 문화 여행',
-    }),
-    []
+  // 추천 타입 선택 (기본값: 개화 정보)
+  const [selectedRecommendationType, setSelectedRecommendationType] = useState('blooming');
+  
+  // 실제 게시물 데이터 기반 추천 지역
+  const [recommendedRegions, setRecommendedRegions] = useState([]);
+  
+  // 선택된 추천 타입에 맞는 추천 지역
+  const selectedRecommendation = useMemo(
+    () => RECOMMENDATION_TYPES.find((type) => type.id === selectedRecommendationType) || RECOMMENDATION_TYPES[0],
+    [selectedRecommendationType]
   );
-
-  const [selectedThemeId, setSelectedThemeId] = useState(travelThemes[0]?.id);
-
-  const selectedTheme = useMemo(
-    () => travelThemes.find((theme) => theme.id === selectedThemeId) || travelThemes[0],
-    [travelThemes, selectedThemeId]
-  );
-
-  // 선택된 테마에 맞는 추천 게시물만 필터링 (현재는 하단 큰 피드는 숨기고, 테마별 지역 카드만 사용)
-  const themeFilteredRecommendedData = useMemo(() => {
-    return [];
-  }, [selectedTheme, filteredRecommendedData, recommendedData]);
 
   // 웹 메인 전용: 여행 매거진 카드 데이터
   const travelMagazineArticles = useMemo(() => ([
@@ -489,13 +437,18 @@ const MainScreen = () => {
     const tags = extractPopularTags(posts);
     setPopularTags(tags);
     
+    // 실제 게시물 데이터 기반 추천 지역 계산
+    const recommended = getRecommendedRegions(allPosts, selectedRecommendationType);
+    setRecommendedRegions(recommended);
+    
     logger.log('📊 메인화면 Mock 데이터 로드:', {
       realtime: realtimeFormatted.length,
       crowded: crowdedFormatted.length,
       recommended: recommendedFormatted.length,
-      popularTags: tags.length
+      popularTags: tags.length,
+      recommendedRegions: recommended.length
     });
-  }, [getTimeAgo, extractPopularTags, selectedTag]);
+  }, [getTimeAgo, extractPopularTags, selectedTag, selectedRecommendationType]);
 
 
   const fetchPosts = useCallback(async () => {
@@ -1004,10 +957,11 @@ const MainScreen = () => {
           <div className="feed-section" style={{ marginBottom: '20px' }}>
             <div className="section-header-main" style={{ 
               display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
+              flexDirection: 'column',
+              gap: '8px',
               padding: '0 16px 12px 16px'
             }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <h3 style={{ 
                   fontSize: '15px',
@@ -1054,6 +1008,7 @@ const MainScreen = () => {
               >
                 더보기
               </button>
+              </div>
             </div>
             
             {/* 횡스크롤 카드 */}
@@ -1341,19 +1296,19 @@ const MainScreen = () => {
               }}>✨ 추천 여행지</h3>
           </div>
 
-            {/* 추천 여행지 섹션 안에 가벼운 테마 기반 추천 블록 */}
+            {/* 추천 여행지 섹션 - 실제 게시물 데이터 기반 */}
             <div style={{ padding: '0 16px 10px 16px' }}>
-              {selectedTheme && (
+              {selectedRecommendation && (
                 <p style={{ 
                   fontSize: '12px', 
                   color: '#6B7280',
                   margin: '0 0 6px 0'
                 }}>
-                  {selectedTheme.description}
+                  {selectedRecommendation.description}
                 </p>
               )}
 
-              {/* 테마 탭 */}
+              {/* 추천 타입 탭 */}
               <div
                 ref={themeScrollRef}
                 onMouseDown={(e) => handleMouseDown(e, themeScrollRef)}
@@ -1368,12 +1323,18 @@ const MainScreen = () => {
                 scrollBehavior: 'smooth',
                 WebkitOverflowScrolling: 'touch'
               }}>
-                {travelThemes.map((theme) => {
-                  const isActive = theme.id === selectedThemeId;
+                {RECOMMENDATION_TYPES.map((type) => {
+                  const isActive = type.id === selectedRecommendationType;
                   return (
                     <button
-                      key={theme.id}
-                      onClick={() => setSelectedThemeId(theme.id)}
+                      key={type.id}
+                      onClick={() => {
+                        setSelectedRecommendationType(type.id);
+                        // 추천 지역 다시 계산
+                        const allPosts = JSON.parse(localStorage.getItem('uploadedPosts') || '[]');
+                        const recommended = getRecommendedRegions(allPosts, type.id);
+                        setRecommendedRegions(recommended);
+                      }}
                       style={{
                         padding: '6px 12px',
                         borderRadius: '999px',
@@ -1386,91 +1347,135 @@ const MainScreen = () => {
                         color: isActive ? '#FFFFFF' : '#4B5563',
                       }}
                     >
-                      {theme.name}
+                      {type.name}
                     </button>
                   );
                 })}
               </div>
 
-              {/* 선택된 테마의 여행지 카드 리스트 (사진 포함, 한 줄 문장) */}
+              {/* 추천 지역 카드 리스트 (실제 게시물 데이터 기반) */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {selectedTheme?.regions.map((regionName) => (
-                  <button
-                    key={regionName}
-                    onClick={() =>
-                      navigate(`/region/${regionName}`, {
-                        state: {
-                          region: { name: regionName }
-                        }
-                      })
-                    }
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'flex-start',
-                      padding: '8px 10px',
-                      borderRadius: '12px',
-                      border: 'none',
-                      backgroundColor: '#FFFFFF',
-                      boxShadow: '0 1px 4px rgba(15, 23, 42, 0.06)',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    {/* 지역 대표 사진 (Unsplash 기반) */}
-                    <div
+                {recommendedRegions.length > 0 ? (
+                  recommendedRegions.map((region) => (
+                    <button
+                      key={region.regionName}
+                      onClick={() =>
+                        navigate(`/region/${region.regionName}`, {
+                          state: {
+                            region: { name: region.regionName }
+                          }
+                        })
+                      }
                       style={{
-                        width: '72px',
-                        height: '54px',
-                        borderRadius: '10px',
-                        overflow: 'hidden',
-                        marginRight: '10px',
-                        backgroundColor: '#E5E7EB',
-                        flexShrink: 0,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'flex-start',
+                        padding: '8px 10px',
+                        borderRadius: '12px',
+                        border: 'none',
+                        backgroundColor: '#FFFFFF',
+                        boxShadow: '0 1px 4px rgba(15, 23, 42, 0.06)',
+                        cursor: 'pointer',
                       }}
                     >
+                      {/* 지역 대표 사진 (실제 게시물 이미지 또는 기본 이미지) */}
                       <div
                         style={{
-                          width: '100%',
-                          height: '100%',
-                          backgroundImage: `url("https://source.unsplash.com/featured/?${encodeURIComponent(
-                            regionName + ' travel landscape'
-                          )}")`,
-                          backgroundSize: 'cover',
-                          backgroundPosition: 'center',
-                        }}
-                      />
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
-                      <span
-                        style={{
-                          fontSize: '13px',
-                          fontWeight: 700,
-                          color: '#111827',
-                          whiteSpace: 'nowrap',
+                          width: '72px',
+                          height: '54px',
+                          borderRadius: '10px',
                           overflow: 'hidden',
-                          textOverflow: 'ellipsis',
+                          marginRight: '10px',
+                          backgroundColor: '#E5E7EB',
+                          flexShrink: 0,
                         }}
                       >
-                        {regionName}
-                      </span>
-                      <span
-                        style={{
-                          fontSize: '11px',
-                          color: '#6B7280',
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                        }}
-                      >
-                        {regionCopyMap[regionName] || selectedTheme.description}
-                      </span>
-                    </div>
-                  </button>
-                ))}
+                        {region.image ? (
+                          <img
+                            src={region.image}
+                            alt={region.regionName}
+                            style={{
+                              width: '100%',
+                              height: '100%',
+                              objectFit: 'cover',
+                            }}
+                          />
+                        ) : (
+                          <div
+                            style={{
+                              width: '100%',
+                              height: '100%',
+                              backgroundImage: `url("https://source.unsplash.com/featured/?${encodeURIComponent(
+                                region.regionName + ' travel landscape'
+                              )}")`,
+                              backgroundSize: 'cover',
+                              backgroundPosition: 'center',
+                            }}
+                          />
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', width: '100%' }}>
+                          <span
+                            style={{
+                              fontSize: '13px',
+                              fontWeight: 700,
+                              color: '#111827',
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                            }}
+                          >
+                            {region.regionName}
+                          </span>
+                          {region.badge && (
+                            <span
+                              style={{
+                                fontSize: '10px',
+                                fontWeight: 600,
+                                color: '#00BCD4',
+                                backgroundColor: '#E0F7FA',
+                                padding: '2px 6px',
+                                borderRadius: '4px',
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
+                              {region.badge}
+                            </span>
+                          )}
+                        </div>
+                        <span
+                          style={{
+                            fontSize: '11px',
+                            color: '#6B7280',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            width: '100%',
+                          }}
+                        >
+                          {region.description}
+                        </span>
+                      </div>
+                    </button>
+                  ))
+                ) : (
+                  <div style={{ 
+                    padding: '20px',
+                    textAlign: 'center',
+                    color: '#6B7280',
+                    fontSize: '13px'
+                  }}>
+                    {selectedRecommendationType === 'blooming' 
+                      ? '개화상태 80% 이상인 지역이 아직 없습니다.'
+                      : '추천 지역이 아직 없습니다.'}
+                  </div>
+                )}
               </div>
             </div>
 
-            {themeFilteredRecommendedData.map((item) => (
+            {/* 추천 게시물 피드는 숨김 처리 (추천 지역 카드만 표시) */}
+            {false && filteredRecommendedData.map((item) => (
               <div 
                 key={item.id} 
                 className="feed-card"
