@@ -9,8 +9,8 @@
 }
 
 html {
-  height: 100vh;
-  overflow: hidden;
+  min-height: 100vh;
+  overflow-y: auto;
 }
 
 /* 데스크톱 웹 브라우저용 스타일 */
@@ -44,7 +44,8 @@ body {
 /* 앱 컨테이너 - 가운데 정렬, 모바일 크기 제한 */
 .app-container {
   width: 100%;
-  max-width: 414px; /* 모바일 최대 너비 */
+  max-width: 414px;
+  /* 모바일 최대 너비 (핸드폰 화면, iPhone 기준) */
   min-height: 100vh;
   height: auto;
   margin: 0 auto;
@@ -58,7 +59,7 @@ body {
 }
 
 /* 작은 화면에서는 전체 너비 사용 */
-@media (max-width: 414px) {
+@media (max-width: 460px) {
   .app-container {
     max-width: 100%;
   }
@@ -92,7 +93,8 @@ body {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  padding-bottom: 100px; /* 네비게이션 바 높이(80px) + 여유 공간(20px) */
+  padding-bottom: 100px;
+  /* 네비게이션 바 높이(80px) + 여유 공간(20px) */
 }
 
 .screen-header {
@@ -103,8 +105,10 @@ body {
 }
 
 .screen-body {
-  padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px)); /* BottomNavigation + 하단 safe-area */
-  min-height: calc(100vh - 80px); /* 네비게이션 바를 제외한 최소 높이 */
+  padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+  /* BottomNavigation + 하단 safe-area */
+  min-height: calc(100vh - 80px);
+  /* 네비게이션 바를 제외한 최소 높이 */
 }
 
 /* 모든 페이지의 안전 영역 확보 */
@@ -114,6 +118,11 @@ body {
 
 .safe-area-bottom {
   padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* 채팅 글쓰기 FAB: 앱 컨테이너(460px) 안에서 네비 바로 위 (위치는 ChatScreen 래퍼 + inline style로 지정) */
+.chat-write-fab {
+  right: max(16px, env(safe-area-inset-right, 16px));
 }
 
 /* 페이지 래퍼 내부 스크롤바 완전히 숨기기 */
@@ -126,26 +135,53 @@ body {
 
 .page-wrapper,
 .screen-content {
-  -ms-overflow-style: none;  /* IE and Edge */
-  scrollbar-width: none;  /* Firefox */
+  -ms-overflow-style: none;
+  /* IE and Edge */
+  scrollbar-width: none;
+  /* Firefox */
 }
 
 /* 개발용 배너 제거됨 */
 
-/* 버튼 기본 스타일 */
+/* 버튼 기본 스타일 - 터치 영역 UX (최소 높이 44px 권장) */
 button {
   cursor: pointer;
   border: none;
   outline: none;
   font-family: inherit;
+  min-height: 44px;
+  font-size: 14px;
 }
 
-button:active {
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+button:active:not(:disabled) {
   opacity: 0.7;
 }
 
+/* 패딩 제거가 필요한 버튼 (아이콘 전용 등) */
+button.icon-btn,
+nav button {
+  padding: 0;
+  min-width: 44px;
+}
+
+.icon-btn {
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: transparent;
+}
+
 /* 입력 필드 기본 스타일 */
-input, textarea {
+input,
+textarea {
   font-family: inherit;
   outline: none;
 }
@@ -158,12 +194,15 @@ a {
 
 /* 모든 스크롤바 완전히 숨기기 */
 * {
-  -ms-overflow-style: none;  /* IE and Edge */
-  scrollbar-width: none;  /* Firefox */
+  -ms-overflow-style: none;
+  /* IE and Edge */
+  scrollbar-width: none;
+  /* Firefox */
 }
 
 *::-webkit-scrollbar {
-  display: none;  /* Chrome, Safari, Opera */
+  display: none;
+  /* Chrome, Safari, Opera */
   width: 0;
   height: 0;
 }
@@ -187,17 +226,21 @@ a {
 
 .snap-start {
   scroll-snap-align: start;
-  scroll-snap-stop: always; /* 하나씩 멈춤! */
+  scroll-snap-stop: always;
+  /* 하나씩 멈춤! */
 }
 
 /* 스크롤바 숨기기 */
 .hide-scrollbar {
-  -ms-overflow-style: none;  /* IE and Edge */
-  scrollbar-width: none;  /* Firefox */
+  -ms-overflow-style: none;
+  /* IE and Edge */
+  scrollbar-width: none;
+  /* Firefox */
 }
 
 .hide-scrollbar::-webkit-scrollbar {
-  display: none;  /* Chrome, Safari, Opera */
+  display: none;
+  /* Chrome, Safari, Opera */
 }
 
 /* 선택 방지 (드래그 시) */
@@ -221,6 +264,7 @@ img {
     transform: translateY(100%);
     opacity: 0;
   }
+
   to {
     transform: translateY(0);
     opacity: 1;
@@ -236,6 +280,7 @@ img {
   from {
     opacity: 0;
   }
+
   to {
     opacity: 1;
   }
@@ -250,6 +295,7 @@ img {
     opacity: 0;
     transform: translateX(20px);
   }
+
   to {
     opacity: 1;
     transform: translateX(0);
@@ -262,6 +308,7 @@ img {
     transform: scale(0.9);
     opacity: 0;
   }
+
   to {
     transform: scale(1);
     opacity: 1;
@@ -277,6 +324,7 @@ img {
   from {
     width: 0%;
   }
+
   to {
     width: 100%;
   }
@@ -292,14 +340,17 @@ img {
     transform: scale(0);
     opacity: 1;
   }
+
   50% {
     transform: scale(1.3);
     opacity: 1;
   }
+
   70% {
     transform: scale(1.0);
     opacity: 1;
   }
+
   100% {
     transform: scale(1.0);
     opacity: 0;
@@ -311,12 +362,59 @@ img {
   animation-fill-mode: forwards;
 }
 
+/* ===== 설정 화면 토글 스위치 ===== */
+.settings-switch {
+  position: relative;
+  display: inline-block;
+  width: 52px;
+  height: 28px;
+}
+
+.settings-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.settings-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #e5e7eb; /* gray-200 */
+  transition: 0.25s;
+  border-radius: 9999px;
+}
+
+.settings-slider::before {
+  position: absolute;
+  content: "";
+  height: 24px;
+  width: 24px;
+  left: 2px;
+  top: 2px;
+  background-color: #ffffff;
+  transition: 0.25s;
+  border-radius: 50%;
+}
+
+.settings-switch input:checked + .settings-slider {
+  background-color: #00BCD4;
+}
+
+.settings-switch input:checked + .settings-slider::before {
+  transform: translateX(24px);
+}
+
 /* 펄스 링 애니메이션 (큰 하트 강조 효과) */
 @keyframes pulseRing {
   0% {
     transform: scale(0);
     opacity: 0.8;
   }
+
   100% {
     transform: scale(2.5);
     opacity: 0;
@@ -339,14 +437,17 @@ img {
     transform: translateX(var(--translate-x, 0)) translateY(var(--start-y, 0)) scale(1) rotate(0deg);
     opacity: 1;
   }
+
   30% {
     transform: translateX(calc((var(--translate-x, 0) + var(--translate-x-final, 0)) * 0.3)) translateY(100px) scale(0.8) rotate(calc(var(--rotation, 0) * 0.3));
     opacity: 1;
   }
+
   60% {
     transform: translateX(calc((var(--translate-x, 0) + var(--translate-x-final, 0)) * 0.6)) translateY(200px) scale(0.6) rotate(calc(var(--rotation, 0) * 0.6));
     opacity: 0.7;
   }
+
   100% {
     transform: translateX(var(--translate-x-final, 0)) translateY(350px) scale(0.4) rotate(var(--rotation, 0));
     opacity: 0;
@@ -358,6 +459,7 @@ img {
   0% {
     background-position: -200% 0;
   }
+
   100% {
     background-position: 200% 0;
   }
@@ -367,6 +469,7 @@ img {
   from {
     opacity: 0;
   }
+
   to {
     opacity: 1;
   }
@@ -375,7 +478,7 @@ img {
 .floating-heart {
   position: absolute;
   animation: floatHeart 2s cubic-bezier(0.4, 0, 0.2, 1) forwards,
-             fadeIn 0.3s ease-out forwards;
+    fadeIn 0.3s ease-out forwards;
   animation-delay: var(--delay, 0ms), var(--delay, 0ms);
   animation-fill-mode: both;
 }

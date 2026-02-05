@@ -154,7 +154,7 @@ export const getDailyMissions = () => {
     
     localStorage.setItem('dailyMissions', JSON.stringify(newMissions));
     
-    console.log('🎯 오늘의 새로운 미션:', todayMissions.map(m => m.title));
+    logger.log('🎯 오늘의 새로운 미션:', todayMissions.map(m => m.title));
     
     return todayMissions;
   }
@@ -286,7 +286,7 @@ export const claimMissionReward = (missionId) => {
 
 // 미션 완료 알림
 const showMissionCompleteNotification = (mission) => {
-  console.log(`✅ 미션 완료! ${mission.icon} ${mission.title}`);
+  logger.log(`✅ 미션 완료! ${mission.icon} ${mission.title}`);
   
   // 알림 생성
   const notification = {
@@ -436,7 +436,7 @@ export const getSuggestedChallenge = () => {
 export const resetMissions = () => {
   localStorage.removeItem('dailyMissions');
   localStorage.removeItem('uploadStreak');
-  console.log('🔄 미션 시스템 초기화');
+  logger.log('🔄 미션 시스템 초기화');
 };
 
 

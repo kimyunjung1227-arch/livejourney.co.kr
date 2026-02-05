@@ -112,15 +112,22 @@ const DetailScreen = () => {
   const route = useRoute();
   const { filter } = route.params || {};
   const [activeTab, setActiveTab] = useState(filter || 'realtime');
+
+  useEffect(() => {
+    if (filter) {
+      setActiveTab(filter);
+    }
+  }, [filter]);
   const [selectedCategory, setSelectedCategory] = useState('자연');
   const [displayedItems, setDisplayedItems] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const pageRef = useRef(0);
-  
+
   const [realtimeData, setRealtimeData] = useState([]);
   const [crowdedData, setCrowdedData] = useState([]);
   const [recommendedData, setRecommendedData] = useState([]);
-  
+  const [currentUserCount, setCurrentUserCount] = useState(0);
+
   const categories = useMemo(() => ['자연', '힐링', '액티비티', '맛집', '카페'], []);
 
   const tabs = useMemo(() => [
@@ -157,17 +164,31 @@ const DetailScreen = () => {
     try {
       const postsJson = await AsyncStorage.getItem('uploadedPosts');
       let posts = postsJson ? JSON.parse(postsJson) : [];
-      
+
       // 2일 이상 된 게시물 필터링
       posts = filterRecentPosts(posts, 2);
-      
+
+      // 현재 사용자 수 계산 (최근 2일 이내 게시물을 올린 고유 사용자 수)
+      const uniqueUserIds = new Set();
+      posts.forEach(post => {
+        const userId = post.userId ||
+          (typeof post.user === 'string' ? post.user : post.user?.id) ||
+          post.user;
+        if (userId) {
+          uniqueUserIds.add(String(userId));
+        }
+      });
+      const userCount = uniqueUserIds.size;
+      setCurrentUserCount(userCount);
+
       if (posts.length === 0) {
         setRealtimeData([]);
         setCrowdedData([]);
         setRecommendedData([]);
+        setCurrentUserCount(0);
         return;
       }
-      
+
       const realtimeFormatted = posts.slice(0, 100).map((post) => ({
         id: `realtime-${post.id}`,
         images: post.images || [],
@@ -187,7 +208,7 @@ const DetailScreen = () => {
         likes: post.likes || post.likeCount || 0,
         timestamp: post.timestamp || post.createdAt || post.time,
       }));
-      
+
       const crowdedFormatted = posts
         .filter((_, idx) => idx % 2 === 0)
         .slice(0, 80)
@@ -210,7 +231,7 @@ const DetailScreen = () => {
           likes: post.likes || post.likeCount || 0,
           timestamp: post.timestamp || post.createdAt || post.time,
         }));
-      
+
       const recommendedFormatted = posts.slice(0, 200).map((post, idx) => {
         let assignedCategory = '자연';
         if (post.category === 'food') {
@@ -222,7 +243,7 @@ const DetailScreen = () => {
         } else {
           assignedCategory = '액티비티';
         }
-        
+
         return {
           id: `recommended-${post.id}`,
           images: post.images || [],
@@ -243,7 +264,7 @@ const DetailScreen = () => {
           timestamp: post.timestamp || post.createdAt || post.time,
         };
       });
-      
+
       setRealtimeData(realtimeFormatted);
       setCrowdedData(crowdedFormatted);
       setRecommendedData(recommendedFormatted);
@@ -259,17 +280,17 @@ const DetailScreen = () => {
       setDisplayedItems([]);
       return;
     }
-    
+
     const itemsPerPage = 12;
     const startIndex = pageRef.current * itemsPerPage;
-    
+
     if (startIndex >= baseData.length) {
       return;
     }
-    
+
     const remainingItems = baseData.length - startIndex;
     const itemsToLoad = Math.min(itemsPerPage, remainingItems);
-    
+
     const newItems = baseData.slice(startIndex, startIndex + itemsToLoad);
     setDisplayedItems(prev => [...prev, ...newItems]);
     pageRef.current += 1;
@@ -316,11 +337,18 @@ const DetailScreen = () => {
             >
               <Ionicons name="arrow-back" size={24} color={COLORS.textPrimaryLight} />
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>
-              {activeTab === 'realtime' && '지금 여기는!'}
-              {activeTab === 'crowded' && '지금 사람 많은 곳!'}
-              {activeTab === 'recommended' && '추천 장소'}
-            </Text>
+            <View style={styles.headerTitleContainer}>
+              <Text style={styles.headerTitle}>
+                {activeTab === 'realtime' && '지금 여기는!'}
+                {activeTab === 'crowded' && '지금 사람 많은 곳!'}
+                {activeTab === 'recommended' && '추천 장소'}
+              </Text>
+              {activeTab === 'realtime' && currentUserCount > 0 && (
+                <Text style={styles.headerSubtitle}>
+                  현재 {currentUserCount}명이 활동 중
+                </Text>
+              )}
+            </View>
             <View style={styles.headerPlaceholder} />
           </View>
         </ScreenHeader>
@@ -328,100 +356,100 @@ const DetailScreen = () => {
         {/* 메인 컨텐츠 - 웹과 동일한 구조 */}
         <ScreenBody>
 
-      {/* 탭 */}
-      <View style={styles.tabsContainer}>
-        {tabs.map((tab) => (
-          <TouchableOpacity
-            key={tab.id}
-            style={[
-              styles.tab,
-              activeTab === tab.id && styles.tabActive
-            ]}
-            onPress={() => setActiveTab(tab.id)}
-          >
-            <Text style={[
-              styles.tabText,
-              activeTab === tab.id && styles.tabTextActive
-            ]}>
-              {tab.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+          {/* 탭 */}
+          <View style={styles.tabsContainer}>
+            {tabs.map((tab) => (
+              <TouchableOpacity
+                key={tab.id}
+                style={[
+                  styles.tab,
+                  activeTab === tab.id && styles.tabActive
+                ]}
+                onPress={() => setActiveTab(tab.id)}
+              >
+                <Text style={[
+                  styles.tabText,
+                  activeTab === tab.id && styles.tabTextActive
+                ]}>
+                  {tab.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
 
-      {/* 카테고리 필터 (추천 지역 탭일 때만) */}
-      {activeTab === 'recommended' && (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.categoryFilter}
-        >
-          {categories.map((category) => (
-            <TouchableOpacity
-              key={category}
-              style={[
-                styles.categoryButton,
-                selectedCategory === category && styles.categoryButtonActive
-              ]}
-              onPress={() => setSelectedCategory(category)}
+          {/* 카테고리 필터 (추천 지역 탭일 때만) */}
+          {activeTab === 'recommended' && (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.categoryFilter}
             >
-              <Text style={[
-                styles.categoryButtonText,
-                selectedCategory === category && styles.categoryButtonTextActive
-              ]}>
-                #{category}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      )}
+              {categories.map((category) => (
+                <TouchableOpacity
+                  key={category}
+                  style={[
+                    styles.categoryButton,
+                    selectedCategory === category && styles.categoryButtonActive
+                  ]}
+                  onPress={() => setSelectedCategory(category)}
+                >
+                  <Text style={[
+                    styles.categoryButtonText,
+                    selectedCategory === category && styles.categoryButtonTextActive
+                  ]}>
+                    #{category}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          )}
 
-      {/* 게시물 그리드 */}
-      {displayedItems.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Ionicons
-            name={activeTab === 'realtime' ? 'time-outline' : activeTab === 'crowded' ? 'people-outline' : 'star-outline'}
-            size={64}
-            color={COLORS.textSubtle}
-          />
-          <Text style={styles.emptyTitle}>
-            {activeTab === 'realtime' && '아직 지금 이곳의 모습이 올라오지 않았어요'}
-            {activeTab === 'crowded' && '아직 어디가 붐비는지 정보가 없어요'}
-            {activeTab === 'recommended' && '추천 장소가 아직 없어요'}
-          </Text>
-          <Text style={styles.emptySubtitle}>
-            {activeTab === 'realtime' && '지금 보고 있는 장소와 분위기, 날씨가 보이도록 한 장만 남겨 주세요'}
-            {activeTab === 'crowded' && '지금 있는 곳의 상황과 느낌을 남겨 주면 다른 사람들의 선택에 도움이 돼요'}
-            {activeTab === 'recommended' && '첫 번째로 추천 장소를 공유해보세요!'}
-          </Text>
-          <TouchableOpacity
-            style={styles.uploadButton}
-            onPress={() => navigation.navigate('UploadTab')}
-          >
-            <Ionicons name="add-circle" size={20} color="white" />
-            <Text style={styles.uploadButtonText}>첫 사진 올리기</Text>
-          </TouchableOpacity>
-        </View>
-      ) : (
-        <FlatList
-          data={displayedItems}
-          renderItem={renderPostItem}
-          keyExtractor={(item) => item.id.toString()}
-          numColumns={2}
-          contentContainerStyle={styles.gridContainer}
-          columnWrapperStyle={styles.gridRow}
-          onEndReached={loadMoreItems}
-          onEndReachedThreshold={0.5}
-          ListFooterComponent={
-            isLoading ? (
-              <View style={styles.loadingFooter}>
-                <ActivityIndicator size="small" color={COLORS.primary} />
-                <Text style={styles.loadingText}>사진 불러오는 중...</Text>
-              </View>
-            ) : null
-          }
-        />
-      )}
+          {/* 게시물 그리드 */}
+          {displayedItems.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Ionicons
+                name={activeTab === 'realtime' ? 'time-outline' : activeTab === 'crowded' ? 'people-outline' : 'star-outline'}
+                size={64}
+                color={COLORS.textSubtle}
+              />
+              <Text style={styles.emptyTitle}>
+                {activeTab === 'realtime' && '아직 지금 이곳의 모습이 올라오지 않았어요'}
+                {activeTab === 'crowded' && '아직 어디가 붐비는지 정보가 없어요'}
+                {activeTab === 'recommended' && '추천 장소가 아직 없어요'}
+              </Text>
+              <Text style={styles.emptySubtitle}>
+                {activeTab === 'realtime' && '지금 보고 있는 장소와 분위기, 날씨가 보이도록 한 장만 남겨 주세요'}
+                {activeTab === 'crowded' && '지금 있는 곳의 상황과 느낌을 남겨 주면 다른 사람들의 선택에 도움이 돼요'}
+                {activeTab === 'recommended' && '첫 번째로 추천 장소를 공유해보세요!'}
+              </Text>
+              <TouchableOpacity
+                style={styles.uploadButton}
+                onPress={() => navigation.navigate('UploadTab')}
+              >
+                <Ionicons name="add-circle" size={20} color="white" />
+                <Text style={styles.uploadButtonText}>첫 사진 올리기</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <FlatList
+              data={displayedItems}
+              renderItem={renderPostItem}
+              keyExtractor={(item) => item.id.toString()}
+              numColumns={2}
+              contentContainerStyle={styles.gridContainer}
+              columnWrapperStyle={styles.gridRow}
+              onEndReached={loadMoreItems}
+              onEndReachedThreshold={0.5}
+              ListFooterComponent={
+                isLoading ? (
+                  <View style={styles.loadingFooter}>
+                    <ActivityIndicator size="small" color={COLORS.primary} />
+                    <Text style={styles.loadingText}>사진 불러오는 중...</Text>
+                  </View>
+                ) : null
+              }
+            />
+          )}
         </ScreenBody>
       </ScreenContent>
     </ScreenLayout>
@@ -455,12 +483,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 8, // rounded-lg
   },
+  headerTitleContainer: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  headerTitleContainer: {
+    flex: 1,
+    alignItems: 'center',
+  },
   headerTitle: {
     fontSize: 22, // text-[22px] (웹과 동일)
     fontWeight: 'bold',
     color: COLORS.text, // text-text-primary-light (웹과 동일)
     letterSpacing: -0.33, // tracking-[-0.015em] = -0.33px (웹과 동일)
     lineHeight: 26.4, // leading-tight (웹과 동일)
+  },
+  headerSubtitle: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    marginTop: 2,
   },
   headerPlaceholder: {
     width: 40, // w-10 = 40px

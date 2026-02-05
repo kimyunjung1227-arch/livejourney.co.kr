@@ -5,6 +5,30 @@ import { getLocationByCoordinates, getCoordinatesByLocation as getCoordsByRegion
 import { getRegionDefaultImage } from '../utils/regionDefaultImages';
 import { filterRecentPosts } from '../utils/timeUtils';
 import { getRecommendedRegions } from '../utils/recommendationEngine';
+import { getCombinedPosts } from '../utils/mockData';
+import { getDisplayImageUrl } from '../api/upload';
+import { logger } from '../utils/logger';
+
+// HTML 속성에 넣을 URL/텍스트 이스케이프 (핀 img src가 깨지지 않도록)
+const escapeHtmlAttr = (value) => {
+  if (value == null) return '';
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+};
+
+/** 게시물에서 지도 핀/썸네일에 쓸 이미지 URL 하나 반환 (우선순위: images[0] → thumbnail → image → imageUrl) */
+const getPostPinImageUrl = (post) => {
+  if (!post) return '';
+  const raw =
+    (post.images && Array.isArray(post.images) && post.images.length > 0)
+      ? post.images[0]
+      : (post.thumbnail ?? post.image ?? post.imageUrl ?? '');
+  return getDisplayImageUrl(typeof raw === 'string' ? raw : (raw?.url ?? raw?.src ?? ''));
+};
+import { useHorizontalDragScroll } from '../hooks/useHorizontalDragScroll';
 
 // 완성된 단어 → 추천 타입 매핑 (지도 검색 시 단어 기반 추천)
 const KEYWORD_TO_RECOMMENDATION_TYPE = {
@@ -49,6 +73,8 @@ const MapScreen = () => {
   const [filteredRegions, setFilteredRegions] = useState([]); // 자동완성 필터링된 지역
   const [searchSuggestions, setSearchSuggestions] = useState([]); // 검색 제안 (지역 + 게시물)
   const [recentSearches, setRecentSearches] = useState([]); // 최근 검색 지역
+
+  const { handleDragStart: handlePinScrollDrag, hasMovedRef: pinHasMovedRef } = useHorizontalDragScroll();
 
   // 추천 지역 데이터
   const recommendedRegions = useMemo(() => [
@@ -126,7 +152,7 @@ const MapScreen = () => {
   const getChosung = useCallback((str) => {
     const CHOSUNG = ['ㄱ', 'ㄲ', 'ㄴ', 'ㄷ', 'ㄸ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅃ', 'ㅅ', 'ㅆ', 'ㅇ', 'ㅈ', 'ㅉ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ'];
     let result = '';
-    
+
     for (let i = 0; i < str.length; i++) {
       const code = str.charCodeAt(i) - 44032;
       if (code > -1 && code < 11172) {
@@ -142,14 +168,14 @@ const MapScreen = () => {
   const matchChosung = useCallback((text, search) => {
     const textChosung = getChosung(text);
     const searchChosung = getChosung(search);
-    
+
     return textChosung.includes(searchChosung) || textChosung.includes(search);
   }, [getChosung]);
 
   // 검색어 입력 핸들러 (자동완성)
   const handleSearchInput = useCallback((value) => {
     setSearchQuery(value);
-    
+
     if (!value.trim()) {
       setFilteredRegions([]);
       setSearchSuggestions([]);
@@ -195,31 +221,31 @@ const MapScreen = () => {
     // 예: "서울" 입력 시 "서울역", "서울광장" 등 "서울"로 시작하는 장소들 추천
     if (window.kakao && window.kakao.maps && window.kakao.maps.services && isWordComplete) {
       const placesService = new window.kakao.maps.services.Places();
-      
+
       // 검색어로 시작하는 장소들을 찾기 위해 키워드 검색
       placesService.keywordSearch(query, (data, status) => {
         if (status === window.kakao.maps.services.Status.OK && data && data.length > 0) {
           const tempKakaoSuggestions = [];
           const tempUniqueNames = new Set(uniqueNames);
-          
+
           // 검색 결과를 필터링: 검색어로 시작하거나 검색어를 포함하는 장소만
           data.forEach(place => {
             const placeName = place.place_name;
             const categoryCode = place.category_group_code || '';
             const categoryName = place.category_name || '';
-            
+
             // 검색어가 장소명에 포함되어 있는지 확인 (겹치는 단어 검색)
             const placeNameLower = placeName.toLowerCase();
             const queryWords = queryLower.split(/\s+/);
-            const hasMatchingKeyword = queryWords.some(word => 
+            const hasMatchingKeyword = queryWords.some(word =>
               placeNameLower.includes(word) || placeNameLower.startsWith(word)
             );
-            
+
             if (hasMatchingKeyword && !tempUniqueNames.has(placeName)) {
               tempUniqueNames.add(placeName);
-              
+
               let placeType = 'kakao_place';
-              
+
               // 카테고리별 타입 설정
               if (categoryCode === 'CT1' || categoryName.includes('관광') || categoryName.includes('명소')) {
                 placeType = 'tourist';
@@ -230,7 +256,7 @@ const MapScreen = () => {
               } else if (categoryCode === 'PO3' || categoryName.includes('공원')) {
                 placeType = 'park';
               }
-              
+
               tempKakaoSuggestions.push({
                 type: placeType,
                 name: placeName,
@@ -244,7 +270,7 @@ const MapScreen = () => {
               });
             }
           });
-          
+
           // 검색어로 시작하는 것을 우선순위로 정렬
           tempKakaoSuggestions.sort((a, b) => {
             const aStartsWith = a.name.toLowerCase().startsWith(queryLower);
@@ -253,7 +279,7 @@ const MapScreen = () => {
             if (!aStartsWith && bStartsWith) return 1;
             return a.name.length - b.name.length;
           });
-          
+
           // Kakao 검색 결과를 기존 suggestions와 합치기
           setSearchSuggestions(prev => {
             const combined = [...prev, ...tempKakaoSuggestions];
@@ -274,21 +300,21 @@ const MapScreen = () => {
 
     // 3. 해시태그 검색 (#로 시작하는 경우)
     if (value.startsWith('#')) {
-      const postsJson = localStorage.getItem('uploadedPosts');
-      const allPosts = postsJson ? JSON.parse(postsJson) : [];
+      const localPosts = JSON.parse(localStorage.getItem('uploadedPosts') || '[]');
+      const allPosts = getCombinedPosts(Array.isArray(localPosts) ? localPosts : []);
       const allTagsSet = new Set();
-      
+
       allPosts.forEach(post => {
         const tags = post.tags || [];
         const aiLabels = post.aiLabels || [];
-        
+
         tags.forEach(tag => {
           const tagText = typeof tag === 'string' ? tag.replace(/^#+/, '').toLowerCase() : String(tag).replace(/^#+/, '').toLowerCase();
           if (tagText && tagText.includes(queryLower.replace(/^#+/, ''))) {
             allTagsSet.add(tagText);
           }
         });
-        
+
         aiLabels.forEach(label => {
           const labelText = label.name?.toLowerCase() || String(label).toLowerCase();
           if (labelText && labelText.includes(queryLower.replace(/^#+/, ''))) {
@@ -296,7 +322,7 @@ const MapScreen = () => {
           }
         });
       });
-      
+
       // 해시태그 제안 추가
       Array.from(allTagsSet).slice(0, 5).forEach(tag => {
         if (!uniqueNames.has(`#${tag}`)) {
@@ -310,7 +336,7 @@ const MapScreen = () => {
         }
       });
     }
-    
+
     // 4. 게시물에서 장소명 검색 (단어가 완성된 경우에만, Kakao 검색 결과와 중복되지 않는 것만)
     if (isWordComplete) {
       const matchingPosts = searchInPosts(value);
@@ -318,15 +344,15 @@ const MapScreen = () => {
         const aPlaceName = (a.placeName || a.detailedLocation || a.location || '').toLowerCase();
         const bPlaceName = (b.placeName || b.detailedLocation || b.location || '').toLowerCase();
         const queryLowerForSort = value.toLowerCase().trim();
-        
+
         const aStartsWith = aPlaceName.startsWith(queryLowerForSort);
         const bStartsWith = bPlaceName.startsWith(queryLowerForSort);
         if (aStartsWith && !bStartsWith) return -1;
         if (!aStartsWith && bStartsWith) return 1;
-        
+
         return aPlaceName.length - bPlaceName.length;
       });
-      
+
       sortedPosts.slice(0, 5).forEach(post => {
         const placeName = post.placeName || post.detailedLocation || post.location;
         if (placeName && !uniqueNames.has(placeName)) {
@@ -347,8 +373,8 @@ const MapScreen = () => {
       const recType = getRecommendationTypeForKeyword(query);
       if (recType) {
         try {
-          const postsJson = localStorage.getItem('uploadedPosts');
-          const allPosts = postsJson ? JSON.parse(postsJson) : [];
+          const localPosts = JSON.parse(localStorage.getItem('uploadedPosts') || '[]');
+          const allPosts = getCombinedPosts(Array.isArray(localPosts) ? localPosts : []);
           const recList = getRecommendedRegions(allPosts, recType);
           recommended = recList.map(r => ({
             type: 'recommended_region',
@@ -359,7 +385,7 @@ const MapScreen = () => {
             description: r.description
           }));
         } catch (e) {
-          console.warn('단어 기반 추천 조회 실패:', e);
+          logger.warn('단어 기반 추천 조회 실패:', e);
         }
       }
     }
@@ -373,16 +399,12 @@ const MapScreen = () => {
   const handleSuggestionClick = useCallback((suggestion) => {
     const query = suggestion.regionName || suggestion.name || suggestion.title;
     setSearchQuery(query);
-    
-    // 최근 검색 지역에 추가
-    const updatedRecentSearches = recentSearches.includes(query)
-      ? recentSearches
-      : [query, ...recentSearches.slice(0, 3)];
-    setRecentSearches(updatedRecentSearches);
-    localStorage.setItem('recentSearches', JSON.stringify(updatedRecentSearches));
-    
+
+    // 지도 화면에서는 최근 검색어에 저장하지 않음 (검색화면에서만 저장)
+    // 최근 검색 지역에 추가하지 않음
+
     setShowSearchSheet(false);
-    
+
     // 검색 실행 - 위치로 이동
     if (suggestion.kakaoPlace && suggestion.lat && suggestion.lng) {
       // Kakao Places API에서 가져온 장소의 경우 - 직접 좌표로 이동
@@ -390,10 +412,10 @@ const MapScreen = () => {
         const position = new window.kakao.maps.LatLng(suggestion.lat, suggestion.lng);
         map.panTo(position);
         map.setLevel(3);
-        
+
         // 검색 마커 표시
         createSearchMarker(position, suggestion.name, map);
-        
+
         setSearchResults([]);
         setIsSearching(false);
         if (map) {
@@ -402,7 +424,7 @@ const MapScreen = () => {
       }
     } else if (suggestion.type === 'place' && suggestion.post) {
       // 게시물 장소의 경우
-      const coords = suggestion.post.coordinates || getCoordinatesByLocation(suggestion.post.detailedLocation || suggestion.post.location);
+      const coords = suggestion.post.coordinates || getCoordsByRegion(suggestion.post.detailedLocation || suggestion.post.location);
       if (coords && coords.lat && coords.lng && map) {
         const position = new window.kakao.maps.LatLng(coords.lat, coords.lng);
         map.panTo(position);
@@ -421,8 +443,8 @@ const MapScreen = () => {
         map.setLevel(4);
         createSearchMarker(position, suggestion.regionName, map);
         try {
-          const postsJson = localStorage.getItem('uploadedPosts');
-          const allPosts = postsJson ? JSON.parse(postsJson) : [];
+          const localPosts = JSON.parse(localStorage.getItem('uploadedPosts') || '[]');
+          const allPosts = getCombinedPosts(Array.isArray(localPosts) ? localPosts : []);
           const regionPosts = allPosts.filter(p =>
             (p.location && (p.location.includes(suggestion.regionName) || p.location === suggestion.regionName)) ||
             (p.detailedLocation && (p.detailedLocation.includes(suggestion.regionName) || p.detailedLocation === suggestion.regionName))
@@ -431,18 +453,18 @@ const MapScreen = () => {
           setIsSearching(true);
           loadPosts(map, { forceSearch: { results: regionPosts } });
         } catch (e) {
-          console.warn('추천 지역 게시물 로드 실패:', e);
+          logger.warn('추천 지역 게시물 로드 실패:', e);
         }
       }
     } else if (suggestion.type === 'hashtag') {
       // 해시태그의 경우 - 해시태그 검색 실행
       setTimeout(() => {
-        handleSearch({ preventDefault: () => {} });
+        handleSearch({ preventDefault: () => { } });
       }, 100);
     } else {
       // 지역명 및 기타의 경우 - 검색 실행
       setTimeout(() => {
-        handleSearch({ preventDefault: () => {} });
+        handleSearch({ preventDefault: () => { } });
       }, 100);
     }
   }, [map, recentSearches]);
@@ -454,7 +476,7 @@ const MapScreen = () => {
       try {
         setRecentSearches(JSON.parse(savedRecentSearches));
       } catch (e) {
-        console.error('최근 검색 지역 로드 실패:', e);
+        logger.error('최근 검색 지역 로드 실패:', e);
       }
     }
   }, []);
@@ -491,6 +513,9 @@ const MapScreen = () => {
   const locationPreviewMapRef = useRef(null); // 위치 미리보기 작은 지도
   const [isRouteMode, setIsRouteMode] = useState(false); // 경로 모드 활성화 여부
   const [selectedRoutePins, setSelectedRoutePins] = useState([]); // 선택된 경로 핀들
+  const [savedRoute, setSavedRoute] = useState(null); // 저장된 경로 (표시용)
+  const [showSavedRoutesPanel, setShowSavedRoutesPanel] = useState(false); // 최근 경로 2개 패널
+  const [showRouteSavedToast, setShowRouteSavedToast] = useState(false); // 경로 저장 완료 토스트
   const routePolylineRef = useRef(null); // 경로 선 객체
   const isRouteModeRef = useRef(false); // 최신 경로 모드 상태 저장용 ref
   // isRouteMode 값이 바뀔 때마다 ref에도 반영 (마커 클릭 핸들러에서 최신 값 사용)
@@ -498,101 +523,80 @@ const MapScreen = () => {
     isRouteModeRef.current = isRouteMode;
   }, [isRouteMode]);
 
-  // 현재 위치 가져오기 (먼저 실행)
+  // 지도를 열자마자 내 위치로 나오게 하기 위해 지오로케이션 요청
   useEffect(() => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const loc = {
-            lat: position.coords.latitude,
-            lng: position.coords.longitude
-          };
-          setCurrentLocation(loc);
-          
-          // 위치를 가져온 후 지도 초기화
-          if (!mapInitialized) {
+    if (!mapInitialized) {
+      const defaultLocation = { lat: 37.5665, lng: 126.9780 }; // 서울 시청
+
+      if (navigator.geolocation) {
+        // 5초 타임아웃으로 위치 정보를 가져와보고, 실패하면 서울 시청에서 시작
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            const loc = {
+              lat: position.coords.latitude,
+              lng: position.coords.longitude,
+              accuracy: position.coords.accuracy
+            };
+            logger.log('📍 초기 접속 내위치 획득 성공:', loc);
             initializeMap(loc);
-          } else if (map) {
-            // 지도가 이미 초기화되어 있으면 현재 위치 마커 업데이트
-            updateCurrentLocationMarker(map, loc);
+            setCurrentLocation(loc);
+          },
+          (error) => {
+            logger.warn('📍 초기 내위치 획득 실패 (서울로 대체):', error);
+            // 위치 권한 거부/오류 시 기본 위치(서울)로 보여주되, 사용자에게 이유를 안내
+            initializeMap(defaultLocation);
+            setCurrentLocation(defaultLocation);
+            try {
+              // 권한 거부 등으로 인해 실제 위치가 아닌 서울로 표시된다는 안내
+              alert('현재 위치 정보를 가져올 수 없어 기본 위치(서울) 지도를 먼저 보여주고 있어요.\n브라우저 위치 권한을 허용하면 더 정확한 위치가 표시됩니다.');
+            } catch {
+              // alert 실패는 무시
+            }
+          },
+          {
+            enableHighAccuracy: true,
+            timeout: 5000,
+            maximumAge: 0
           }
-        },
-        (error) => {
-          console.error('위치 가져오기 실패:', error);
-          // 위치 가져오기 실패 시 기본 위치로 초기화
-          if (!mapInitialized) {
-            initializeMap({ lat: 37.5665, lng: 126.9780 });
-          }
-        }
-      );
-    } else {
-      // geolocation 지원 안 할 경우 기본 위치로 초기화
-      if (!mapInitialized) {
-        initializeMap({ lat: 37.5665, lng: 126.9780 });
+        );
+      } else {
+        initializeMap(defaultLocation);
+        setCurrentLocation(defaultLocation);
       }
     }
-  }, []);
+  }, [mapInitialized]);
 
-  const initializeMap = (initialCenter) => {
-    const initMap = () => {
-      if (!window.kakao || !window.kakao.maps) {
-        setTimeout(initMap, 100);
-        return;
-      }
+  // 화면이 열릴 때마다 내 위치로 이동
+  useEffect(() => {
+    if (map && currentLocation && currentLocation.lat && currentLocation.lng) {
+      // 지도가 완전히 로드된 후 내 위치로 이동
+      const timer = setTimeout(() => {
+        const moveLatLon = new window.kakao.maps.LatLng(currentLocation.lat, currentLocation.lng);
+        map.setCenter(moveLatLon);
+        map.setLevel(4); // 적절한 줌 레벨 설정
+      }, 500);
 
-      const container = mapRef.current;
-      if (!container) return;
+      return () => clearTimeout(timer);
+    }
+  }, [map, currentLocation]);
 
-      const selectedPin = location.state?.selectedPin;
-      const sosLocation = location.state?.sosLocation;
-      const center = selectedPin
-        ? new window.kakao.maps.LatLng(selectedPin.lat, selectedPin.lng)
-        : sosLocation
-        ? new window.kakao.maps.LatLng(sosLocation.lat, sosLocation.lng)
-        : new window.kakao.maps.LatLng(initialCenter.lat, initialCenter.lng);
-
-      const options = {
-        center: center,
-        level: selectedPin ? 3 : 4
-      };
-
-      const kakaoMap = new window.kakao.maps.Map(container, options);
-      setMap(kakaoMap);
-      setMapInitialized(true);
-
-      // 현재 위치 마커 추가
-      if (initialCenter) {
-        updateCurrentLocationMarker(kakaoMap, initialCenter);
-      }
-
-      loadPosts(kakaoMap);
-      
-      // 경로 모드일 때 경로 다시 그리기
-      if (isRouteMode && selectedRoutePins.length >= 2) {
-        setTimeout(() => drawRoute(selectedRoutePins), 500);
-      }
-
-      // 지도 범위 변경 시 보이는 핀 업데이트
-      window.kakao.maps.event.addListener(kakaoMap, 'bounds_changed', () => {
-        updateVisiblePins(kakaoMap);
-      });
-
-      // 초기 보이는 핀 업데이트
-      setTimeout(() => updateVisiblePins(kakaoMap), 500);
-    };
-
-    initMap();
-  };
-
+  // 현재 위치 마커 업데이트
   const updateCurrentLocationMarker = (kakaoMap, location) => {
-    // 기존 현재 위치 마커 제거
+    if (!kakaoMap || !location) return;
+
+    // 기존 마커 제거
     if (currentLocationMarkerRef.current) {
-      currentLocationMarkerRef.current.setMap(null);
+      if (currentLocationMarkerRef.current.marker) {
+        currentLocationMarkerRef.current.marker.setMap(null);
+      }
+      currentLocationMarkerRef.current = null;
     }
 
-    const position = new window.kakao.maps.LatLng(location.lat, location.lng);
+    const lat = location.lat;
+    const lng = location.lng;
+    const position = new window.kakao.maps.LatLng(lat, lng);
 
-    // 현재 위치 마커 생성 (하늘색 원점 + 여러 파동 - 더 잘 보이게 강화)
+    // 현재 위치 마커 (하늘색 원점 + 파동 효과)
     const el = document.createElement('div');
     el.innerHTML = `
       <div style="
@@ -635,48 +639,31 @@ const MapScreen = () => {
           position: relative;
           width: 24px;
           height: 24px;
+          background: #00BCD4;
+          border: 3px solid white;
           border-radius: 50%;
-          background-color: #87CEEB;
-          border: 4px solid rgba(255, 255, 255, 1);
-          box-shadow: 0 3px 10px rgba(0,0,0,0.4);
-          z-index: 10;
+          box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+          z-index: 1000;
+          cursor: pointer;
         "></div>
       </div>
       <style>
         @keyframes pulse1 {
-          0% {
-            transform: scale(1);
-            opacity: 0.25;
-          }
-          100% {
-            transform: scale(3);
-            opacity: 0;
-          }
+          0% { transform: scale(1); opacity: 0.25; }
+          100% { transform: scale(3); opacity: 0; }
         }
         @keyframes pulse2 {
-          0% {
-            transform: scale(1);
-            opacity: 0.2;
-          }
-          100% {
-            transform: scale(3.5);
-            opacity: 0;
-          }
+          0% { transform: scale(1); opacity: 0.2; }
+          100% { transform: scale(3.5); opacity: 0; }
         }
         @keyframes pulse3 {
-          0% {
-            transform: scale(1);
-            opacity: 0.15;
-          }
-          100% {
-            transform: scale(4);
-            opacity: 0;
-          }
+          0% { transform: scale(1); opacity: 0.15; }
+          100% { transform: scale(4); opacity: 0; }
         }
       </style>
     `;
 
-    const overlay = new window.kakao.maps.CustomOverlay({
+    const marker = new window.kakao.maps.CustomOverlay({
       position: position,
       content: el,
       yAnchor: 0.5,
@@ -684,9 +671,104 @@ const MapScreen = () => {
       zIndex: 1000
     });
 
-    overlay.setMap(kakaoMap);
-    currentLocationMarkerRef.current = overlay;
+    marker.setMap(kakaoMap);
+
+    // ref에 마커만 저장 (원 제거)
+    currentLocationMarkerRef.current = { marker };
   };
+
+  const initializeMap = (initialCenter) => {
+    const initMap = () => {
+      if (!window.kakao || !window.kakao.maps) {
+        setTimeout(initMap, 100);
+        return;
+      }
+
+      const container = mapRef.current;
+      if (!container) return;
+
+      const selectedPin = location.state?.selectedPin;
+      const sosLocation = location.state?.sosLocation;
+
+      // 지도 중심 좌표 결정
+      let center;
+      if (selectedPin) {
+        center = new window.kakao.maps.LatLng(selectedPin.lat, selectedPin.lng);
+        logger.log('📍 지도 초기화: 선택된 핀 위치 사용', { lat: selectedPin.lat, lng: selectedPin.lng });
+      } else if (sosLocation) {
+        center = new window.kakao.maps.LatLng(sosLocation.lat, sosLocation.lng);
+        logger.log('📍 지도 초기화: SOS 위치 사용', { lat: sosLocation.lat, lng: sosLocation.lng });
+      } else {
+        center = new window.kakao.maps.LatLng(initialCenter.lat, initialCenter.lng);
+        logger.log('📍 지도 초기화: 현재 위치 사용', {
+          lat: initialCenter.lat.toFixed(6),
+          lng: initialCenter.lng.toFixed(6)
+        });
+      }
+
+      const options = {
+        center: center,
+        level: selectedPin ? 3 : 4
+      };
+
+      const kakaoMap = new window.kakao.maps.Map(container, options);
+      setMap(kakaoMap);
+      setMapInitialized(true);
+
+      // 현재 위치 마커 추가 (항상 실제 GPS 위치 사용)
+      if (initialCenter && initialCenter.lat && initialCenter.lng) {
+        logger.log('📍 현재 위치 마커 추가:', {
+          lat: initialCenter.lat.toFixed(6),
+          lng: initialCenter.lng.toFixed(6)
+        });
+        // 지도가 완전히 로드된 후 마커 추가
+        setTimeout(() => {
+          updateCurrentLocationMarker(kakaoMap, initialCenter);
+        }, 300);
+      }
+
+      // 현재 위치가 있으면 마커 표시
+      if (currentLocation && currentLocation.lat && currentLocation.lng) {
+        setTimeout(() => {
+          updateCurrentLocationMarker(kakaoMap, currentLocation);
+        }, 500);
+      }
+
+      // 게시물 로딩을 지연시켜 지도가 먼저 표시되도록 (로딩 속도 개선)
+      setTimeout(() => {
+        loadPosts(kakaoMap);
+      }, 100);
+
+      // 경로 모드일 때 경로 다시 그리기
+      if (isRouteMode && selectedRoutePins.length >= 2) {
+        setTimeout(() => drawRoute(selectedRoutePins), 500);
+      }
+
+      // 지도 범위 변경 시 보이는 핀 업데이트 (디바운싱으로 성능 개선)
+      let boundsUpdateTimeout = null;
+      window.kakao.maps.event.addListener(kakaoMap, 'bounds_changed', () => {
+        if (boundsUpdateTimeout) clearTimeout(boundsUpdateTimeout);
+        boundsUpdateTimeout = setTimeout(() => {
+          updateVisiblePins(kakaoMap);
+        }, 100); // 300 -> 100으로 응답성 개선
+      });
+
+      // 지도가 멈췄을 때 최종 업데이트
+      window.kakao.maps.event.addListener(kakaoMap, 'idle', () => {
+        updateVisiblePins(kakaoMap);
+      });
+
+      // 초기 보이는 핀 업데이트를 지연 (지도가 완전히 로드된 후)
+      setTimeout(() => updateVisiblePins(kakaoMap), 1000);
+
+
+
+    };
+
+    initMap();
+  };
+
+
 
   const loadPosts = async (kakaoMap, options) => {
     try {
@@ -696,7 +778,7 @@ const MapScreen = () => {
         : (isSearching && searchResults.length > 0 ? { active: true, results: searchResults } : { active: false, results: [] });
       if (effectiveSearch.active && effectiveSearch.results.length > 0) {
         let filteredResults = [...effectiveSearch.results];
-        
+
         // 필터 적용 (중복 선택 가능)
         if (selectedFilters.length > 0) {
           filteredResults = filteredResults.filter(post => {
@@ -711,15 +793,15 @@ const MapScreen = () => {
             });
           });
         }
-        
+
         setPosts(filteredResults);
         createMarkers(filteredResults, kakaoMap, selectedRoutePins);
         return;
       }
 
-      const postsJson = localStorage.getItem('uploadedPosts');
-      const allPosts = postsJson ? JSON.parse(postsJson) : [];
-      
+      const localPosts = JSON.parse(localStorage.getItem('uploadedPosts') || '[]');
+      const allPosts = getCombinedPosts(Array.isArray(localPosts) ? localPosts : []);
+
       let validPosts = allPosts.filter(post => {
         return post.coordinates || post.location || post.detailedLocation;
       });
@@ -742,34 +824,11 @@ const MapScreen = () => {
       setPosts(validPosts);
       createMarkers(validPosts, kakaoMap, selectedRoutePins);
     } catch (error) {
-      console.error('게시물 로드 실패:', error);
+      logger.error('게시물 로드 실패:', error);
     }
   };
 
-  const getCoordinatesByLocation = (locationName) => {
-    const defaultCoords = {
-      '서울': { lat: 37.5665, lng: 126.9780 },
-      '부산': { lat: 35.1796, lng: 129.0756 },
-      '제주': { lat: 33.4996, lng: 126.5312 },
-      '인천': { lat: 37.4563, lng: 126.7052 },
-      '대구': { lat: 35.8714, lng: 128.6014 },
-      '대전': { lat: 36.3504, lng: 127.3845 },
-      '광주': { lat: 35.1595, lng: 126.8526 },
-      '수원': { lat: 37.2636, lng: 127.0286 },
-      '용인': { lat: 37.2411, lng: 127.1776 },
-      '성남': { lat: 37.4201, lng: 127.1268 }
-    };
-
-    if (!locationName) return null;
-
-    for (const [region, coords] of Object.entries(defaultCoords)) {
-      if (locationName.includes(region)) {
-        return coords;
-      }
-    }
-
-    return { lat: 37.5665, lng: 126.9780 };
-  };
+  // getCoordinatesByLocation 함수 제거 - import된 getCoordsByRegion 사용
 
   // 장소 타입 키워드 매핑
   const placeTypeKeywords = {
@@ -787,11 +846,11 @@ const MapScreen = () => {
   const searchInPosts = (query) => {
     const queryLower = query.toLowerCase().trim();
     const queryWithoutHash = queryLower.replace(/^#+/, ''); // # 제거
-    
+
     // 모든 게시물 가져오기
-    const postsJson = localStorage.getItem('uploadedPosts');
-    const allPosts = postsJson ? JSON.parse(postsJson) : [];
-    
+    const localPosts = JSON.parse(localStorage.getItem('uploadedPosts') || '[]');
+    const allPosts = getCombinedPosts(Array.isArray(localPosts) ? localPosts : []);
+
     const validPosts = allPosts.filter(post => {
       return post.coordinates || post.location || post.detailedLocation;
     });
@@ -802,19 +861,19 @@ const MapScreen = () => {
       const hashtagResults = validPosts.filter(post => {
         const tags = post.tags || [];
         const aiLabels = post.aiLabels || [];
-        
+
         // 태그와 AI 라벨에서 검색
         const allTags = [
           ...tags.map(t => typeof t === 'string' ? t.toLowerCase().replace(/^#+/, '') : String(t).toLowerCase().replace(/^#+/, '')),
           ...aiLabels.map(l => l.name?.toLowerCase() || '').filter(Boolean)
         ];
-        
+
         // 정확한 태그 매칭 또는 포함 매칭
-        return allTags.some(tag => 
+        return allTags.some(tag =>
           tag === queryWithoutHash || tag.includes(queryWithoutHash)
         );
       });
-      
+
       if (hashtagResults.length > 0) {
         return hashtagResults;
       }
@@ -835,8 +894,8 @@ const MapScreen = () => {
             ...tags.map(t => typeof t === 'string' ? t.toLowerCase() : String(t).toLowerCase()),
             ...aiLabels.map(l => l.name?.toLowerCase() || '').filter(Boolean)
           ];
-          
-          return config.tags.some(tag => 
+
+          return config.tags.some(tag =>
             allLabels.some(label => label.includes(tag.toLowerCase()))
           );
         });
@@ -850,7 +909,7 @@ const MapScreen = () => {
       const placeName = (post.placeName || '').toLowerCase();
       const address = (post.address || '').toLowerCase();
       const note = (post.note || '').toLowerCase();
-      
+
       // 태그와 AI 라벨도 검색 대상에 포함
       const tags = post.tags || [];
       const aiLabels = post.aiLabels || [];
@@ -859,31 +918,31 @@ const MapScreen = () => {
         ...aiLabels.map(l => l.name?.toLowerCase() || '').filter(Boolean)
       ];
       const tagsText = allTags.join(' ');
-      
+
       // 검색어 조합 검색 (예: "경주 불국사" -> "경주"와 "불국사" 모두 포함 또는 연속 검색)
       const searchTerms = queryLower.split(/\s+/).filter(term => term.length > 0);
-      
+
       // 모든 검색어가 포함되어 있는지 확인
       const allTermsMatch = searchTerms.every(term => {
         const termWithoutHash = term.replace(/^#+/, '');
         return location.includes(termWithoutHash) ||
-               detailedLocation.includes(termWithoutHash) ||
-               placeName.includes(termWithoutHash) ||
-               address.includes(termWithoutHash) ||
-               note.includes(termWithoutHash) ||
-               tagsText.includes(termWithoutHash) ||
-               `${location} ${detailedLocation} ${placeName}`.includes(termWithoutHash);
+          detailedLocation.includes(termWithoutHash) ||
+          placeName.includes(termWithoutHash) ||
+          address.includes(termWithoutHash) ||
+          note.includes(termWithoutHash) ||
+          tagsText.includes(termWithoutHash) ||
+          `${location} ${detailedLocation} ${placeName}`.includes(termWithoutHash);
       });
-      
+
       // 또는 단일 검색어가 포함되어 있는지 확인
       const singleTermMatch = location.includes(queryLower) ||
-             detailedLocation.includes(queryLower) ||
-             placeName.includes(queryLower) ||
-             address.includes(queryLower) ||
-             note.includes(queryLower) ||
-             tagsText.includes(queryWithoutHash) ||
-             `${location} ${detailedLocation} ${placeName}`.includes(queryLower);
-      
+        detailedLocation.includes(queryLower) ||
+        placeName.includes(queryLower) ||
+        address.includes(queryLower) ||
+        note.includes(queryLower) ||
+        tagsText.includes(queryWithoutHash) ||
+        `${location} ${detailedLocation} ${placeName}`.includes(queryLower);
+
       return allTermsMatch || singleTermMatch;
     });
 
@@ -903,7 +962,7 @@ const MapScreen = () => {
     }
 
     const places = new window.kakao.maps.services.Places();
-    
+
     places.keywordSearch(query, (data, status) => {
       if (status === window.kakao.maps.services.Status.OK && data && data.length > 0) {
         const firstResult = data[0];
@@ -929,12 +988,12 @@ const MapScreen = () => {
     }
 
     const placesService = new window.kakao.maps.services.Places();
-    
+
     // 관광지 관련 키워드 확인
-    const isTouristKeyword = ['관광지', '명소', 'tourist', 'attraction', 'landmark'].some(keyword => 
+    const isTouristKeyword = ['관광지', '명소', 'tourist', 'attraction', 'landmark'].some(keyword =>
       query.toLowerCase().includes(keyword.toLowerCase())
     );
-    
+
     // 지역명 제거하고 실제 검색어만 사용 (예: "서울 관광지" -> "서울")
     let searchQuery = query;
     if (isTouristKeyword) {
@@ -947,7 +1006,7 @@ const MapScreen = () => {
         searchQuery = '관광지';
       }
     }
-    
+
     // Kakao Places API 키워드 검색 (최대 15개 결과)
     placesService.keywordSearch(searchQuery, (data, status, pagination) => {
       if (status === window.kakao.maps.services.Status.OK && data && data.length > 0) {
@@ -956,12 +1015,12 @@ const MapScreen = () => {
           .filter(place => {
             const categoryCode = place.category_group_code || '';
             const categoryName = place.category_name || '';
-            
+
             // CT1 = 관광지 카테고리이거나, 카테고리명에 '관광' 또는 '명소'가 포함된 경우
-            return categoryCode === 'CT1' || 
-                   categoryName.includes('관광') || 
-                   categoryName.includes('명소') ||
-                   isTouristKeyword; // 관광지 키워드로 검색한 경우 모두 포함
+            return categoryCode === 'CT1' ||
+              categoryName.includes('관광') ||
+              categoryName.includes('명소') ||
+              isTouristKeyword; // 관광지 키워드로 검색한 경우 모두 포함
           })
           .slice(0, 15) // 최대 15개
           .map(place => ({
@@ -973,7 +1032,7 @@ const MapScreen = () => {
             placeUrl: place.place_url,
             category: place.category_name || ''
           }));
-        
+
         callback(touristResults.length > 0 ? touristResults : data.slice(0, 10));
       } else {
         callback([]);
@@ -1099,11 +1158,11 @@ const MapScreen = () => {
         searchMarkerRef.current = null;
       }
       // 관광지 마커 제거
-    markersRef.current.forEach(markerData => {
+      markersRef.current.forEach(markerData => {
         if (markerData.touristPlace && markerData.overlay) {
-        markerData.overlay.setMap(null);
-      }
-    });
+          markerData.overlay.setMap(null);
+        }
+      });
       markersRef.current = markersRef.current.filter(m => !m.touristPlace);
       if (map) {
         loadPosts(map);
@@ -1114,36 +1173,36 @@ const MapScreen = () => {
     if (!map) return;
 
     const query = searchQuery.trim();
-    
+
     // 게시물에서 먼저 검색
     const matchingPosts = searchInPosts(query);
-    
+
     if (matchingPosts.length > 0) {
       // 검색 결과가 있으면 해당 게시물만 표시
       setSearchResults(matchingPosts);
       setIsSearching(true);
-      
+
       // 첫 번째 게시물의 위치로 지도 이동
       const firstPost = matchingPosts[0];
-      const coords = firstPost.coordinates || getCoordinatesByLocation(firstPost.detailedLocation || firstPost.location);
-      
+      const coords = firstPost.coordinates || getCoordsByRegion(firstPost.detailedLocation || firstPost.location);
+
       if (coords && coords.lat && coords.lng) {
         const position = new window.kakao.maps.LatLng(coords.lat, coords.lng);
         map.panTo(position);
         map.setLevel(3);
-        
+
         // 검색 마커 표시
         createSearchMarker(position, firstPost.placeName || firstPost.location, map);
-        
+
         // 검색 결과 게시물만 마커로 표시
         createMarkers(matchingPosts, map, selectedRoutePins);
       }
     } else {
       // 관광지 키워드 확인
-      const isTouristKeyword = ['관광지', '명소', 'tourist', 'attraction', 'landmark'].some(keyword => 
+      const isTouristKeyword = ['관광지', '명소', 'tourist', 'attraction', 'landmark'].some(keyword =>
         query.toLowerCase().includes(keyword.toLowerCase())
       );
-      
+
       if (isTouristKeyword) {
         // 관광지 다중 검색
         searchTouristAttractionsWithKakao(query, (touristPlaces) => {
@@ -1151,20 +1210,20 @@ const MapScreen = () => {
             setKakaoSearchResults(touristPlaces);
             setSearchResults([]);
             setIsSearching(true);
-            
+
             // 모든 관광지 마커 표시
             const bounds = new window.kakao.maps.LatLngBounds();
             touristPlaces.forEach((place, index) => {
               const position = new window.kakao.maps.LatLng(place.lat, place.lng);
               bounds.extend(position);
-              
+
               // 각 관광지에 마커 표시
               if (index === 0) {
                 // 첫 번째 관광지 위치로 지도 이동
                 map.panTo(position);
                 map.setLevel(5);
               }
-              
+
               // 관광지 마커 생성 (파란색으로 구분)
               const el = document.createElement('div');
               el.innerHTML = `
@@ -1187,7 +1246,7 @@ const MapScreen = () => {
                   ">🏛️</span>
                 </div>
               `;
-              
+
               const marker = new window.kakao.maps.CustomOverlay({
                 position: position,
                 content: el,
@@ -1195,19 +1254,19 @@ const MapScreen = () => {
                 xAnchor: 0.5,
                 zIndex: 9000 + index
               });
-              
+
               marker.setMap(map);
               // 마커 참조 저장 (나중에 제거할 수 있도록)
               if (!markersRef.current.some(m => m.touristPlace && m.touristPlace.name === place.name)) {
                 markersRef.current.push({ overlay: marker, touristPlace: place, position: position });
               }
             });
-            
+
             // 검색된 관광지가 모두 보이도록 지도 범위 조정
             if (touristPlaces.length > 1) {
               map.setBounds(bounds);
             }
-            
+
             // 모든 게시물도 함께 표시
             if (map) {
               loadPosts(map);
@@ -1226,7 +1285,7 @@ const MapScreen = () => {
                   loadPosts(map);
                 }
               } else {
-                const coords = getCoordinatesByLocation(query);
+                const coords = getCoordsByRegion(query);
                 if (coords) {
                   setSearchResults([]);
                   setIsSearching(false);
@@ -1254,14 +1313,14 @@ const MapScreen = () => {
             const position = new window.kakao.maps.LatLng(place.lat, place.lng);
             map.panTo(position);
             map.setLevel(3);
-            
+
             // 검색 마커 표시
             createSearchMarker(position, place.name, map);
-            
+
             // 검색 결과 초기화 (Kakao 검색은 게시물이 아니므로)
             setSearchResults([]);
             setIsSearching(false);
-            
+
             // 모든 게시물 표시
             if (map) {
               loadPosts(map);
@@ -1275,10 +1334,10 @@ const MapScreen = () => {
               const position = new window.kakao.maps.LatLng(coords.lat, coords.lng);
               map.panTo(position);
               map.setLevel(4);
-              
+
               // 검색 마커 표시
               createSearchMarker(position, query, map);
-              
+
               if (map) {
                 loadPosts(map);
               }
@@ -1313,26 +1372,42 @@ const MapScreen = () => {
     const bounds = new window.kakao.maps.LatLngBounds();
     let hasValidMarker = false;
 
-    posts.forEach((post, index) => {
-      const coords = post.coordinates || getCoordinatesByLocation(post.detailedLocation || post.location);
-      if (!coords) return;
+    // 성능 최적화: 게시물이 많을 때 청크 단위로 처리 (50개씩)
+    const CHUNK_SIZE = 50;
+    const chunks = [];
+    for (let i = 0; i < posts.length; i += CHUNK_SIZE) {
+      chunks.push(posts.slice(i, i + CHUNK_SIZE));
+    }
 
-      const position = new window.kakao.maps.LatLng(coords.lat, coords.lng);
-      bounds.extend(position);
+    // 첫 번째 청크는 즉시 처리, 나머지는 지연 처리
+    const processChunk = (chunk, chunkIndex) => {
+      chunk.forEach((post, index) => {
+        const globalIndex = chunkIndex * CHUNK_SIZE + index;
+        // 상세/업로드 기준 좌표만 사용 — coordinates 없는 게시물은 핀 미표시 (위치 정확도)
+        const raw = post.coordinates;
+        if (!raw || (raw.lat == null && raw.latitude == null) || (raw.lng == null && raw.longitude == null)) return;
+        const coords = { lat: Number(raw.lat ?? raw.latitude), lng: Number(raw.lng ?? raw.longitude) };
+        const lat = Number(coords.lat ?? coords.latitude);
+        const lng = Number(coords.lng ?? coords.longitude);
+        if (Number.isNaN(lat) || Number.isNaN(lng)) return;
 
-      // 게시물의 첫 번째 이미지 사용
-      const imageUrl = post.images?.[0] || post.imageUrl || post.image || post.thumbnail;
-      
-      // 선택된 핀인지 확인
-      const isSelected = routePins.some(p => p.post.id === post.id);
-      const borderColor = isSelected ? '#00BCD4' : 'white';
-      const borderWidth = isSelected ? '4px' : '3px';
-      const boxShadow = isSelected 
-        ? '0 3px 12px rgba(0, 188, 212, 0.5), 0 0 0 2px rgba(0, 188, 212, 0.3)' 
-        : '0 3px 12px rgba(0,0,0,0.3)';
-      
-      const el = document.createElement('div');
-      el.innerHTML = `
+        const position = new window.kakao.maps.LatLng(lat, lng);
+        bounds.extend(position);
+
+        // 핀 썸네일: 사용자가 올린 사진 우선 (getPostPinImageUrl로 통일)
+        const imageUrl = getPostPinImageUrl(post);
+
+        // 선택된 핀인지 확인
+        const isSelected = routePins.some(p => p.post.id === post.id);
+        const borderColor = isSelected ? '#00BCD4' : 'white';
+        const borderWidth = isSelected ? '4px' : '3px';
+        const boxShadow = isSelected
+          ? '0 3px 12px rgba(0, 188, 212, 0.5), 0 0 0 2px rgba(0, 188, 212, 0.3)'
+          : '0 3px 12px rgba(0,0,0,0.3)';
+
+        const PLACEHOLDER_SVG = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiByeD0iNCIgZmlsbD0iI0YzRjRGNiIvPgo8cGF0aCBkPSJNMjAgMTNDMTcuMjQgMTMgMTUgMTUuMjQgMTUgMThDMTUgMjAuNzYgMTcuMjQgMjMgMjAgMjNDMjIuNzYgMjMgMjUgMjAuNzYgMjUgMThDMjUgMTUuMjQgMjIuNzYgMTMgMjAgMTNaIiBmaWxsPSIjOUI5Q0E1Ii8+Cjwvc3ZnPg==';
+        const el = document.createElement('div');
+        el.innerHTML = `
         <button 
           class="pin-btn" 
           style="
@@ -1353,15 +1428,17 @@ const MapScreen = () => {
           data-post-id="${post.id}"
         >
           <img 
+            width="50"
+            height="50"
+            loading="eager"
             style="
               width: 100%;
               height: 100%;
               object-fit: cover;
               display: block;
+              background: #f5f5f5;
             " 
-            src="${imageUrl || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiByeD0iNCIgZmlsbD0iI0YzRjRGNiIvPgo8cGF0aCBkPSJNMjAgMTNDMTcuMjQgMTMgMTUgMTUuMjQgMTUgMThDMTUgMjAuNzYgMTcuMjQgMjMgMjAgMjNDMjIuNzYgMjMgMjUgMjAuNzYgMjUgMThDMjUgMTUuMjQgMjIuNzYgMTMgMjAgMTNaIiBmaWxsPSIjOUI5Q0E1Ii8+Cjwvc3ZnPg=='} 
-            alt="${post.location || '여행지'}"
-            onerror="this.onerror=null; this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiByeD0iNCIgZmlsbD0iI0YzRjRGNiIvPgo8cGF0aCBkPSJNMjAgMTNDMTcuMjQgMTMgMTUgMTUuMjQgMTUgMThDMTUgMjAuNzYgMTcuMjQgMjMgMjAgMjNDMjIuNzYgMjMgMjUgMjAuNzYgMjUgMThDMjUgMTUuMjQgMjIuNzYgMTMgMjAgMTNaIiBmaWxsPSIjOUI5Q0E1Ii8+Cjwvc3ZnPg==';"
+            alt="${escapeHtmlAttr(post.location || '여행지')}"
           />
           ${isSelected ? `
             <div style="
@@ -1387,41 +1464,75 @@ const MapScreen = () => {
         </button>
       `;
 
-      const button = el.querySelector('button');
-      if (button) {
-        button.addEventListener('click', (e) => {
-          e.stopPropagation();
-          // 경로 모드일 때는 경로에 추가, 아니면 게시물 상세 보기
-          if (isRouteModeRef.current) {
-            handlePinSelectForRoute(post, position, index);
-          } else {
-            setSelectedPost({ post, allPosts: posts, currentPostIndex: index });
-          }
+        el.style.visibility = 'visible';
+        el.style.pointerEvents = 'auto';
+        el.style.position = 'relative';
+        el.style.zIndex = '1';
+
+        // img src는 JS로 설정 (HTML 이스케이프로 URL 깨짐 방지, blob/긴 URL 안정 처리)
+        const img = el.querySelector('img');
+        if (img) {
+          img.src = imageUrl || PLACEHOLDER_SVG;
+          img.onerror = function onPinImgError() {
+            this.onerror = null;
+            this.src = PLACEHOLDER_SVG;
+          };
+        }
+
+        const button = el.querySelector('button');
+        if (button) {
+          button.addEventListener('click', (e) => {
+            e.stopPropagation();
+            // 경로 모드일 때는 경로에 추가, 아니면 게시물 상세 보기
+            if (isRouteModeRef.current) {
+              handlePinSelectForRoute(post, position, index);
+            } else {
+              setSelectedPost({ post, allPosts: posts, currentPostIndex: index });
+            }
+          });
+
+          button.addEventListener('mouseenter', () => {
+            button.style.transform = 'scale(1.15)';
+            button.style.boxShadow = '0 4px 16px rgba(0,0,0,0.4)';
+          });
+
+          button.addEventListener('mouseleave', () => {
+            button.style.transform = 'scale(1)';
+            button.style.boxShadow = '0 3px 12px rgba(0,0,0,0.3)';
+          });
+        }
+
+        // 핀 이미지가 처음부터 보이도록 프리로드 (오버레이가 나중에 그려져도 캐시에서 바로 표시)
+        if (imageUrl) {
+          const preload = new Image();
+          preload.src = imageUrl;
+        }
+
+        const overlay = new window.kakao.maps.CustomOverlay({
+          position: position,
+          content: el,
+          yAnchor: 1,
+          xAnchor: 0.5,
+          zIndex: 1000 + index
         });
 
-        button.addEventListener('mouseenter', () => {
-          button.style.transform = 'scale(1.15)';
-          button.style.boxShadow = '0 4px 16px rgba(0,0,0,0.4)';
-        });
+        overlay.setMap(kakaoMap);
 
-        button.addEventListener('mouseleave', () => {
-          button.style.transform = 'scale(1)';
-          button.style.boxShadow = '0 3px 12px rgba(0,0,0,0.3)';
-        });
-      }
-
-      const overlay = new window.kakao.maps.CustomOverlay({
-        position: position,
-        content: el,
-        yAnchor: 1,
-        xAnchor: 0.5,
-        zIndex: index
+        markersRef.current.push({ overlay, post, position });
+        hasValidMarker = true;
       });
+    };
 
-      overlay.setMap(kakaoMap);
+    // 첫 번째 청크는 즉시 처리
+    if (chunks.length > 0) {
+      processChunk(chunks[0], 0);
+    }
 
-      markersRef.current.push({ overlay, post, position });
-      hasValidMarker = true;
+    // 나머지 청크는 지연 처리 (지도가 먼저 표시되도록)
+    chunks.slice(1).forEach((chunk, chunkIndex) => {
+      setTimeout(() => {
+        processChunk(chunk, chunkIndex + 1);
+      }, chunkIndex * 50); // 50ms 간격으로 처리
     });
 
     // 선택된 핀/위치로 지도 자동 이동
@@ -1442,22 +1553,35 @@ const MapScreen = () => {
     const bounds = kakaoMap.getBounds();
     const visible = markersRef.current
       .filter(markerData => {
-        const position = markerData.position;
-        return bounds.contain(position);
-      })
-      .map(markerData => ({
-        id: markerData.post.id,
-        title: markerData.post.location || markerData.post.detailedLocation || '여행지',
-        image: markerData.post.images?.[0] || markerData.post.imageUrl || markerData.post.image || markerData.post.thumbnail,
-        lat: markerData.position.getLat(),
-        lng: markerData.position.getLng(),
-        post: markerData.post
-      }));
+        if (!markerData.position) return false;
+        // 마커가 실제 지도 위에 있는지 확인
+        if (markerData.overlay && !markerData.overlay.getMap()) return false;
 
-    setVisiblePins(visible);
+        return bounds.contain(markerData.position);
+      })
+      .map(markerData => {
+        // 사용자가 올린 정보를 우선으로 표시 (placeName > detailedLocation > note > location 순)
+        const title = markerData.post.placeName || 
+                     markerData.post.detailedLocation || 
+                     markerData.post.note || 
+                     markerData.post.location || 
+                     '여행지';
+        return {
+          id: markerData.post.id,
+          title: title,
+          image: getPostPinImageUrl(markerData.post),
+          lat: markerData.position.getLat(),
+          lng: markerData.position.getLng(),
+          post: markerData.post
+        };
+      });
+
+    // 중복 제거 및 무결성 확인
+    const uniqueVisible = Array.from(new Map(visible.map(p => [p.id, p])).values());
+    setVisiblePins(uniqueVisible);
   };
 
-  const handleDragStart = (e) => {
+  const handleSheetDragStart = (e) => {
     setIsDragging(true);
     setStartY(e.type === 'mousedown' ? e.clientY : e.touches[0].clientY);
   };
@@ -1475,13 +1599,13 @@ const MapScreen = () => {
   const handleDragEnd = () => {
     if (!isDragging) return;
     setIsDragging(false);
-    
+
     // 100px 이상 드래그하면 시트를 완전히 숨김
     const sheetElement = sheetRef.current;
     if (sheetElement) {
       const sheetHeight = sheetElement.offsetHeight;
       const threshold = sheetHeight * 0.5; // 시트 높이의 50% 이상 드래그하면 숨김
-      
+
       if (sheetOffset > threshold) {
         setSheetOffset(sheetHeight + 20); // 시트를 완전히 숨김 (약간의 여유 공간 추가)
         setIsSheetHidden(true);
@@ -1506,7 +1630,7 @@ const MapScreen = () => {
       document.addEventListener('mouseup', handleDragEnd);
       document.addEventListener('touchmove', handleDragMove);
       document.addEventListener('touchend', handleDragEnd);
-      
+
       return () => {
         document.removeEventListener('mousemove', handleDragMove);
         document.removeEventListener('mouseup', handleDragEnd);
@@ -1549,11 +1673,34 @@ const MapScreen = () => {
   };
 
   const handleCenterLocation = () => {
-    if (map && currentLocation) {
-      const moveLatLon = new window.kakao.maps.LatLng(currentLocation.lat, currentLocation.lng);
-      map.panTo(moveLatLon);
-      map.setLevel(3);
+    if (!navigator.geolocation) {
+      alert('위치 정보를 사용할 수 없는 브라우저입니다.');
+      return;
     }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const lat = position.coords.latitude;
+        const lng = position.coords.longitude;
+        const accuracy = position.coords.accuracy;
+        const newLoc = { lat, lng, accuracy };
+
+        setCurrentLocation(newLoc);
+
+        if (map) {
+          updateCurrentLocationMarker(map, newLoc);
+          const moveLatLon = new window.kakao.maps.LatLng(lat, lng);
+          map.panTo(moveLatLon);
+          map.setLevel(3);
+        }
+        logger.log('📍 사용자 요청으로 내 위치 업데이트:', newLoc);
+      },
+      (error) => {
+        logger.error('📍 내 위치 업데이트 실패:', error);
+        alert('현재 위치를 가져올 수 없습니다. 위치 권한을 확인해주세요.');
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
   };
 
   const handleSOSRequest = () => {
@@ -1668,7 +1815,7 @@ const MapScreen = () => {
 
     // 지도 컨테이너에 중심 마커 생성 (지도 위에 오버레이)
     const mapContainer = mapContainerRef.current;
-    
+
     // 십자선 표시선 생성
     const crosshair = document.createElement('div');
     crosshair.style.cssText = `
@@ -1709,7 +1856,7 @@ const MapScreen = () => {
     `;
     mapContainer.appendChild(crosshair);
     crosshairRef.current = crosshair;
-    
+
     // 핀 마커 생성
     const marker = document.createElement('div');
     marker.style.cssText = `
@@ -1725,7 +1872,7 @@ const MapScreen = () => {
       pointer-events: none;
       z-index: 1002;
     `;
-    
+
     marker.innerHTML = `
       <div style="
         position: relative;
@@ -1894,26 +2041,26 @@ const MapScreen = () => {
     try {
       // 기존 SOS 요청 로드
       const existingSOS = JSON.parse(localStorage.getItem('sosRequests_v1') || '[]');
-      
+
       // 저장 (외부 서버에 저장된 것처럼 처리)
       const updatedSOS = [pendingSOSRequest, ...existingSOS];
       localStorage.setItem('sosRequests_v1', JSON.stringify(updatedSOS));
 
       // 질문 내용 요약 (속보형)
       const questionText = pendingSOSRequest.question || '';
-      const questionSnippet = questionText.length > 35 
-        ? questionText.substring(0, 35) + '...' 
+      const questionSnippet = questionText.length > 35
+        ? questionText.substring(0, 35) + '...'
         : questionText;
 
       // 위치 정보 가져오기 (좌표로부터 지역명 추출)
-      const locationName = pendingSOSRequest.coordinates 
+      const locationName = pendingSOSRequest.coordinates
         ? getLocationByCoordinates(pendingSOSRequest.coordinates.lat, pendingSOSRequest.coordinates.lng)
         : '근처 지역';
 
       // 라이브저니 스타일 알림 생성 (속보형 + 개인화)
       // 속보형: 궁금증을 유발하는 텍스트 스니펫
       const notificationTitle = `[${locationName} 실시간 속보] 📢 "${questionSnippet}"`;
-      
+
       // 개인화된 가치: 따뜻한 메시지 + 실시간성 강조
       const notificationMessage = `${locationName}에서 지금 상황을 물어보고 있어요. 실시간 정보를 공유해주시면 도움이 될 거예요! 🗺️`;
 
@@ -1927,7 +2074,7 @@ const MapScreen = () => {
         iconBg: 'bg-blue-100 dark:bg-blue-900/20',
         iconColor: 'text-blue-500',
         link: '/map',
-        data: { 
+        data: {
           sosRequest: pendingSOSRequest,
           type: 'sos_request'
         }
@@ -1939,7 +2086,7 @@ const MapScreen = () => {
       setSosQuestion('');
       setIsSelectingLocation(false);
       setSelectedSOSLocation(null);
-      
+
       // 마커 제거
       if (sosMarkerRef.current) {
         sosMarkerRef.current.setMap(null);
@@ -1949,7 +2096,7 @@ const MapScreen = () => {
       // 외부 시스템에서 알림이 전송된 것처럼 메시지 표시
       alert('도움 요청이 등록되었습니다.\n근처에 있는 분들에게 알림이 전송되었습니다.');
     } catch (error) {
-      console.error('도움 요청 저장 실패:', error);
+      logger.error('도움 요청 저장 실패:', error);
       alert('도움 요청 등록에 실패했습니다. 다시 시도해주세요.');
       setShowAdModal(false);
       setPendingSOSRequest(null);
@@ -1962,25 +2109,25 @@ const MapScreen = () => {
     setSosQuestion('');
     setIsSelectingLocation(false);
     setSelectedSOSLocation(null);
-    
+
     // 중심 마커 제거
     if (centerMarkerRef.current) {
       centerMarkerRef.current.remove();
       centerMarkerRef.current = null;
     }
-    
+
     // 표시선 제거
     if (crosshairRef.current) {
       crosshairRef.current.remove();
       crosshairRef.current = null;
     }
-    
+
     // SOS 마커 제거
     if (sosMarkerRef.current) {
       sosMarkerRef.current.setMap(null);
       sosMarkerRef.current = null;
     }
-    
+
     // 위치 미리보기 지도 제거
     if (locationPreviewMapRef.current) {
       locationPreviewMapRef.current.marker.setMap(null);
@@ -1993,7 +2140,7 @@ const MapScreen = () => {
   const handleStartLocationSelection = () => {
     setIsSelectingLocation(true);
     setShowSOSModal(false); // 모달 닫기
-    
+
     // 기존 SOS 마커 제거 (중심 마커로 대체됨)
     if (sosMarkerRef.current) {
       sosMarkerRef.current.setMap(null);
@@ -2019,10 +2166,10 @@ const MapScreen = () => {
       lat: position.getLat(),
       lng: position.getLng()
     };
-    
+
     // 이미 선택된 핀인지 확인
     const isAlreadySelected = selectedRoutePins.some(p => p.post.id === post.id);
-    
+
     if (isAlreadySelected) {
       // 이미 선택된 핀은 제거
       const newPins = selectedRoutePins.filter(p => p.post.id !== post.id);
@@ -2077,7 +2224,7 @@ const MapScreen = () => {
   const toggleRouteMode = () => {
     const newMode = !isRouteMode;
     setIsRouteMode(newMode);
-    
+
     if (newMode) {
       // 경로 모드 진입 시 상세 모달은 닫기
       setSelectedPost(null);
@@ -2106,7 +2253,7 @@ const MapScreen = () => {
     }
   };
 
-  // 경로 저장
+  // 경로 저장: 저장 후 경로 모드 해제, 방금 저장한 경로 표시(연결선·핀 스타일 동일)
   const saveRoute = () => {
     if (selectedRoutePins.length < 2) {
       alert('경로를 만들려면 최소 2개 이상의 핀을 선택해주세요.');
@@ -2120,20 +2267,147 @@ const MapScreen = () => {
         location: pin.post.location || pin.post.detailedLocation || '여행지',
         lat: pin.lat,
         lng: pin.lng,
-        image: pin.post.images?.[0] || pin.post.imageUrl || pin.post.image || pin.post.thumbnail
+        image: getDisplayImageUrl(pin.post.images?.[0] || pin.post.imageUrl || pin.post.image || pin.post.thumbnail)
       })),
       createdAt: new Date().toISOString()
     };
 
-    // localStorage에 저장
     try {
       const existingRoutes = JSON.parse(localStorage.getItem('savedRoutes') || '[]');
       const updatedRoutes = [routeData, ...existingRoutes];
       localStorage.setItem('savedRoutes', JSON.stringify(updatedRoutes));
-      alert('경로가 저장되었습니다!');
+      setSavedRoute(routeData);
+      // 경로 모드 해제
+      setIsRouteMode(false);
+      setSelectedRoutePins([]);
+      setIsSheetHidden(false);
+      setSheetOffset(0);
+      // 방금 저장한 경로를 경로 모드와 동일하게 표시: 연결선(메인컬러) + 핀(메인컬러 테두리)
+      const routePins = routeData.pins.map(pin => ({
+        post: { id: pin.id, location: pin.location, images: pin.image ? [pin.image] : [] },
+        lat: pin.lat,
+        lng: pin.lng
+      }));
+      drawRoute(routePins);
+      createMarkers(posts, map, routePins);
+      const bounds = new window.kakao.maps.LatLngBounds();
+      routePins.forEach(pin => bounds.extend(new window.kakao.maps.LatLng(pin.lat, pin.lng)));
+      const sw = bounds.getSouthWest();
+      const ne = bounds.getNorthEast();
+      const latSpan = Math.max((ne.getLat() - sw.getLat()) * 0.25, 0.01);
+      const lngSpan = Math.max((ne.getLng() - sw.getLng()) * 0.25, 0.01);
+      bounds.extend(new window.kakao.maps.LatLng(sw.getLat() - latSpan, sw.getLng() - lngSpan));
+      bounds.extend(new window.kakao.maps.LatLng(ne.getLat() + latSpan, ne.getLng() + lngSpan));
+      if (map) map.setBounds(bounds);
+      // 프로필의 "저장된 경로" 탭에서 볼 수 있도록 안내 토스트 표시
+      setShowRouteSavedToast(true);
+      // 다른 탭(프로필 등)에서도 savedRoutes 갱신되도록 storage 이벤트 발생
+      window.dispatchEvent(new Event('storage'));
+      // 일정 시간 후 토스트 자동 숨김
+      setTimeout(() => {
+        setShowRouteSavedToast(false);
+      }, 5000);
     } catch (error) {
-      console.error('경로 저장 실패:', error);
+      logger.error('경로 저장 실패:', error);
       alert('경로 저장에 실패했습니다.');
+    }
+  };
+
+  const MAX_RECENT_ROUTES_ON_MAP = 2;
+
+  const recentSavedRoutes = useMemo(() => {
+    try {
+      const routes = JSON.parse(localStorage.getItem('savedRoutes') || '[]');
+      return routes.slice(0, MAX_RECENT_ROUTES_ON_MAP);
+    } catch { return []; }
+  }, [savedRoute]);
+
+  const totalSavedRoutesCount = useMemo(() => {
+    try {
+      const routes = JSON.parse(localStorage.getItem('savedRoutes') || '[]');
+      return routes.length;
+    } catch { return 0; }
+  }, [savedRoute]);
+
+  const showRouteOnMap = (route) => {
+    if (!route || !map) return;
+    setSavedRoute(route);
+    setShowSavedRoutesPanel(false);
+    if (route.pins && route.pins.length > 0) {
+      const routePins = route.pins.map(pin => ({
+        post: { id: pin.id, location: pin.location, images: pin.image ? [pin.image] : [] },
+        lat: pin.lat,
+        lng: pin.lng
+      }));
+      if (routePins.length >= 2) drawRoute(routePins);
+      createMarkers(posts, map, routePins);
+      const bounds = new window.kakao.maps.LatLngBounds();
+      routePins.forEach(pin => bounds.extend(new window.kakao.maps.LatLng(pin.lat, pin.lng)));
+      // 패딩 추가해서 한 화면에 모든 핀이 다 보이게
+      const sw = bounds.getSouthWest();
+      const ne = bounds.getNorthEast();
+      const latSpan = Math.max((ne.getLat() - sw.getLat()) * 0.25, 0.01);
+      const lngSpan = Math.max((ne.getLng() - sw.getLng()) * 0.25, 0.01);
+      bounds.extend(new window.kakao.maps.LatLng(sw.getLat() - latSpan, sw.getLng() - lngSpan));
+      bounds.extend(new window.kakao.maps.LatLng(ne.getLat() + latSpan, ne.getLng() + lngSpan));
+      map.setBounds(bounds);
+    }
+  };
+
+  const showSavedRoute = () => {
+    try {
+      const savedRoutes = JSON.parse(localStorage.getItem('savedRoutes') || '[]');
+      if (savedRoutes.length === 0) {
+        alert('저장된 경로가 없습니다.');
+        return;
+      }
+      showRouteOnMap(savedRoutes[0]);
+    } catch (error) {
+      logger.error('저장된 경로 불러오기 실패:', error);
+      alert('저장된 경로를 불러오는데 실패했습니다.');
+    }
+  };
+
+  // 프로필에서 "지도에서 보기"로 진입 시 해당 경로 표시
+  const routeToShowRef = useRef(null);
+  useEffect(() => {
+    const routeToShow = location.state?.routeToShow;
+    if (map && routeToShow && routeToShow.pins?.length > 0 && routeToShowRef.current !== routeToShow.id) {
+      routeToShowRef.current = routeToShow.id;
+      showRouteOnMap(routeToShow);
+    }
+  }, [map, location.state?.routeToShow]);
+
+  // 저장된 경로 숨기기
+  const hideSavedRoute = () => {
+    setSavedRoute(null);
+    if (routePolylineRef.current) {
+      routePolylineRef.current.setMap(null);
+      routePolylineRef.current = null;
+    }
+    // 마커 다시 생성하여 선택 상태 제거
+    if (map) {
+      createMarkers(posts, map, []);
+    }
+  };
+
+  // 저장된 경로 삭제
+  const deleteSavedRoute = () => {
+    if (!savedRoute) return;
+    
+    if (confirm('저장된 경로를 삭제하시겠습니까?')) {
+      try {
+        const savedRoutes = JSON.parse(localStorage.getItem('savedRoutes') || '[]');
+        const updatedRoutes = savedRoutes.filter(route => route.id !== savedRoute.id);
+        localStorage.setItem('savedRoutes', JSON.stringify(updatedRoutes));
+        
+        // 경로 숨기기
+        hideSavedRoute();
+        alert('경로가 삭제되었습니다.');
+      } catch (error) {
+        logger.error('경로 삭제 실패:', error);
+        alert('경로 삭제에 실패했습니다.');
+      }
     }
   };
 
@@ -2154,7 +2428,7 @@ const MapScreen = () => {
 
     // 공유 링크 생성 (실제로는 서버에 저장하고 링크를 받아야 함)
     const shareUrl = `${window.location.origin}/map?route=${encodeURIComponent(JSON.stringify(routeData))}`;
-    
+
     // Web Share API 사용 (지원하는 경우)
     if (navigator.share) {
       try {
@@ -2257,9 +2531,17 @@ const MapScreen = () => {
           .filter-scroll::-webkit-scrollbar {
             display: none;
           }
+          @keyframes pulse {
+            0%, 100% {
+              opacity: 1;
+            }
+            50% {
+              opacity: 0.7;
+            }
+          }
         `}
       </style>
-      <div className="phone-screen" style={{ 
+      <div className="phone-screen" style={{
         background: 'transparent',
         borderRadius: '0px',
         overflow: 'hidden',
@@ -2268,215 +2550,215 @@ const MapScreen = () => {
         flexDirection: 'column',
         position: 'relative'
       }}>
-      {/* 지도 컨테이너 - 전체 화면에 지도가 보이도록 */}
-      <main 
-        ref={mapContainerRef}
-        style={{ 
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0, // 네비게이션바 제거 → 지도를 화면 맨 아래까지 확장
-          overflow: 'hidden',
-          zIndex: 1,
-          pointerEvents: 'auto',
-          width: '100%',
-          height: '100%'
-        }}
-      >
-        <div 
-          ref={mapRef}
+        {/* 지도 컨테이너 - 전체 화면에 지도가 보이도록 */}
+        <main
+          ref={mapContainerRef}
           style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0, // 네비게이션바 제거 → 지도를 화면 맨 아래까지 확장
+            overflow: 'hidden',
+            zIndex: 1,
+            pointerEvents: 'auto',
             width: '100%',
-            height: '100%',
-            pointerEvents: 'auto',
-            position: 'relative'
-          }}
-        />
-      </main>
-
-      {/* 상태바 영역 (시스템 UI 제거, 공간만 유지) */}
-      <div style={{ 
-        height: '20px',
-        position: 'relative',
-        zIndex: 10
-      }} />
-
-      {/* 검색바 - 투명 배경으로 지도가 보이도록 */}
-      <div style={{
-        padding: '16px',
-        background: 'transparent',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px',
-        position: 'relative',
-        zIndex: 10,
-        pointerEvents: 'none'
-      }}>
-        {/* 뒤로가기 버튼 - 검색창 왼쪽에 정렬 */}
-        <button
-          onClick={() => navigate(-1)}
-          style={{
-            width: '40px',
-            height: '40px',
-            borderRadius: '20px',
-            border: 'none',
-            background: 'rgba(255, 255, 255, 0.95)',
-            backdropFilter: 'blur(10px)',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer',
-            pointerEvents: 'auto'
+            height: '100%'
           }}
         >
-          <span className="material-symbols-outlined" style={{ fontSize: '22px', color: '#333' }}>
-            arrow_back
-          </span>
-        </button>
-        <div
-          onClick={() => setShowSearchSheet(true)}
-          style={{
-          flex: 1,
-          display: 'flex',
-          alignItems: 'center',
-          background: 'rgba(255, 255, 255, 0.95)',
-          backdropFilter: 'blur(10px)',
-          borderRadius: '28px',
-          padding: '12px 20px',
-          gap: '12px',
-          minHeight: '52px',
-          boxShadow: '0 2px 12px rgba(0,0,0,0.1)',
-            pointerEvents: 'auto',
-            cursor: 'pointer'
-          }}
-        >
-          <span className="material-symbols-outlined" style={{ fontSize: '24px', color: '#666' }}>
-            search
-          </span>
-          <span style={{
-              flex: 1,
-              fontSize: '16px',
-            color: '#999',
-              fontWeight: '400'
-          }}>
-            {searchQuery || "지역 검색"}
-          </span>
-        </div>
-        <button
-          onClick={() => {
-            if (map) {
-              updateVisiblePins(map);
-            }
-          }}
-          style={{
-            width: '52px',
-            height: '52px',
-            borderRadius: '26px',
-            border: 'none',
-            background: 'rgba(255, 255, 255, 0.95)',
-            backdropFilter: 'blur(10px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer',
-            flexShrink: 0,
-            boxShadow: '0 2px 12px rgba(0,0,0,0.1)',
-            pointerEvents: 'auto'
-          }}
-        >
-          <span className="material-symbols-outlined" style={{ fontSize: '24px', color: '#666' }}>
-            refresh
-          </span>
-        </button>
-      </div>
+          <div
+            ref={mapRef}
+            style={{
+              width: '100%',
+              height: '100%',
+              pointerEvents: 'auto',
+              position: 'relative'
+            }}
+          />
+        </main>
 
-      {/* 상황 물어보기 버튼과 필터 버튼들 - 메인 추천여행지처럼 좌우 슬라이드(마우스 드래그·휠·터치 스와이프) */}
-      <div
-        ref={filterScrollRef}
-        className="filter-scroll"
-        style={{
-          display: 'flex',
-          flexDirection: 'row',
-          flexWrap: 'nowrap',
-          gap: '8px',
-          alignItems: 'center',
-          padding: '8px 16px',
+        {/* 상태바 영역 (시스템 UI 제거, 공간만 유지) */}
+        <div style={{
+          height: '20px',
+          position: 'relative',
+          zIndex: 10
+        }} />
+
+        {/* 검색바 - 투명 배경으로 지도가 보이도록 */}
+        <div style={{
+          padding: '16px',
           background: 'transparent',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
           position: 'relative',
           zIndex: 10,
-          width: '100%',
-          minWidth: 0,
-          flexShrink: 0,
-          overflowX: 'scroll',
-          overflowY: 'hidden',
-          scrollbarWidth: 'none',
-          msOverflowStyle: 'none',
-          scrollBehavior: 'smooth',
-          WebkitOverflowScrolling: 'touch',
-          cursor: 'grab',
-          touchAction: 'pan-x'
-        }}
-        onMouseDown={(e) => {
-          e.preventDefault();
-          hasDraggedFilterRef.current = false;
-          const slider = e.currentTarget;
-          let isDown = true;
-          const startX = e.pageX;
-          const startScrollLeft = slider.scrollLeft;
-          slider.style.cursor = 'grabbing';
-          slider.style.userSelect = 'none';
+          pointerEvents: 'none'
+        }}>
+          {/* 뒤로가기 버튼 - 검색창 왼쪽에 정렬 */}
+          <button
+            onClick={() => navigate(-1)}
+            style={{
+              width: '40px',
+              height: '40px',
+              borderRadius: '20px',
+              border: 'none',
+              background: 'rgba(255, 255, 255, 0.95)',
+              backdropFilter: 'blur(10px)',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              pointerEvents: 'auto'
+            }}
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: '22px', color: '#333' }}>
+              arrow_back
+            </span>
+          </button>
+          <div
+            onClick={() => setShowSearchSheet(true)}
+            style={{
+              flex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              background: 'rgba(255, 255, 255, 0.95)',
+              backdropFilter: 'blur(10px)',
+              borderRadius: '28px',
+              padding: '12px 20px',
+              gap: '12px',
+              minHeight: '52px',
+              boxShadow: '0 2px 12px rgba(0,0,0,0.1)',
+              pointerEvents: 'auto',
+              cursor: 'pointer'
+            }}
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: '24px', color: '#666' }}>
+              search
+            </span>
+            <span style={{
+              flex: 1,
+              fontSize: '16px',
+              color: '#999',
+              fontWeight: '400'
+            }}>
+              {searchQuery || "지역 검색"}
+            </span>
+          </div>
+          <button
+            onClick={() => {
+              if (map) {
+                updateVisiblePins(map);
+              }
+            }}
+            style={{
+              width: '52px',
+              height: '52px',
+              borderRadius: '26px',
+              border: 'none',
+              background: 'rgba(255, 255, 255, 0.95)',
+              backdropFilter: 'blur(10px)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              flexShrink: 0,
+              boxShadow: '0 2px 12px rgba(0,0,0,0.1)',
+              pointerEvents: 'auto'
+            }}
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: '24px', color: '#666' }}>
+              refresh
+            </span>
+          </button>
+        </div>
 
-          const handleMouseMove = (ev) => {
-            if (!isDown) return;
-            ev.preventDefault();
-            const walk = (ev.pageX - startX) * 1.2;
-            if (Math.abs(walk) > 5) hasDraggedFilterRef.current = true;
-            slider.scrollLeft = startScrollLeft - walk;
-          };
+        {/* 상황 물어보기 버튼과 필터 버튼들 - 메인 추천여행지처럼 좌우 슬라이드(마우스 드래그·휠·터치 스와이프) */}
+        <div
+          ref={filterScrollRef}
+          className="filter-scroll"
+          style={{
+            display: 'flex',
+            flexDirection: 'row',
+            flexWrap: 'nowrap',
+            gap: '8px',
+            alignItems: 'center',
+            padding: '8px 16px',
+            background: 'transparent',
+            position: 'relative',
+            zIndex: 10,
+            width: '100%',
+            minWidth: 0,
+            flexShrink: 0,
+            overflowX: 'scroll',
+            overflowY: 'hidden',
+            scrollbarWidth: 'none',
+            msOverflowStyle: 'none',
+            scrollBehavior: 'smooth',
+            WebkitOverflowScrolling: 'touch',
+            cursor: 'grab',
+            touchAction: 'pan-x'
+          }}
+          onMouseDown={(e) => {
+            e.preventDefault();
+            hasDraggedFilterRef.current = false;
+            const slider = e.currentTarget;
+            let isDown = true;
+            const startX = e.pageX;
+            const startScrollLeft = slider.scrollLeft;
+            slider.style.cursor = 'grabbing';
+            slider.style.userSelect = 'none';
 
-          const handleMouseUp = () => {
-            isDown = false;
-            slider.style.cursor = 'grab';
-            slider.style.userSelect = 'auto';
-            document.removeEventListener('mousemove', handleMouseMove);
-            document.removeEventListener('mouseup', handleMouseUp);
-          };
+            const handleMouseMove = (ev) => {
+              if (!isDown) return;
+              ev.preventDefault();
+              const walk = (ev.pageX - startX) * 1.2;
+              if (Math.abs(walk) > 5) hasDraggedFilterRef.current = true;
+              slider.scrollLeft = startScrollLeft - walk;
+            };
 
-          document.addEventListener('mousemove', handleMouseMove);
-          document.addEventListener('mouseup', handleMouseUp);
-        }}
-        onTouchStart={(e) => {
-          hasDraggedFilterRef.current = false;
-          const slider = e.currentTarget;
-          if (slider.scrollWidth <= slider.clientWidth) return;
-          const startX = e.touches[0].pageX;
-          const startScrollLeft = slider.scrollLeft;
-          slider._touchStartX = startX;
-          slider._touchStartScroll = startScrollLeft;
-        }}
-        onTouchMove={(e) => {
-          const slider = e.currentTarget;
-          if (slider.scrollWidth <= slider.clientWidth) return;
-          if (slider._touchStartX == null) return;
-          e.preventDefault();
-          hasDraggedFilterRef.current = true;
-          const x = e.touches[0].pageX;
-          const walk = (x - slider._touchStartX) * 1.2;
-          slider.scrollLeft = slider._touchStartScroll - walk;
-        }}
-        onTouchEnd={(e) => {
-          e.currentTarget._touchStartX = null;
-          e.currentTarget._touchStartScroll = null;
-        }}
-        onTouchCancel={(e) => {
-          e.currentTarget._touchStartX = null;
-          e.currentTarget._touchStartScroll = null;
-        }}
-      >
-        {/* 상황 물어보기 버튼 - 가장 앞에 배치 */}
-        <button
+            const handleMouseUp = () => {
+              isDown = false;
+              slider.style.cursor = 'grab';
+              slider.style.userSelect = 'auto';
+              document.removeEventListener('mousemove', handleMouseMove);
+              document.removeEventListener('mouseup', handleMouseUp);
+            };
+
+            document.addEventListener('mousemove', handleMouseMove);
+            document.addEventListener('mouseup', handleMouseUp);
+          }}
+          onTouchStart={(e) => {
+            hasDraggedFilterRef.current = false;
+            const slider = e.currentTarget;
+            if (slider.scrollWidth <= slider.clientWidth) return;
+            const startX = e.touches[0].pageX;
+            const startScrollLeft = slider.scrollLeft;
+            slider._touchStartX = startX;
+            slider._touchStartScroll = startScrollLeft;
+          }}
+          onTouchMove={(e) => {
+            const slider = e.currentTarget;
+            if (slider.scrollWidth <= slider.clientWidth) return;
+            if (slider._touchStartX == null) return;
+            e.preventDefault();
+            hasDraggedFilterRef.current = true;
+            const x = e.touches[0].pageX;
+            const walk = (x - slider._touchStartX) * 1.2;
+            slider.scrollLeft = slider._touchStartScroll - walk;
+          }}
+          onTouchEnd={(e) => {
+            e.currentTarget._touchStartX = null;
+            e.currentTarget._touchStartScroll = null;
+          }}
+          onTouchCancel={(e) => {
+            e.currentTarget._touchStartX = null;
+            e.currentTarget._touchStartScroll = null;
+          }}
+        >
+          {/* 상황 물어보기 버튼 - 가장 앞에 배치 */}
+          <button
             onClick={() => {
               if (hasDraggedFilterRef.current) { hasDraggedFilterRef.current = false; return; }
               handleSOSRequest();
@@ -2485,7 +2767,8 @@ const MapScreen = () => {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              padding: '8px 12px',
+              padding: '12px 18px',
+              minHeight: 44,
               background: 'rgba(255, 255, 255, 0.95)',
               backdropFilter: 'blur(10px)',
               borderRadius: '20px',
@@ -2508,31 +2791,32 @@ const MapScreen = () => {
             }}
           >
             <span style={{
-              fontSize: '13px',
+              fontSize: '14px',
               fontWeight: '600',
               color: '#00BCD4'
             }}>
               지금 상황 알아보기
             </span>
           </button>
-          
+
           {/* 필터 버튼들 - 중복 선택 가능, 좌우 스크롤 */}
           <button
             onClick={() => {
               if (hasDraggedFilterRef.current) { hasDraggedFilterRef.current = false; return; }
-              setSelectedFilters(prev => 
-                prev.includes('bloom') 
+              setSelectedFilters(prev =>
+                prev.includes('bloom')
                   ? prev.filter(f => f !== 'bloom')
                   : [...prev, 'bloom']
               );
             }}
             style={{
-              padding: '6px 14px',
+              padding: '10px 18px',
+              minHeight: 44,
               borderRadius: '20px',
               border: 'none',
               background: selectedFilters.includes('bloom') ? '#00BCD4' : 'rgba(255, 255, 255, 0.95)',
               color: selectedFilters.includes('bloom') ? 'white' : '#666',
-              fontSize: '13px',
+              fontSize: '14px',
               fontWeight: '600',
               cursor: 'pointer',
               whiteSpace: 'nowrap',
@@ -2547,19 +2831,20 @@ const MapScreen = () => {
           <button
             onClick={() => {
               if (hasDraggedFilterRef.current) { hasDraggedFilterRef.current = false; return; }
-              setSelectedFilters(prev => 
-                prev.includes('food') 
+              setSelectedFilters(prev =>
+                prev.includes('food')
                   ? prev.filter(f => f !== 'food')
                   : [...prev, 'food']
               );
             }}
             style={{
-              padding: '6px 14px',
+              padding: '10px 18px',
+              minHeight: 44,
               borderRadius: '20px',
               border: 'none',
               background: selectedFilters.includes('food') ? '#00BCD4' : 'rgba(255, 255, 255, 0.95)',
               color: selectedFilters.includes('food') ? 'white' : '#666',
-              fontSize: '13px',
+              fontSize: '14px',
               fontWeight: '600',
               cursor: 'pointer',
               whiteSpace: 'nowrap',
@@ -2574,19 +2859,20 @@ const MapScreen = () => {
           <button
             onClick={() => {
               if (hasDraggedFilterRef.current) { hasDraggedFilterRef.current = false; return; }
-              setSelectedFilters(prev => 
-                prev.includes('scenic') 
+              setSelectedFilters(prev =>
+                prev.includes('scenic')
                   ? prev.filter(f => f !== 'scenic')
                   : [...prev, 'scenic']
               );
             }}
             style={{
-              padding: '6px 14px',
+              padding: '10px 18px',
+              minHeight: 44,
               borderRadius: '20px',
               border: 'none',
               background: selectedFilters.includes('scenic') ? '#00BCD4' : 'rgba(255, 255, 255, 0.95)',
               color: selectedFilters.includes('scenic') ? 'white' : '#666',
-              fontSize: '13px',
+              fontSize: '14px',
               fontWeight: '600',
               cursor: 'pointer',
               whiteSpace: 'nowrap',
@@ -2601,19 +2887,20 @@ const MapScreen = () => {
           <button
             onClick={() => {
               if (hasDraggedFilterRef.current) { hasDraggedFilterRef.current = false; return; }
-              setSelectedFilters(prev => 
-                prev.includes('waiting') 
+              setSelectedFilters(prev =>
+                prev.includes('waiting')
                   ? prev.filter(f => f !== 'waiting')
                   : [...prev, 'waiting']
               );
             }}
             style={{
-              padding: '6px 14px',
+              padding: '10px 18px',
+              minHeight: 44,
               borderRadius: '20px',
               border: 'none',
               background: selectedFilters.includes('waiting') ? '#00BCD4' : 'rgba(255, 255, 255, 0.95)',
               color: selectedFilters.includes('waiting') ? 'white' : '#666',
-              fontSize: '13px',
+              fontSize: '14px',
               fontWeight: '600',
               cursor: 'pointer',
               whiteSpace: 'nowrap',
@@ -2625,279 +2912,448 @@ const MapScreen = () => {
           >
             ⏱️ 웨이팅
           </button>
-        {/* 스크롤 끝 여백 (메인 추천여행지 슬라이드와 동일) */}
-        <div style={{ width: '16px', flexShrink: 0 }} aria-hidden="true" />
-      </div>
+          {/* 스크롤 끝 여백 (메인 추천여행지 슬라이드와 동일) */}
+          <div style={{ width: '16px', flexShrink: 0 }} aria-hidden="true" />
+        </div>
 
-      {/* 경로 모드 토글 버튼 */}
-      <div style={{
-        position: 'absolute',
-        left: '16px',
-        // 네비게이션바 제거 → 68px 보정값 삭제, 시트 바로 위에 위치
-        bottom: isRouteMode
-          ? (selectedRoutePins.length >= 2 ? '200px' : '120px')
-          : (isSheetHidden ? '120px' : `${sheetHeight + 16}px`),
-        zIndex: 30,
-        transition: 'all 0.3s ease-out',
-        pointerEvents: 'auto'
-      }}>
-        <button
-          onClick={toggleRouteMode}
-          style={{
-            padding: '10px 16px',
-            borderRadius: '24px',
-            border: 'none',
-            background: isRouteMode ? '#00BCD4' : 'white',
-            color: isRouteMode ? 'white' : '#333',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '6px',
-            cursor: 'pointer',
-            fontSize: '14px',
-            fontWeight: '600',
-            transition: 'all 0.2s'
-          }}
-          onMouseEnter={(e) => {
-            if (!isRouteMode) {
-              e.currentTarget.style.background = '#f5f5f5';
-            }
-          }}
-          onMouseLeave={(e) => {
-            if (!isRouteMode) {
-              e.currentTarget.style.background = 'white';
-            }
-          }}
-        >
-          <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>
-            {isRouteMode ? 'route' : 'route'}
-          </span>
-          {isRouteMode ? '경로 모드' : '경로 만들기'}
-        </button>
-      </div>
-
-      {/* 선택된 핀 개수 배지 (경로 모드일 때만 표시) */}
-      {isRouteMode && selectedRoutePins.length > 0 && (
+        {/* 경로 모드 토글 버튼 및 초기화 아이콘 */}
         <div style={{
           position: 'absolute',
-          top: '110px',
           left: '16px',
+          bottom: isSheetHidden ? '100px' : `${Math.max(sheetHeight + 20, 100)}px`,
           zIndex: 30,
+          transition: 'all 0.3s ease-out',
+          pointerEvents: 'auto',
           display: 'flex',
           alignItems: 'center',
-          gap: '6px',
-          padding: '8px 12px',
-          background: '#00BCD4',
-          borderRadius: '20px',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
-          pointerEvents: 'auto'
+          gap: '8px'
         }}>
-          <span className="material-symbols-outlined" style={{ 
-            fontSize: '16px', 
-            color: 'white' 
-          }}>
-            location_on
-          </span>
-          <span style={{
-            fontSize: '13px',
-            fontWeight: '700',
-            color: 'white'
-          }}>
-            {selectedRoutePins.length}개 선택됨
-          </span>
+          <button
+            onClick={toggleRouteMode}
+            style={{
+              padding: '10px 16px',
+              borderRadius: '24px',
+              border: isRouteMode ? '2px solid #00BCD4' : '2px solid transparent',
+              background: isRouteMode ? '#00BCD4' : 'white',
+              color: isRouteMode ? 'white' : '#333',
+              boxShadow: isRouteMode ? '0 4px 12px rgba(0, 188, 212, 0.4)' : '0 2px 8px rgba(0,0,0,0.15)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
+              cursor: 'pointer',
+              fontSize: '14px',
+              fontWeight: '600',
+              transition: 'all 0.3s ease',
+              transform: isRouteMode ? 'scale(1.05)' : 'scale(1)',
+              position: 'relative'
+            }}
+            onMouseEnter={(e) => {
+              if (!isRouteMode) {
+                e.currentTarget.style.background = '#f5f5f5';
+                e.currentTarget.style.transform = 'scale(1.02)';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!isRouteMode) {
+                e.currentTarget.style.background = 'white';
+                e.currentTarget.style.transform = 'scale(1)';
+              }
+            }}
+            onMouseDown={(e) => {
+              e.currentTarget.style.transform = 'scale(0.98)';
+            }}
+            onMouseUp={(e) => {
+              e.currentTarget.style.transform = isRouteMode ? 'scale(1.05)' : 'scale(1)';
+            }}
+          >
+            <span className="material-symbols-outlined" style={{ 
+              fontSize: '20px',
+              animation: isRouteMode ? 'pulse 2s infinite' : 'none'
+            }}>
+              route
+            </span>
+            {isRouteMode ? '경로 모드' : '경로 만들기'}
+            {isRouteMode && selectedRoutePins.length > 0 && (
+              <span style={{
+                marginLeft: '4px',
+                padding: '2px 6px',
+                borderRadius: '10px',
+                background: isRouteMode ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.1)',
+              fontSize: '12px',
+                fontWeight: '700'
+              }}>
+                {selectedRoutePins.length}
+              </span>
+            )}
+          </button>
+          {/* 최근 저장한 경로 (시간 아이콘) - 켜면 경로, 끄면 바로 내 위치 */}
+          {recentSavedRoutes.length > 0 && (
+            <button
+              onClick={() => {
+                if (showSavedRoutesPanel || savedRoute) {
+                  hideSavedRoute();
+                  setShowSavedRoutesPanel(false);
+                  if (map && currentLocation?.lat != null && currentLocation?.lng != null) {
+                    const moveLatLon = new window.kakao.maps.LatLng(currentLocation.lat, currentLocation.lng);
+                    map.panTo(moveLatLon);
+                    map.setLevel(3);
+                  } else {
+                    handleCenterLocation();
+                  }
+                } else {
+                  showRouteOnMap(recentSavedRoutes[0]);
+                  setShowSavedRoutesPanel(true);
+                }
+              }}
+              title="최근 저장한 경로"
+              style={{
+                width: '44px',
+                height: '44px',
+                minWidth: '44px',
+                minHeight: '44px',
+                borderRadius: '22px',
+                border: 'none',
+                background: showSavedRoutesPanel || savedRoute ? '#00BCD4' : 'rgba(255, 255, 255, 0.95)',
+                color: showSavedRoutesPanel || savedRoute ? 'white' : '#666',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                backdropFilter: 'blur(10px)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                transition: 'all 0.2s'
+              }}
+              onMouseEnter={(e) => {
+                if (!showSavedRoutesPanel && !savedRoute) {
+                  e.currentTarget.style.background = 'rgba(255, 255, 255, 1)';
+                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!showSavedRoutesPanel && !savedRoute) {
+                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.95)';
+                  e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)';
+                }
+              }}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: '22px' }}>schedule</span>
+            </button>
+          )}
+          {/* 초기화 아이콘 버튼 (경로 모드이고 핀이 선택되었을 때만 표시) */}
+          {isRouteMode && selectedRoutePins.length > 0 && (
+            <button
+              onClick={clearRoute}
+              style={{
+                width: '40px',
+                height: '40px',
+                borderRadius: '20px',
+                border: 'none',
+                background: 'white',
+                color: '#666',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                transition: 'all 0.2s'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = '#f5f5f5';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'white';
+              }}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>
+                refresh
+              </span>
+            </button>
+          )}
         </div>
-      )}
 
-      {/* 경로 관리 버튼들 (경로 모드일 때만 표시) */}
-      {isRouteMode && (
-        <div style={{
-          position: 'absolute',
-          right: '16px',
-          bottom: '84px',
-          zIndex: 30,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '8px',
-          pointerEvents: 'auto',
-          alignItems: 'flex-end'
-        }}>
+        {/* 저장된 경로 패널 — 최근 2개만, 사이즈 축소 */}
+        {showSavedRoutesPanel && !isRouteMode && (
+          <div
+            style={{
+              position: 'absolute',
+              left: 16,
+              bottom: (isSheetHidden ? 100 : Math.max(sheetHeight + 20, 100)) + 56,
+              zIndex: 35,
+              background: 'white',
+              borderRadius: 12,
+              padding: 8,
+              boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+              minWidth: 160,
+              maxWidth: 200
+            }}
+          >
+            <div style={{ fontSize: 11, fontWeight: 600, color: '#666', marginBottom: 6 }}>최근 저장한 경로</div>
+            {recentSavedRoutes.map((route) => (
+              <button
+                key={route.id}
+                type="button"
+                onClick={() => showRouteOnMap(route)}
+                style={{
+                  width: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '6px 8px',
+                  border: 'none',
+                  borderRadius: 8,
+                  background: savedRoute?.id === route.id ? '#e0f7fa' : '#f5f5f5',
+                  cursor: 'pointer',
+                  marginBottom: 4,
+                  textAlign: 'left'
+                }}
+              >
+                {route.pins?.[0]?.image && (
+                  <img src={route.pins[0].image} alt="" style={{ width: 26, height: 26, borderRadius: 6, objectFit: 'cover', flexShrink: 0 }} />
+                )}
+                <span style={{ flex: 1, fontSize: 11, fontWeight: 500, color: '#333', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {route.pins?.length || 0}개 장소
+                </span>
+                {savedRoute?.id === route.id && <span className="material-symbols-outlined" style={{ fontSize: 14, color: '#00BCD4', flexShrink: 0 }}>check</span>}
+              </button>
+            ))}
+            {totalSavedRoutesCount > MAX_RECENT_ROUTES_ON_MAP && (
+              <button
+                type="button"
+                onClick={() => { setShowSavedRoutesPanel(false); navigate('/profile', { state: { tab: 'savedRoutes' } }); }}
+                style={{
+                  width: '100%',
+                  padding: '6px 8px',
+                  border: 'none',
+                  borderRadius: 8,
+                  background: '#f0f9ff',
+                  color: '#00BCD4',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 4
+                }}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: 14 }}>person</span>
+                프로필에서 전체 보기
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* 저장, 공유 버튼들 (경로 모드이고 2개 이상 선택되었을 때) — 필터와 비슷한 스타일 */}
+        {isRouteMode && selectedRoutePins.length >= 2 && (
           <div style={{
-            background: 'white',
-            borderRadius: '12px',
-            padding: '12px',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+            position: 'absolute',
+            left: '16px',
+            bottom: (isSheetHidden ? 100 : Math.max(sheetHeight + 20, 100)) + 56,
+            zIndex: 30,
+            pointerEvents: 'auto',
+            display: 'flex',
+            gap: '8px',
+            alignItems: 'center'
+          }}>
+            <button
+              onClick={saveRoute}
+              style={{
+                padding: '10px 18px',
+                minHeight: 44,
+                borderRadius: '20px',
+                border: 'none',
+                background: 'rgba(255, 255, 255, 0.95)',
+                color: '#666',
+                fontSize: '14px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+                backdropFilter: 'blur(10px)',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                transition: 'all 0.2s',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(255, 255, 255, 1)';
+                e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.95)';
+                e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)';
+              }}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>save</span>
+              저장
+            </button>
+            <button
+              onClick={shareRoute}
+              style={{
+                padding: '10px 18px',
+                minHeight: 44,
+                borderRadius: '20px',
+                border: 'none',
+                background: 'rgba(255, 255, 255, 0.95)',
+                color: '#666',
+                fontSize: '14px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+                backdropFilter: 'blur(10px)',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                transition: 'all 0.2s',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(255, 255, 255, 1)';
+                e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.95)';
+                e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)';
+              }}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>share</span>
+              공유
+            </button>
+          </div>
+        )}
+
+        {/* 경로 저장 완료 토스트 - 프로필의 저장된 경로로 유도 */}
+        {showRouteSavedToast && (
+          <div
+            style={{
+              position: 'absolute',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              bottom: (isSheetHidden ? 100 : Math.max(sheetHeight + 20, 100)) + 56,
+              zIndex: 40,
+              maxWidth: 360,
+              width: 'calc(100% - 48px)',
+              background: 'rgba(15, 23, 42, 0.95)',
+              color: 'white',
+              borderRadius: 16,
+              padding: '12px 16px',
+              boxShadow: '0 10px 30px rgba(15, 23, 42, 0.45)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 8,
+              pointerEvents: 'auto'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 20, color: '#22c55e' }}>check_circle</span>
+              <span style={{ fontSize: 14, fontWeight: 600 }}>경로가 저장되었습니다.</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setShowRouteSavedToast(false);
+                navigate('/profile', { state: { tab: 'savedRoutes' } });
+              }}
+              style={{
+                marginTop: 2,
+                alignSelf: 'flex-start',
+                padding: '6px 12px',
+                borderRadius: 999,
+                border: '1px solid rgba(148, 163, 184, 0.6)',
+                background: 'rgba(15, 23, 42, 0.9)',
+                color: 'white',
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4
+              }}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: 16 }}>person</span>
+              저장된 경로 보러가기
+            </button>
+          </div>
+        )}
+
+        {/* 지도 컨트롤 버튼들 - 경로 모드일 때는 숨김 */}
+        {!isRouteMode && (
+          <div style={{
+            position: 'absolute',
+            right: '16px',
+            // 네비게이션바 제거 → 68px 보정값 삭제, 시트 바로 위에 위치
+            bottom: isSheetHidden ? '120px' : `${sheetHeight + 16}px`,
             display: 'flex',
             flexDirection: 'column',
             gap: '8px',
-            alignItems: 'flex-end'
+            zIndex: 30,
+            transition: 'all 0.3s ease-out',
+            pointerEvents: 'auto'
           }}>
-            {selectedRoutePins.length > 0 && (
-              <button
-                onClick={clearRoute}
-                style={{
-                  padding: '8px 12px',
-                  borderRadius: '8px',
-                  border: 'none',
-                  background: '#f5f5f5',
-                  color: '#333',
-                  fontSize: '13px',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = '#eeeeee';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = '#f5f5f5';
-                }}
-              >
-                초기화
-              </button>
-            )}
-            {selectedRoutePins.length >= 2 && (
-              <div style={{
+            <button
+              onClick={handleZoomIn}
+              style={{
+                width: '40px',
+                height: '40px',
+                borderRadius: '20px',
+                border: 'none',
+                background: 'white',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
                 display: 'flex',
-                flexDirection: 'row',
-                gap: '8px'
-              }}>
-                <button
-                  onClick={saveRoute}
-                  style={{
-                    padding: '8px 12px',
-                    borderRadius: '8px',
-                    border: 'none',
-                    background: '#00BCD4',
-                    color: 'white',
-                    fontSize: '13px',
-                    fontWeight: '600',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s',
-                    whiteSpace: 'nowrap'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = '#00ACC1';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = '#00BCD4';
-                  }}
-                >
-                  저장
-                </button>
-                <button
-                  onClick={shareRoute}
-                  style={{
-                    padding: '8px 12px',
-                    borderRadius: '8px',
-                    border: 'none',
-                    background: '#4CAF50',
-                    color: 'white',
-                    fontSize: '13px',
-                    fontWeight: '600',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '4px',
-                    whiteSpace: 'nowrap'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = '#45a049';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = '#4CAF50';
-                  }}
-                >
-                  <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>
-                    share
-                  </span>
-                  공유
-                </button>
-              </div>
-            )}
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer'
+              }}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: '20px', color: '#333' }}>
+                add
+              </span>
+            </button>
+            <button
+              onClick={handleZoomOut}
+              style={{
+                width: '40px',
+                height: '40px',
+                borderRadius: '20px',
+                border: 'none',
+                background: 'white',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer'
+              }}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: '20px', color: '#333' }}>
+                remove
+              </span>
+            </button>
+            <button
+              onClick={handleCenterLocation}
+              style={{
+                width: '40px',
+                height: '40px',
+                borderRadius: '20px',
+                border: 'none',
+                background: 'white',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer'
+              }}
+              title="내 위치"
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: '20px', color: '#00BCD4' }}>
+                my_location
+              </span>
+            </button>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* 지도 컨트롤 버튼들 - 경로 모드일 때는 숨김 */}
-      {!isRouteMode && (
-        <div style={{
-          position: 'absolute',
-          right: '16px',
-          // 네비게이션바 제거 → 68px 보정값 삭제, 시트 바로 위에 위치
-          bottom: isSheetHidden ? '120px' : `${sheetHeight + 16}px`,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '8px',
-          zIndex: 30,
-          transition: 'all 0.3s ease-out',
-          pointerEvents: 'auto'
-        }}>
-          <button
-            onClick={handleZoomIn}
-            style={{
-              width: '40px',
-              height: '40px',
-              borderRadius: '20px',
-              border: 'none',
-              background: 'white',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer'
-            }}
-          >
-            <span className="material-symbols-outlined" style={{ fontSize: '20px', color: '#333' }}>
-              add
-            </span>
-          </button>
-          <button
-            onClick={handleZoomOut}
-            style={{
-              width: '40px',
-              height: '40px',
-              borderRadius: '20px',
-              border: 'none',
-              background: 'white',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer'
-            }}
-          >
-            <span className="material-symbols-outlined" style={{ fontSize: '20px', color: '#333' }}>
-              remove
-            </span>
-          </button>
-          <button
-            onClick={handleCenterLocation}
-            style={{
-              width: '40px',
-              height: '40px',
-              borderRadius: '20px',
-              border: 'none',
-              background: 'white',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer'
-            }}
-            title="내 위치"
-          >
-            <span className="material-symbols-outlined" style={{ fontSize: '20px', color: '#00BCD4' }}>
-              my_location
-            </span>
-          </button>
-        </div>
-      )}
-
-      {/* 사진 다시 보기 버튼 - 시트가 숨겨졌고 경로 모드가 아닐 때만 표시 */}
-      {isSheetHidden && !isRouteMode && (
+        {/* 사진 다시 보기 버튼 - 시트가 숨겨졌고 경로 모드가 아닐 때만 표시 */}
+        {isSheetHidden && !isRouteMode && (
           <button
             onClick={handleShowSheet}
             style={{
@@ -2937,1076 +3393,377 @@ const MapScreen = () => {
             }}>
               사진 다시 보기
             </span>
-        </button>
-      )}
+          </button>
+        )}
 
-      {/* 주변 장소 바텀 시트 - 경로 모드가 아닐 때만 보임, 아래로 슬라이드 가능 */}
-      {!isSelectingLocation && !isRouteMode && (
-      <div
-        ref={sheetRef}
-        style={{
-          position: 'absolute',
-          left: 0,
-          right: 0,
-          bottom: 0, // 네비게이션바 높이(68px)만큼 있던 여백 제거 → 화면 맨 아래까지 시트 내림
-          backgroundColor: 'rgba(255, 255, 255, 0.9)',
-          backdropFilter: 'blur(20px)',
-          borderTopLeftRadius: '20px',
-          borderTopRightRadius: '20px',
-          transform: `translateY(${sheetOffset}px)`,
-          transition: isDragging ? 'none' : 'transform 0.3s ease-out',
-          display: 'flex',
-          flexDirection: 'column',
-          boxShadow: '0 -4px 20px rgba(0,0,0,0.1)',
-          maxHeight: '40vh',
-          zIndex: 20
-        }}
-      >
-        <div
-          ref={dragHandleRef}
-          onMouseDown={handleDragStart}
-          onTouchStart={handleDragStart}
-          style={{
-            padding: '12px 0',
-            display: 'flex',
-            justifyContent: 'center',
-            cursor: 'grab',
-            touchAction: 'none'
-          }}
-        >
-          <div style={{
-            width: '40px',
-            height: '4px',
-            backgroundColor: '#d4d4d8',
-            borderRadius: '2px'
-          }} />
-        </div>
-
-        <div style={{
-          padding: '8px 16px 12px',
-          borderBottom: '1px solid #f4f4f5'
-        }}>
-          <h1 style={{
-            fontSize: '18px',
-            fontWeight: 'bold',
-            margin: 0
-          }}>주변 장소</h1>
-        </div>
-
-        <div 
-          className="sheet-scroll-container"
-          style={{ 
-            flex: 1,
-            overflowX: visiblePins.length >= 4 ? 'auto' : 'hidden', // 4개 이상일 때만 스크롤 가능
-            overflowY: 'hidden',
-            padding: '16px 16px 24px 16px',
-            display: 'flex',
-            gap: '12px',
-            minHeight: '110px',
-            scrollBehavior: 'smooth',
-            WebkitOverflowScrolling: 'touch',
-            scrollbarWidth: 'thin',
-            scrollbarColor: '#d4d4d8 transparent',
-            cursor: visiblePins.length >= 4 ? 'grab' : 'default', // 4개 이상일 때만 grab 커서
-            userSelect: 'none',
-            touchAction: 'pan-x',
-            scrollSnapType: visiblePins.length >= 4 ? 'x mandatory' : 'none', // 4개 이상일 때만 스냅
-            scrollPadding: '0 16px'
-          }}
-          onMouseDown={(e) => {
-            if (e.target.closest('.pin-card')) return; // 핀 카드 클릭은 제외
-            e.currentTarget.style.cursor = 'grabbing';
-            const startX = e.pageX - e.currentTarget.scrollLeft;
-            const startScrollLeft = e.currentTarget.scrollLeft;
-            
-            const handleMouseMove = (e) => {
-              e.preventDefault();
-              const x = e.pageX - startX;
-              e.currentTarget.scrollLeft = startScrollLeft - x;
-            };
-            
-            const handleMouseUp = () => {
-              e.currentTarget.style.cursor = 'grab';
-              document.removeEventListener('mousemove', handleMouseMove);
-              document.removeEventListener('mouseup', handleMouseUp);
-            };
-            
-            document.addEventListener('mousemove', handleMouseMove);
-            document.addEventListener('mouseup', handleMouseUp);
-          }}
-          onTouchStart={(e) => {
-            if (e.target.closest('.pin-card')) return; // 핀 카드 터치는 제외
-            const startX = e.touches[0].pageX - e.currentTarget.scrollLeft;
-            const startScrollLeft = e.currentTarget.scrollLeft;
-            
-            const handleTouchMove = (e) => {
-              e.preventDefault();
-              const x = e.touches[0].pageX - startX;
-              e.currentTarget.scrollLeft = startScrollLeft - x;
-            };
-            
-            const handleTouchEnd = () => {
-              e.currentTarget.removeEventListener('touchmove', handleTouchMove);
-              e.currentTarget.removeEventListener('touchend', handleTouchEnd);
-            };
-            
-            e.currentTarget.addEventListener('touchmove', handleTouchMove, { passive: false });
-            e.currentTarget.addEventListener('touchend', handleTouchEnd);
-          }}
-        >
-          {visiblePins.length > 0 ? (
-            visiblePins.map((pin, index) => (
-              <div
-                key={pin.id || index}
-                className="pin-card"
-                onClick={() => {
-                  // 즉시 상세화면 표시
-                  if (pin.post) {
-                    setSelectedPost({ 
-                      post: pin.post, 
-                      allPosts: posts, 
-                      currentPostIndex: index 
-                    });
-                  }
-                  // 지도도 해당 위치로 이동
-                  if (map && pin.lat && pin.lng) {
-                    const position = new window.kakao.maps.LatLng(pin.lat, pin.lng);
-                    map.panTo(position);
-                    map.setLevel(3); // 적절한 확대 레벨로 설정
-                  }
-                }}
-                style={{
-                  minWidth: '90px',
-                  width: '90px',
-                  flexShrink: 0,
-                  borderRadius: '12px',
-                  overflow: 'hidden',
-                  cursor: 'pointer',
-                  position: 'relative',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-                  background: '#f5f5f5',
-                  transition: 'transform 0.2s',
-                  scrollSnapAlign: visiblePins.length >= 4 ? 'start' : 'none',
-                  scrollSnapStop: visiblePins.length >= 4 ? 'always' : 'normal',
-                  display: 'flex',
-                  flexDirection: 'column' // 사진이 위, 지역명이 아래
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = 'scale(1.05)';
-                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = 'scale(1)';
-                  e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)';
-                }}
-              >
-                {pin.image && (
-                  <img
-                    src={pin.image}
-                    alt={pin.title}
-                    style={{
-                      width: '100%',
-                      height: '90px',
-                      objectFit: 'cover'
-                    }}
-                    onError={(e) => {
-                      e.currentTarget.style.display = 'none';
-                    }}
-                  />
-                )}
-                <div style={{
-                  padding: '6px',
-                  background: 'white'
-                }}>
-                  <p style={{
-                    margin: 0,
-                    fontSize: '11px',
-                    fontWeight: '600',
-                    color: '#333',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap'
-                  }}>
-                    {pin.title}
-                  </p>
-                </div>
-              </div>
-            ))
-          ) : (
-            <div style={{
-              width: '100%',
-              padding: '40px 20px',
-              textAlign: 'center',
-              color: '#999',
-              fontSize: '14px'
-            }}>
-              표시할 장소가 없습니다
-            </div>
-          )}
-        </div>
-      </div>
-      )}
-
-      {/* 게시물 상세화면 모달 - 핸드폰 화면 안에서만 표시 */}
-      {selectedPost && (
-        <div
-          onClick={() => setSelectedPost(null)}
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: '68px',
-            background: 'rgba(0, 0, 0, 0.5)',
-            zIndex: 1000,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '20px'
-          }}
-        >
+        {/* 주변 장소 바텀 시트 - 경로 모드가 아닐 때만 보임, 아래로 슬라이드 가능 */}
+        {!isSelectingLocation && !isRouteMode && (
           <div
-            onClick={(e) => e.stopPropagation()}
+            ref={sheetRef}
             style={{
-              background: 'white',
-              borderRadius: '20px',
-              width: '100%',
-              maxWidth: 'calc(100% - 40px)',
-              maxHeight: 'calc(100vh - 200px)',
-              overflow: 'hidden',
+              position: 'absolute',
+              left: 0,
+              right: 0,
+              bottom: 0, // 네비게이션바 높이(68px)만큼 있던 여백 제거 → 화면 맨 아래까지 시트 내림
+              backgroundColor: 'rgba(255, 255, 255, 0.9)',
+              backdropFilter: 'blur(20px)',
+              borderTopLeftRadius: '20px',
+              borderTopRightRadius: '20px',
+              transform: `translateY(${sheetOffset}px)`,
+              transition: isDragging ? 'none' : 'transform 0.3s ease-out',
               display: 'flex',
               flexDirection: 'column',
-              boxShadow: '0 10px 40px rgba(0,0,0,0.3)'
+              boxShadow: '0 -4px 20px rgba(0,0,0,0.1)',
+              maxHeight: '40vh',
+              zIndex: 20
             }}
           >
-            {/* 헤더 */}
-            <div style={{
-              padding: '16px',
-              borderBottom: '1px solid #f0f0f0',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between'
-            }}>
-              <h2 style={{
-                margin: 0,
-                fontSize: '18px',
-                fontWeight: 'bold',
-                color: '#333'
-              }}>
-                {selectedPost.post.location || selectedPost.post.detailedLocation || '여행지'}
-              </h2>
-              <button
-                onClick={() => setSelectedPost(null)}
-                style={{
-                  width: '32px',
-                  height: '32px',
-                  borderRadius: '16px',
-                  border: 'none',
-                  background: '#f5f5f5',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer'
-                }}
-              >
-                <span className="material-symbols-outlined" style={{ fontSize: '20px', color: '#666' }}>
-                  close
-                </span>
-              </button>
-            </div>
-
-            {/* 이미지 */}
-            <div style={{
-              width: '100%',
-              aspectRatio: '4/3',
-              overflow: 'hidden',
-              background: '#f5f5f5'
-            }}>
-              <img
-                src={selectedPost.post.images?.[0] || selectedPost.post.imageUrl || selectedPost.post.image || selectedPost.post.thumbnail}
-                alt={selectedPost.post.location || '여행지'}
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  objectFit: 'cover'
-                }}
-                onError={(e) => {
-                  e.currentTarget.style.display = 'none';
-                }}
-              />
-            </div>
-
-            {/* 내용 */}
-            <div style={{
-              padding: '16px',
-              overflowY: 'auto',
-              flex: 1
-            }}>
-              {selectedPost.post.note && (
-                <p style={{
-                  margin: '0 0 12px 0',
-                  fontSize: '14px',
-                  color: '#666',
-                  lineHeight: '1.6'
-                }}>
-                  {selectedPost.post.note}
-                </p>
-              )}
-              
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                marginTop: '12px',
-                paddingTop: '12px',
-                borderTop: '1px solid #f0f0f0'
-              }}>
-                <span className="material-symbols-outlined" style={{ fontSize: '18px', color: '#00BCD4' }}>
-                  location_on
-                </span>
-                <span style={{
-                  fontSize: '13px',
-                  color: '#999'
-                }}>
-                  {selectedPost.post.detailedLocation || selectedPost.post.location || '위치 정보 없음'}
-                </span>
-              </div>
-
-              <button
-                onClick={() => {
-                  navigate(`/post/${selectedPost.post.id}`, {
-                    state: {
-                      post: selectedPost.post,
-                      allPosts: selectedPost.allPosts,
-                      currentPostIndex: selectedPost.currentPostIndex
-                    }
-                  });
-                }}
-                style={{
-                  width: '100%',
-                  marginTop: '16px',
-                  padding: '12px',
-                  background: '#00BCD4',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '12px',
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  cursor: 'pointer'
-                }}
-              >
-                전체 보기
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 위치 선택 모드 하단 안내 */}
-      {isSelectingLocation && (
-        <div style={{
-          position: 'absolute',
-          bottom: '80px',
-          left: '50%',
-          transform: 'translateX(-50%)',
-          zIndex: 1003,
-          width: 'calc(100% - 32px)',
-          maxWidth: '400px'
-        }}>
-          <div style={{
-            background: 'white',
-            padding: '16px 20px',
-            borderRadius: '16px',
-            boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '12px'
-          }}>
-            <span style={{
-              fontSize: '15px',
-              fontWeight: '600',
-              color: '#00BCD4',
-              textAlign: 'center'
-            }}>
-              위치를 설정하세요
-            </span>
-            <button
-              onClick={() => {
-                setIsSelectingLocation(false);
-                // 선택된 위치에 일반 마커 표시
-                if (map && selectedSOSLocation) {
-                  updateSOSMarker(map, selectedSOSLocation);
-                }
-                setShowSOSModal(true);
-              }}
+            <div
+              ref={dragHandleRef}
+              onMouseDown={handleSheetDragStart}
+              onTouchStart={handleSheetDragStart}
               style={{
-                width: '100%',
-                padding: '14px',
-                background: '#00BCD4',
-                border: 'none',
-                borderRadius: '12px',
-                fontSize: '15px',
-                fontWeight: '600',
-                color: 'white',
-                cursor: 'pointer',
-                transition: 'all 0.2s'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = '#00ACC1';
-                e.currentTarget.style.transform = 'scale(1.02)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = '#00BCD4';
-                e.currentTarget.style.transform = 'scale(1)';
+                padding: '12px 0',
+                display: 'flex',
+                justifyContent: 'center',
+                cursor: 'grab',
+                touchAction: 'none'
               }}
             >
-              완료
-            </button>
-          </div>
-        </div>
-      )}
+              <div style={{
+                width: '40px',
+                height: '4px',
+                backgroundColor: '#d4d4d8',
+                borderRadius: '2px'
+              }} />
+            </div>
 
-      {/* 도움 요청 모달 */}
-      {showSOSModal && !isSelectingLocation && (
-        <>
-        {/* 모달 배경 - 지도가 보이도록 반투명 */}
-        <div
-          onClick={handleSOSModalClose}
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: '68px',
-            background: 'rgba(0, 0, 0, 0.3)',
-            zIndex: 1000,
-            pointerEvents: 'auto'
-          }}
-        />
-        <div
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: '68px',
-            zIndex: 1001,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '20px',
-            pointerEvents: 'none'
-          }}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              background: 'white',
-              borderRadius: '24px',
-              width: '100%',
-              maxWidth: '400px',
-              maxHeight: '70vh',
-              overflow: 'hidden',
-              display: 'flex',
-              flexDirection: 'column',
-              boxShadow: '0 10px 40px rgba(0,0,0,0.3)',
-              pointerEvents: 'auto'
-            }}
-          >
-            {/* 헤더 */}
             <div style={{
-              padding: '16px 20px 12px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              borderBottom: '1px solid #f0f0f0'
+              padding: '8px 16px 12px',
+              borderBottom: '1px solid #f4f4f5'
             }}>
-              <span style={{
+              <h1 style={{
                 fontSize: '18px',
                 fontWeight: 'bold',
-                color: '#333'
-              }}>
-                도움 요청
-              </span>
-              <button
-                onClick={handleSOSModalClose}
-                style={{
-                  width: '28px',
-                  height: '28px',
-                  borderRadius: '14px',
-                  border: 'none',
-                  background: '#f5f5f5',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer'
-                }}
-              >
-                <span className="material-symbols-outlined" style={{ fontSize: '18px', color: '#666' }}>
-                  close
-                </span>
-              </button>
+                margin: 0
+              }}>주변 장소</h1>
             </div>
 
-            {/* 내용 */}
-            <div style={{
-              padding: '16px 20px',
-              overflowY: 'auto',
-              flex: 1
-            }}>
-              {/* 위치 선택 */}
-              <div style={{ marginBottom: '16px' }}>
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  marginBottom: '10px'
-                }}>
-                  <span style={{
-                    fontSize: '14px',
-                    fontWeight: '600',
-                    color: '#333'
-                  }}>
-                    위치
-                  </span>
-                  {selectedSOSLocation && (
-                    <span style={{
-                      fontSize: '12px',
-                      color: '#00BCD4',
-                      fontWeight: '600'
-                    }}>
-                      선택됨
-                    </span>
-                  )}
-                </div>
-                
-                {selectedSOSLocation && (
-                  <div style={{
-                    marginBottom: '10px',
-                    padding: '0',
-                    background: '#f0f9fa',
-                    border: '1px solid #00BCD4',
-                    borderRadius: '12px',
-                    overflow: 'hidden'
-                  }}>
-                    <div
-                      id="location-preview-map"
-                      style={{
-                        width: '100%',
-                        height: '120px',
-                        borderRadius: '12px'
-                      }}
-                    />
-                  </div>
-                )}
-                
-                <button
-                  onClick={handleStartLocationSelection}
-                  style={{
-                    width: '100%',
-                    padding: '12px',
-                    background: '#f5f5f5',
-                    border: '1px solid #e0e0e0',
-                    borderRadius: '12px',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '8px',
-                    fontSize: '14px',
-                    fontWeight: '500',
-                    color: '#666',
-                    transition: 'all 0.2s'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = '#eeeeee';
-                    e.currentTarget.style.borderColor = '#00BCD4';
-                    e.currentTarget.style.color = '#00BCD4';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = '#f5f5f5';
-                    e.currentTarget.style.borderColor = '#e0e0e0';
-                    e.currentTarget.style.color = '#666';
-                  }}
-                >
-                  <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
-                    map
-                  </span>
-                  {selectedSOSLocation ? '위치 다시 선택하기' : '지도에서 위치 선택하기'}
-                </button>
-              </div>
-
-              {/* 내용 입력 */}
-              <div>
-                <span style={{
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  color: '#333',
-                  display: 'block',
-                  marginBottom: '10px'
-                }}>
-                  내용
-                </span>
-                <textarea
-                  value={sosQuestion}
-                  onChange={(e) => setSosQuestion(e.target.value)}
-                  placeholder="무엇이 궁금하신가요?"
-                  style={{
-                    width: '100%',
-                    minHeight: '80px',
-                    padding: '12px',
-                    border: '1px solid #e0e0e0',
-                    borderRadius: '12px',
-                    fontSize: '14px',
-                    fontFamily: 'inherit',
-                    resize: 'vertical',
-                    outline: 'none',
-                    lineHeight: '1.6',
-                    background: '#fafafa'
-                  }}
-                  onFocus={(e) => {
-                    e.target.style.borderColor = '#00BCD4';
-                    e.target.style.background = 'white';
-                  }}
-                  onBlur={(e) => {
-                    e.target.style.borderColor = '#e0e0e0';
-                    e.target.style.background = '#fafafa';
-                  }}
-                />
-              </div>
-            </div>
-
-            {/* 하단 버튼 */}
-            <div style={{
-              padding: '12px 20px 16px',
-              borderTop: '1px solid #f0f0f0',
-              background: '#fafafa'
-            }}>
-              <button
-                onClick={handleSOSSubmit}
-                disabled={!selectedSOSLocation || !sosQuestion.trim()}
-                style={{
-                  width: '100%',
-                  padding: '14px',
-                  background: selectedSOSLocation && sosQuestion.trim() ? '#00BCD4' : '#ddd',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '12px',
-                  fontSize: '15px',
-                  fontWeight: 'bold',
-                  cursor: selectedSOSLocation && sosQuestion.trim() ? 'pointer' : 'not-allowed',
-                  transition: 'all 0.2s',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '6px'
-                }}
-                onMouseEnter={(e) => {
-                  if (selectedSOSLocation && sosQuestion.trim()) {
-                    e.currentTarget.style.background = '#00ACC1';
-                    e.currentTarget.style.transform = 'scale(1.02)';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (selectedSOSLocation && sosQuestion.trim()) {
-                    e.currentTarget.style.background = '#00BCD4';
-                    e.currentTarget.style.transform = 'scale(1)';
-                  }
-                }}
-              >
-                <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
-                  send
-                </span>
-                요청하기
-              </button>
-            </div>
-          </div>
-        </div>
-        </>
-      )}
-
-      {/* 검색 시트 모달 */}
-      {showSearchSheet && (
-        <div
-          onClick={() => setShowSearchSheet(false)}
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: 'rgba(0, 0, 0, 0.8)',
-            zIndex: 2000,
-            display: 'flex',
-            alignItems: 'flex-start',
-            pointerEvents: 'auto'
-          }}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              background: 'white',
-              width: '100%',
-              height: '100vh',
-              borderBottomLeftRadius: '0',
-              borderBottomRightRadius: '0',
-              boxShadow: '0 -4px 20px rgba(0,0,0,0.2)',
-              display: 'flex',
-              flexDirection: 'column'
-            }}
-          >
-            {/* 헤더 */}
-            <div style={{
-              padding: '20px',
-              borderBottom: '1px solid #f0f0f0',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px'
-            }}>
-              <div style={{
+            <div
+              className="sheet-scroll-container"
+              style={{
                 flex: 1,
+                overflowX: visiblePins.length >= 4 ? 'auto' : 'hidden',
+                overflowY: 'hidden',
+                padding: '16px 16px 24px 16px',
                 display: 'flex',
-                alignItems: 'center',
-                background: '#f5f5f5',
-                borderRadius: '24px',
-                padding: '12px 20px',
-                gap: '12px'
-              }}>
-                <span className="material-symbols-outlined" style={{ fontSize: '24px', color: '#666' }}>
-                  search
-                </span>
-                <input
-                  type="text"
-                  placeholder="지역 또는 장소명 검색 (예: 서울 올림픽 공원, 카페, 맛집)"
-                  value={searchQuery}
-                  onChange={(e) => handleSearchInput(e.target.value)}
-                  onKeyPress={(e) => {
-                    if (e.key === 'Enter') {
-                      handleSearch(e);
-                      setShowSearchSheet(false);
-                    }
-                  }}
-                  autoFocus
-                  style={{
-                    flex: 1,
-                    border: 'none',
-                    background: 'transparent',
-                    outline: 'none',
-                    fontSize: '16px',
-                    color: '#333',
-                    fontWeight: '400'
-                  }}
-                />
-                {searchQuery && (
-                  <button
+                gap: '12px',
+                minHeight: '110px',
+                scrollBehavior: 'smooth',
+                WebkitOverflowScrolling: 'touch',
+                scrollbarWidth: 'thin',
+                scrollbarColor: '#d4d4d8 transparent',
+                cursor: visiblePins.length >= 4 ? 'grab' : 'default',
+                userSelect: 'none',
+                touchAction: 'pan-x',
+                scrollSnapType: 'x mandatory',
+                scrollPadding: '0 16px'
+              }}
+              onMouseDown={handlePinScrollDrag}
+            >
+              {visiblePins.length > 0 ? (
+                visiblePins.map((pin, index) => (
+                  <div
+                    key={`${pin.id}-${index}`}
+                    className="pin-card"
                     onClick={() => {
-                      setSearchQuery('');
-                      setFilteredRegions([]);
-                      setSearchSuggestions([]);
+                      if (pinHasMovedRef.current) return;
+                      if (pin.post) {
+                        setSelectedPost({
+                          post: pin.post,
+                          allPosts: posts,
+                          currentPostIndex: index
+                        });
+                      }
+                      if (map && pin.lat && pin.lng) {
+                        const position = new window.kakao.maps.LatLng(pin.lat, pin.lng);
+                        map.panTo(position);
+                        map.setLevel(3);
+                      }
                     }}
                     style={{
-                      border: 'none',
-                      background: 'transparent',
+                      minWidth: '90px',
+                      width: '90px',
+                      flexShrink: 0,
+                      borderRadius: '12px',
+                      overflow: 'hidden',
                       cursor: 'pointer',
-                      padding: '4px',
+                      position: 'relative',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                      background: '#f5f5f5',
+                      transition: 'transform 0.2s',
+                      scrollSnapAlign: 'start',
+                      scrollSnapStop: 'always',
                       display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center'
+                      flexDirection: 'column' // 사진이 위, 지역명이 아래
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = 'scale(1.05)';
+                      e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = 'scale(1)';
+                      e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)';
                     }}
                   >
-                    <span className="material-symbols-outlined" style={{ fontSize: '20px', color: '#666' }}>
-                      close
-                    </span>
-                  </button>
-                )}
-              </div>
-              <button
-                onClick={() => setShowSearchSheet(false)}
-                style={{
-                  width: '40px',
-                  height: '40px',
-                  borderRadius: '20px',
-                  border: 'none',
-                  background: '#f5f5f5',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer'
-                }}
-              >
-                <span className="material-symbols-outlined" style={{ fontSize: '24px', color: '#666' }}>
-                  close
-                </span>
-              </button>
-            </div>
-
-            {/* 검색 결과 또는 최근 검색 지역 */}
-            <div style={{
-              flex: 1,
-              overflowY: 'auto',
-              padding: '20px'
-            }}>
-              {searchQuery.trim() ? (
-                // 검색어가 있을 때 자동완성 결과
-                (searchSuggestions.length > 0 ? (
-                  <div>
-                    {searchSuggestions.map((suggestion, index) => (
-                      <div
-                        key={index}
-                        onClick={() => handleSuggestionClick(suggestion)}
+                    {(pin.image || pin.post?.images?.[0] || pin.post?.thumbnail) && (
+                      <img
+                        src={pin.image || getDisplayImageUrl(pin.post?.images?.[0] ?? pin.post?.thumbnail ?? pin.post?.image ?? pin.post?.imageUrl)}
+                        alt={pin.title}
                         style={{
-                          padding: '12px 16px',
-                          borderRadius: '12px',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '12px',
-                          marginBottom: '8px',
-                          transition: 'background 0.2s',
-                          background: '#fafafa'
+                          width: '100%',
+                          height: '90px',
+                          objectFit: 'cover'
                         }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.background = '#f0f0f0';
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
                         }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.background = '#fafafa';
-                        }}
-                      >
-                        <span className="material-symbols-outlined" style={{ 
-                          fontSize: '24px', 
-                          color: suggestion.type === 'recommended_region' ? '#9C27B0'
-                            : suggestion.type === 'region' ? '#00BCD4' 
-                            : suggestion.type === 'hashtag' ? '#9C27B0' 
-                            : suggestion.type === 'tourist' ? '#2196F3'
-                            : suggestion.type === 'restaurant' ? '#FF5722'
-                            : suggestion.type === 'cafe' ? '#795548'
-                            : suggestion.type === 'park' ? '#4CAF50'
-                            : '#FF9800' 
-                        }}>
-                          {suggestion.type === 'recommended_region' ? 'recommendation'
-                            : suggestion.type === 'region' ? 'location_on' 
-                            : suggestion.type === 'hashtag' ? 'tag' 
-                            : suggestion.type === 'tourist' ? 'tour'
-                            : suggestion.type === 'restaurant' ? 'restaurant'
-                            : suggestion.type === 'cafe' ? 'local_cafe'
-                            : suggestion.type === 'park' ? 'park'
-                            : 'place'}
-                        </span>
-                        <span style={{
-                          fontSize: '16px',
-                          fontWeight: '500',
-                          color: '#333',
-                          flex: 1
-                        }}>
-                          {suggestion.display}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div style={{
-                    padding: '40px 20px',
-                    textAlign: 'center',
-                    color: '#999',
-                    fontSize: '14px'
-                  }}>
-                    검색 결과가 없습니다
+                      />
+                    )}
+                    <div style={{
+                      padding: '6px',
+                      background: 'white'
+                    }}>
+                      <p style={{
+                        margin: 0,
+                        fontSize: '12px',
+                        fontWeight: '600',
+                        color: '#333',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
+                      }}>
+                        {pin.title}
+                      </p>
+                    </div>
                   </div>
                 ))
               ) : (
-                // 검색어가 없을 때 최근 검색 지역
-                <div>
-                  {recentSearches.length > 0 ? (
-                    <div>
-                      <div style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        marginBottom: '16px'
-                      }}>
-                        <h2 style={{
-                          fontSize: '18px',
-                          fontWeight: 'bold',
-                          color: '#333'
-                        }}>
-                          최근 검색한 지역
-                        </h2>
-                        <button
-                          onClick={() => {
-                            setRecentSearches([]);
-                            localStorage.removeItem('recentSearches');
-                          }}
-                          style={{
-                            border: 'none',
-                            background: 'transparent',
-                            cursor: 'pointer',
-                            fontSize: '14px',
-                            color: '#666',
-                            padding: '4px 8px'
-                          }}
-                        >
-                          지우기
-                        </button>
-                      </div>
-                      <div style={{
-                        display: 'flex',
-                        flexWrap: 'wrap',
-                        gap: '8px'
-                      }}>
-                        {recentSearches.map((search, index) => (
-                          <button
-                            key={index}
-                            onClick={() => {
-                              setSearchQuery(search);
-                              setTimeout(() => {
-                                handleSearch({ preventDefault: () => {} });
-                                setShowSearchSheet(false);
-                              }, 100);
-                            }}
-                            style={{
-                              padding: '10px 16px',
-                              borderRadius: '20px',
-                              border: 'none',
-                              background: index === 0 ? '#00BCD4' : '#f5f5f5',
-                              color: index === 0 ? 'white' : '#333',
-                              fontSize: '14px',
-                              fontWeight: '500',
-                              cursor: 'pointer',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '8px',
-                              transition: 'all 0.2s'
-                            }}
-                          >
-                            <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
-                              history
-                            </span>
-                            {search}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  ) : (
-                    <div style={{
-                      padding: '40px 20px',
-                      textAlign: 'center',
-                      color: '#999',
-                      fontSize: '14px'
-                    }}>
-                      최근 검색한 지역이 없습니다
-                    </div>
-                  )}
+                <div style={{
+                  width: '100%',
+                  padding: '40px 20px',
+                  textAlign: 'center',
+                  color: '#999',
+                  fontSize: '14px'
+                }}>
+                  표시할 장소가 없습니다
                 </div>
               )}
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* 광고 모달 */}
-      {showAdModal && (
-        <div
-          onClick={() => {
-            // 광고를 봐야 하므로 외부 클릭으로 닫히지 않도록
-          }}
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: '68px',
-            background: 'rgba(0, 0, 0, 0.7)',
-            zIndex: 2000,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '20px'
-          }}
-        >
+        {/* 게시물 상세화면 모달 - 핸드폰 화면 안에서만 표시 */}
+        {selectedPost && (
           <div
-            onClick={(e) => e.stopPropagation()}
+            onClick={() => setSelectedPost(null)}
             style={{
-              background: 'white',
-              borderRadius: '24px',
-              width: '100%',
-              maxWidth: '400px',
-              maxHeight: '80vh',
-              overflow: 'hidden',
-              display: 'flex',
-              flexDirection: 'column',
-              boxShadow: '0 10px 40px rgba(0,0,0,0.3)'
-            }}
-          >
-            {/* 광고 헤더 */}
-            <div style={{
-              padding: '20px',
-              borderBottom: '1px solid #f0f0f0',
-              textAlign: 'center'
-            }}>
-              <h2 style={{
-                margin: 0,
-                fontSize: '20px',
-                fontWeight: 'bold',
-                color: '#333'
-              }}>
-                광고를 시청해주세요
-              </h2>
-              <p style={{
-                margin: '8px 0 0 0',
-                fontSize: '14px',
-                color: '#666'
-              }}>
-                광고를 보시면 도움 요청이 완료됩니다
-              </p>
-            </div>
-
-            {/* 광고 영역 */}
-            <div style={{
-              padding: '20px',
-              background: '#f5f5f5',
-              minHeight: '200px',
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: '68px',
+              background: 'rgba(0, 0, 0, 0.5)',
+              zIndex: 1000,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              flex: 1
-            }}>
-              <div style={{
+              padding: '20px'
+            }}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: 'white',
+                borderRadius: '20px',
                 width: '100%',
-                height: '200px',
-                background: 'linear-gradient(135deg, #00BCD4 0%, #0097A7 100%)',
-                borderRadius: '12px',
+                maxWidth: 'calc(100% - 40px)',
+                maxHeight: 'calc(100vh - 200px)',
+                overflow: 'hidden',
+                display: 'flex',
+                flexDirection: 'column',
+                boxShadow: '0 10px 40px rgba(0,0,0,0.3)'
+              }}
+            >
+              {/* 헤더 */}
+              <div style={{
+                padding: '16px',
+                borderBottom: '1px solid #f0f0f0',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center',
-                color: 'white',
-                fontSize: '18px',
-                fontWeight: '600'
+                justifyContent: 'space-between'
               }}>
-                광고 영역
-                <br />
-                <span style={{ fontSize: '14px', opacity: 0.9, marginTop: '8px', display: 'block' }}>
-                  (실제 광고 서비스 연동 필요)
-                </span>
+                <h2 style={{
+                  margin: 0,
+                  fontSize: '18px',
+                  fontWeight: 'bold',
+                  color: '#333'
+                }}>
+                  {selectedPost.post.location || selectedPost.post.detailedLocation || '여행지'}
+                </h2>
+                <button
+                  onClick={() => setSelectedPost(null)}
+                  style={{
+                    width: '32px',
+                    height: '32px',
+                    borderRadius: '16px',
+                    border: 'none',
+                    background: '#f5f5f5',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: '20px', color: '#666' }}>
+                    close
+                  </span>
+                </button>
+              </div>
+
+              {/* 이미지 */}
+              <div style={{
+                width: '100%',
+                aspectRatio: '4/3',
+                overflow: 'hidden',
+                background: '#f5f5f5'
+              }}>
+                <img
+                  src={getDisplayImageUrl(selectedPost.post.images?.[0] ?? selectedPost.post.thumbnail ?? selectedPost.post.image ?? selectedPost.post.imageUrl)}
+                  alt={selectedPost.post.location || '여행지'}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover'
+                  }}
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                  }}
+                />
+              </div>
+
+              {/* 내용 */}
+              <div style={{
+                padding: '16px',
+                overflowY: 'auto',
+                flex: 1
+              }}>
+                {selectedPost.post.note && (
+                  <p style={{
+                    margin: '0 0 12px 0',
+                    fontSize: '14px',
+                    color: '#666',
+                    lineHeight: '1.6'
+                  }}>
+                    {selectedPost.post.note}
+                  </p>
+                )}
+
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  marginTop: '12px',
+                  paddingTop: '12px',
+                  borderTop: '1px solid #f0f0f0'
+                }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: '18px', color: '#00BCD4' }}>
+                    location_on
+                  </span>
+                  <span style={{
+                    fontSize: '13px',
+                    color: '#999'
+                  }}>
+                    {selectedPost.post.detailedLocation || selectedPost.post.location || '위치 정보 없음'}
+                  </span>
+                </div>
+
+                <button
+                  onClick={() => {
+                    navigate(`/post/${selectedPost.post.id}`, {
+                      state: {
+                        post: selectedPost.post,
+                        allPosts: selectedPost.allPosts,
+                        currentPostIndex: selectedPost.currentPostIndex
+                      }
+                    });
+                  }}
+                  style={{
+                    width: '100%',
+                    marginTop: '16px',
+                    padding: '12px',
+                    background: '#00BCD4',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '12px',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    cursor: 'pointer'
+                  }}
+                >
+                  전체 보기
+                </button>
               </div>
             </div>
+          </div>
+        )}
 
-            {/* 확인 버튼 */}
+        {/* 위치 선택 모드 하단 안내 */}
+        {isSelectingLocation && (
+          <div style={{
+            position: 'absolute',
+            bottom: '80px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 1003,
+            width: 'calc(100% - 32px)',
+            maxWidth: '400px'
+          }}>
             <div style={{
-              padding: '16px 20px 20px',
-              borderTop: '1px solid #f0f0f0',
-              background: '#fafafa'
+              background: 'white',
+              padding: '16px 20px',
+              borderRadius: '16px',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '12px'
             }}>
+              <span style={{
+                fontSize: '15px',
+                fontWeight: '600',
+                color: '#00BCD4',
+                textAlign: 'center'
+              }}>
+                위치를 설정하세요
+              </span>
               <button
-                onClick={handleAdComplete}
+                onClick={() => {
+                  setIsSelectingLocation(false);
+                  // 선택된 위치에 일반 마커 표시
+                  if (map && selectedSOSLocation) {
+                    updateSOSMarker(map, selectedSOSLocation);
+                  }
+                  setShowSOSModal(true);
+                }}
                 style={{
                   width: '100%',
-                  padding: '16px',
+                  padding: '14px',
                   background: '#00BCD4',
-                  color: 'white',
                   border: 'none',
                   borderRadius: '12px',
-                  fontSize: '16px',
-                  fontWeight: 'bold',
+                  fontSize: '15px',
+                  fontWeight: '600',
+                  color: 'white',
                   cursor: 'pointer',
                   transition: 'all 0.2s'
                 }}
@@ -4019,14 +3776,673 @@ const MapScreen = () => {
                   e.currentTarget.style.transform = 'scale(1)';
                 }}
               >
-                광고 시청 완료
+                완료
               </button>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-    </div>
+        {/* 도움 요청 모달 */}
+        {showSOSModal && !isSelectingLocation && (
+          <>
+            {/* 모달 배경 - 지도가 보이도록 반투명 */}
+            <div
+              onClick={handleSOSModalClose}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: '68px',
+                background: 'rgba(0, 0, 0, 0.3)',
+                zIndex: 1000,
+                pointerEvents: 'auto'
+              }}
+            />
+            <div
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: '68px',
+                zIndex: 1001,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '20px',
+                pointerEvents: 'none'
+              }}
+            >
+              <div
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  background: 'white',
+                  borderRadius: '24px',
+                  width: '100%',
+                  maxWidth: '400px',
+                  maxHeight: '70vh',
+                  overflow: 'hidden',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  boxShadow: '0 10px 40px rgba(0,0,0,0.3)',
+                  pointerEvents: 'auto'
+                }}
+              >
+                {/* 헤더 */}
+                <div style={{
+                  padding: '16px 20px 12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  borderBottom: '1px solid #f0f0f0'
+                }}>
+                  <span style={{
+                    fontSize: '18px',
+                    fontWeight: 'bold',
+                    color: '#333'
+                  }}>
+                    도움 요청
+                  </span>
+                  <button
+                    onClick={handleSOSModalClose}
+                    style={{
+                      width: '28px',
+                      height: '28px',
+                      borderRadius: '14px',
+                      border: 'none',
+                      background: '#f5f5f5',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: '18px', color: '#666' }}>
+                      close
+                    </span>
+                  </button>
+                </div>
+
+                {/* 내용 */}
+                <div style={{
+                  padding: '16px 20px',
+                  overflowY: 'auto',
+                  flex: 1
+                }}>
+                  {/* 위치 선택 */}
+                  <div style={{ marginBottom: '16px' }}>
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      marginBottom: '10px'
+                    }}>
+                      <span style={{
+                        fontSize: '14px',
+                        fontWeight: '600',
+                        color: '#333'
+                      }}>
+                        위치
+                      </span>
+                      {selectedSOSLocation && (
+                        <span style={{
+                          fontSize: '12px',
+                          color: '#00BCD4',
+                          fontWeight: '600'
+                        }}>
+                          선택됨
+                        </span>
+                      )}
+                    </div>
+
+                    {selectedSOSLocation && (
+                      <div style={{
+                        marginBottom: '10px',
+                        padding: '0',
+                        background: '#f0f9fa',
+                        border: '1px solid #00BCD4',
+                        borderRadius: '12px',
+                        overflow: 'hidden'
+                      }}>
+                        <div
+                          id="location-preview-map"
+                          style={{
+                            width: '100%',
+                            height: '120px',
+                            borderRadius: '12px'
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    <button
+                      onClick={handleStartLocationSelection}
+                      style={{
+                        width: '100%',
+                        padding: '12px',
+                        background: '#f5f5f5',
+                        border: '1px solid #e0e0e0',
+                        borderRadius: '12px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px',
+                        fontSize: '14px',
+                        fontWeight: '500',
+                        color: '#666',
+                        transition: 'all 0.2s'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = '#eeeeee';
+                        e.currentTarget.style.borderColor = '#00BCD4';
+                        e.currentTarget.style.color = '#00BCD4';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = '#f5f5f5';
+                        e.currentTarget.style.borderColor = '#e0e0e0';
+                        e.currentTarget.style.color = '#666';
+                      }}
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
+                        map
+                      </span>
+                      {selectedSOSLocation ? '위치 다시 선택하기' : '지도에서 위치 선택하기'}
+                    </button>
+                  </div>
+
+                  {/* 내용 입력 */}
+                  <div>
+                    <span style={{
+                      fontSize: '14px',
+                      fontWeight: '600',
+                      color: '#333',
+                      display: 'block',
+                      marginBottom: '10px'
+                    }}>
+                      내용
+                    </span>
+                    <textarea
+                      value={sosQuestion}
+                      onChange={(e) => setSosQuestion(e.target.value)}
+                      placeholder="무엇이 궁금하신가요?"
+                      style={{
+                        width: '100%',
+                        minHeight: '80px',
+                        padding: '12px',
+                        border: '1px solid #e0e0e0',
+                        borderRadius: '12px',
+                        fontSize: '14px',
+                        fontFamily: 'inherit',
+                        resize: 'vertical',
+                        outline: 'none',
+                        lineHeight: '1.6',
+                        background: '#fafafa'
+                      }}
+                      onFocus={(e) => {
+                        e.target.style.borderColor = '#00BCD4';
+                        e.target.style.background = 'white';
+                      }}
+                      onBlur={(e) => {
+                        e.target.style.borderColor = '#e0e0e0';
+                        e.target.style.background = '#fafafa';
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* 하단 버튼 */}
+                <div style={{
+                  padding: '12px 20px 16px',
+                  borderTop: '1px solid #f0f0f0',
+                  background: '#fafafa'
+                }}>
+                  <button
+                    onClick={handleSOSSubmit}
+                    disabled={!selectedSOSLocation || !sosQuestion.trim()}
+                    style={{
+                      width: '100%',
+                      padding: '14px',
+                      background: selectedSOSLocation && sosQuestion.trim() ? '#00BCD4' : '#ddd',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '12px',
+                      fontSize: '15px',
+                      fontWeight: 'bold',
+                      cursor: selectedSOSLocation && sosQuestion.trim() ? 'pointer' : 'not-allowed',
+                      transition: 'all 0.2s',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (selectedSOSLocation && sosQuestion.trim()) {
+                        e.currentTarget.style.background = '#00ACC1';
+                        e.currentTarget.style.transform = 'scale(1.02)';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (selectedSOSLocation && sosQuestion.trim()) {
+                        e.currentTarget.style.background = '#00BCD4';
+                        e.currentTarget.style.transform = 'scale(1)';
+                      }
+                    }}
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
+                      send
+                    </span>
+                    요청하기
+                  </button>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* 검색 시트 모달 */}
+        {showSearchSheet && (
+          <div
+            onClick={() => setShowSearchSheet(false)}
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgba(0, 0, 0, 0.8)',
+              zIndex: 2000,
+              display: 'flex',
+              alignItems: 'flex-start',
+              pointerEvents: 'auto'
+            }}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: 'white',
+                width: '100%',
+                height: '100vh',
+                borderBottomLeftRadius: '0',
+                borderBottomRightRadius: '0',
+                boxShadow: '0 -4px 20px rgba(0,0,0,0.2)',
+                display: 'flex',
+                flexDirection: 'column'
+              }}
+            >
+              {/* 헤더 */}
+              <div style={{
+                padding: '20px',
+                borderBottom: '1px solid #f0f0f0',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px'
+              }}>
+                <div style={{
+                  flex: 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  background: '#f5f5f5',
+                  borderRadius: '24px',
+                  padding: '12px 20px',
+                  gap: '12px'
+                }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: '24px', color: '#666' }}>
+                    search
+                  </span>
+                  <input
+                    type="text"
+                    placeholder="지역 또는 장소명 검색 (예: 서울 올림픽 공원, 카페, 맛집)"
+                    value={searchQuery}
+                    onChange={(e) => handleSearchInput(e.target.value)}
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter') {
+                        handleSearch(e);
+                        setShowSearchSheet(false);
+                      }
+                    }}
+                    autoFocus
+                    style={{
+                      flex: 1,
+                      border: 'none',
+                      background: 'transparent',
+                      outline: 'none',
+                      fontSize: '16px',
+                      color: '#333',
+                      fontWeight: '400'
+                    }}
+                  />
+                  {searchQuery && (
+                    <button
+                      onClick={() => {
+                        setSearchQuery('');
+                        setFilteredRegions([]);
+                        setSearchSuggestions([]);
+                      }}
+                      style={{
+                        border: 'none',
+                        background: 'transparent',
+                        cursor: 'pointer',
+                        padding: '4px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: '20px', color: '#666' }}>
+                        close
+                      </span>
+                    </button>
+                  )}
+                </div>
+                <button
+                  onClick={() => setShowSearchSheet(false)}
+                  style={{
+                    width: '40px',
+                    height: '40px',
+                    borderRadius: '20px',
+                    border: 'none',
+                    background: '#f5f5f5',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: '24px', color: '#666' }}>
+                    close
+                  </span>
+                </button>
+              </div>
+
+              {/* 검색 결과 또는 최근 검색 지역 */}
+              <div style={{
+                flex: 1,
+                overflowY: 'auto',
+                padding: '20px'
+              }}>
+                {searchQuery.trim() ? (
+                  // 검색어가 있을 때 자동완성 결과
+                  (searchSuggestions.length > 0 ? (
+                    <div>
+                      {searchSuggestions.map((suggestion, index) => (
+                        <div
+                          key={index}
+                          onClick={() => handleSuggestionClick(suggestion)}
+                          style={{
+                            padding: '12px 16px',
+                            borderRadius: '12px',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '12px',
+                            marginBottom: '8px',
+                            transition: 'background 0.2s',
+                            background: '#fafafa'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = '#f0f0f0';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = '#fafafa';
+                          }}
+                        >
+                          <span className="material-symbols-outlined" style={{
+                            fontSize: '24px',
+                            color: suggestion.type === 'recommended_region' ? '#9C27B0'
+                              : suggestion.type === 'region' ? '#00BCD4'
+                                : suggestion.type === 'hashtag' ? '#9C27B0'
+                                  : suggestion.type === 'tourist' ? '#2196F3'
+                                    : suggestion.type === 'restaurant' ? '#FF5722'
+                                      : suggestion.type === 'cafe' ? '#795548'
+                                        : suggestion.type === 'park' ? '#4CAF50'
+                                          : '#FF9800'
+                          }}>
+                            {suggestion.type === 'recommended_region' ? 'recommendation'
+                              : suggestion.type === 'region' ? 'location_on'
+                                : suggestion.type === 'hashtag' ? 'tag'
+                                  : suggestion.type === 'tourist' ? 'tour'
+                                    : suggestion.type === 'restaurant' ? 'restaurant'
+                                      : suggestion.type === 'cafe' ? 'local_cafe'
+                                        : suggestion.type === 'park' ? 'park'
+                                          : 'place'}
+                          </span>
+                          <span style={{
+                            fontSize: '16px',
+                            fontWeight: '500',
+                            color: '#333',
+                            flex: 1
+                          }}>
+                            {suggestion.display}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{
+                      padding: '40px 20px',
+                      textAlign: 'center',
+                      color: '#999',
+                      fontSize: '14px'
+                    }}>
+                      검색 결과가 없습니다
+                    </div>
+                  ))
+                ) : (
+                  // 검색어가 없을 때 최근 검색 지역
+                  <div>
+                    {recentSearches.length > 0 ? (
+                      <div>
+                        <div style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          marginBottom: '16px'
+                        }}>
+                          <h2 style={{
+                            fontSize: '18px',
+                            fontWeight: 'bold',
+                            color: '#333'
+                          }}>
+                            최근 검색한 지역
+                          </h2>
+                          <button
+                            onClick={() => {
+                              setRecentSearches([]);
+                              localStorage.removeItem('recentSearches');
+                            }}
+                            style={{
+                              border: 'none',
+                              background: 'transparent',
+                              cursor: 'pointer',
+                              fontSize: '14px',
+                              color: '#666',
+                              padding: '4px 8px'
+                            }}
+                          >
+                            지우기
+                          </button>
+                        </div>
+                        <div style={{
+                          display: 'flex',
+                          flexWrap: 'wrap',
+                          gap: '8px'
+                        }}>
+                          {recentSearches.map((search, index) => (
+                            <button
+                              key={index}
+                              onClick={() => {
+                                setSearchQuery(search);
+                                setTimeout(() => {
+                                  handleSearch({ preventDefault: () => { } });
+                                  setShowSearchSheet(false);
+                                }, 100);
+                              }}
+                              style={{
+                                padding: '10px 16px',
+                                borderRadius: '20px',
+                                border: 'none',
+                                background: index === 0 ? '#00BCD4' : '#f5f5f5',
+                                color: index === 0 ? 'white' : '#333',
+                                fontSize: '14px',
+                                fontWeight: '500',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                                transition: 'all 0.2s'
+                              }}
+                            >
+                              <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
+                                history
+                              </span>
+                              {search}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{
+                        padding: '40px 20px',
+                        textAlign: 'center',
+                        color: '#999',
+                        fontSize: '14px'
+                      }}>
+                        최근 검색한 지역이 없습니다
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 광고 모달 */}
+        {showAdModal && (
+          <div
+            onClick={() => {
+              // 광고를 봐야 하므로 외부 클릭으로 닫히지 않도록
+            }}
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: '68px',
+              background: 'rgba(0, 0, 0, 0.7)',
+              zIndex: 2000,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '20px'
+            }}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: 'white',
+                borderRadius: '24px',
+                width: '100%',
+                maxWidth: '400px',
+                maxHeight: '80vh',
+                overflow: 'hidden',
+                display: 'flex',
+                flexDirection: 'column',
+                boxShadow: '0 10px 40px rgba(0,0,0,0.3)'
+              }}
+            >
+              {/* 광고 헤더 */}
+              <div style={{
+                padding: '20px',
+                borderBottom: '1px solid #f0f0f0',
+                textAlign: 'center'
+              }}>
+                <h2 style={{
+                  margin: 0,
+                  fontSize: '20px',
+                  fontWeight: 'bold',
+                  color: '#333'
+                }}>
+                  광고를 시청해주세요
+                </h2>
+                <p style={{
+                  margin: '8px 0 0 0',
+                  fontSize: '14px',
+                  color: '#666'
+                }}>
+                  광고를 보시면 도움 요청이 완료됩니다
+                </p>
+              </div>
+
+              {/* 광고 영역 */}
+              <div style={{
+                padding: '20px',
+                background: '#f5f5f5',
+                minHeight: '200px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flex: 1
+              }}>
+                <div style={{
+                  width: '100%',
+                  height: '200px',
+                  background: 'linear-gradient(135deg, #00BCD4 0%, #0097A7 100%)',
+                  borderRadius: '12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'white',
+                  fontSize: '18px',
+                  fontWeight: '600'
+                }}>
+                  광고 영역
+                  <br />
+                  <span style={{ fontSize: '14px', opacity: 0.9, marginTop: '8px', display: 'block' }}>
+                    (실제 광고 서비스 연동 필요)
+                  </span>
+                </div>
+              </div>
+
+              {/* 확인 버튼 */}
+              <div style={{
+                padding: '16px 20px 20px',
+                borderTop: '1px solid #f0f0f0',
+                background: '#fafafa'
+              }}>
+                <button
+                  onClick={handleAdComplete}
+                  style={{
+                    width: '100%',
+                    padding: '16px',
+                    background: '#00BCD4',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '12px',
+                    fontSize: '16px',
+                    fontWeight: 'bold',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = '#00ACC1';
+                    e.currentTarget.style.transform = 'scale(1.02)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = '#00BCD4';
+                    e.currentTarget.style.transform = 'scale(1)';
+                  }}
+                >
+                  광고 시청 완료
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+      </div>
     </>
   );
 };

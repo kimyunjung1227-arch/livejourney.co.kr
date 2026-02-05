@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { logger } from '../utils/logger';
 
 const AuthCallbackScreen = () => {
   const navigate = useNavigate();
@@ -17,7 +18,7 @@ const AuthCallbackScreen = () => {
         const errorMsg = searchParams.get('error');
 
         if (errorMsg) {
-          console.error('소셜 로그인 오류:', errorMsg);
+          logger.error('소셜 로그인 오류:', errorMsg);
           setError(errorMsg);
           setTimeout(() => {
             navigate('/start', { replace: true });
@@ -41,12 +42,17 @@ const AuthCallbackScreen = () => {
             // 사용자 정보 업데이트 이벤트 발생
             window.dispatchEvent(new Event('userUpdated'));
             
-            console.log('✅ 소셜 로그인 성공:', user);
+            logger.log('✅ 소셜 로그인 성공:', user);
             
-            // 소셜 로그인 후에는 프로필 화면으로 이동
-            navigate('/profile', { replace: true });
+            // 소셜 로그인 후: 처음이라면 관심 지역 설정, 그 이후에는 메인으로 이동
+            const hasCompletedInterest = localStorage.getItem('hasCompletedInterestSetup') === 'true';
+            if (!hasCompletedInterest) {
+              navigate('/interest-places', { replace: true });
+            } else {
+              navigate('/main', { replace: true });
+            }
           } catch (parseError) {
-            console.error('사용자 정보 파싱 오류:', parseError);
+            logger.error('사용자 정보 파싱 오류:', parseError);
             setError('사용자 정보를 처리할 수 없습니다.');
             setTimeout(() => {
               navigate('/start', { replace: true });
@@ -60,7 +66,7 @@ const AuthCallbackScreen = () => {
           }, 3000);
         }
       } catch (err) {
-        console.error('콜백 처리 오류:', err);
+        logger.error('콜백 처리 오류:', err);
         setError('로그인 처리 중 오류가 발생했습니다.');
         setTimeout(() => {
           navigate('/start', { replace: true });

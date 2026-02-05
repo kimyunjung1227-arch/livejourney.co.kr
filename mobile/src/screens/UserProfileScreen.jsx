@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   ScrollView,
   SafeAreaView,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   Image,
   ActivityIndicator,
   Modal,
@@ -13,10 +14,14 @@ import {
 import { useNavigation, useRoute } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
+import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
+import { useAuth } from '../contexts/AuthContext';
 import { COLORS, SPACING, TYPOGRAPHY } from '../constants/styles';
 import { getUserDailyTitle } from '../utils/dailyTitleSystem';
-import { getEarnedBadgesForUser, BADGES } from '../utils/badgeSystem';
+import { getEarnedBadgesForUser, BADGES, getBadgeDisplayName } from '../utils/badgeSystem';
 import { getUserLevel } from '../utils/levelSystem';
+import { getCoordinatesByLocation } from '../utils/regionLocationMapping';
+import { follow, unfollow, isFollowing, getFollowerCount, getFollowingCount } from '../utils/followSystem';
 import PostGridItem from '../components/PostGridItem';
 import { ScreenLayout, ScreenContent, ScreenHeader, ScreenBody } from '../components/ScreenLayout';
 
@@ -24,6 +29,7 @@ const UserProfileScreen = () => {
   const navigation = useNavigation();
   const route = useRoute();
   const { userId, username: passedUsername } = route.params || {};
+  const { user: currentUser } = useAuth();
   
   const [user, setUser] = useState(null);
   const [userPosts, setUserPosts] = useState([]);
@@ -38,6 +44,25 @@ const UserProfileScreen = () => {
   const [loading, setLoading] = useState(true);
   const [showAllBadges, setShowAllBadges] = useState(false);
   const [levelInfo, setLevelInfo] = useState(null);
+  const [selectedDate, setSelectedDate] = useState('');
+  const [availableDates, setAvailableDates] = useState([]);
+  const [selectedPost, setSelectedPost] = useState(null); // 여행 지도 핀 클릭 시 가벼운 사진상세 모달용
+  const [isFollow, setIsFollow] = useState(false);
+  const [followerCount, setFollowerCount] = useState(0);
+  const [followingCount, setFollowingCount] = useState(0);
+  const [followLoading, setFollowLoading] = useState(false);
+
+  const loadFollowData = useCallback(async () => {
+    if (!userId) return;
+    const [fc, fing, isf] = await Promise.all([
+      getFollowerCount(userId),
+      getFollowingCount(userId),
+      isFollowing(null, userId),
+    ]);
+    setFollowerCount(fc);
+    setFollowingCount(fing);
+    setIsFollow(isf);
+  }, [userId]);
 
   useEffect(() => {
     if (!userId) {
@@ -46,6 +71,10 @@ const UserProfileScreen = () => {
     }
     loadUserData();
   }, [userId, navigation]);
+
+  useEffect(() => {
+    loadFollowData();
+  }, [userId, loadFollowData]);
 
   const loadUserData = async () => {
     try {
@@ -58,7 +87,9 @@ const UserProfileScreen = () => {
       setRepresentativeBadge(null);
       setStats({ posts: 0, likes: 0, comments: 0 });
       setDailyTitle(null);
-      
+      setSelectedDate('');
+      setAvailableDates([]);
+
       // 해당 사용자의 정보 찾기 (게시물에서)
       const uploadedPostsJson = await AsyncStorage.getItem('uploadedPosts');
       const uploadedPosts = uploadedPostsJson ? JSON.parse(uploadedPostsJson) : [];
@@ -172,6 +203,18 @@ const UserProfileScreen = () => {
         return postUserId === userId;
       });
       setUserPosts(posts);
+
+      // 사용 가능한 날짜 목록 (최신순) - 사진/동영상이 있는 게시물이 있는 날만 표시
+      const postsWithMedia = posts.filter(
+        (p) => (p.images && p.images.length > 0) || p.image || p.imageUrl || (p.videos && p.videos.length > 0)
+      );
+      const dates = [...new Set(
+        postsWithMedia.map((p) => {
+          const d = new Date(p.createdAt || p.timestamp || Date.now());
+          return d.toISOString().split('T')[0];
+        }).filter(Boolean)
+      )].sort((a, b) => new Date(b) - new Date(a));
+      setAvailableDates(dates);
       
       // 통계 계산
       const totalLikes = posts.reduce((sum, post) => sum + (post.likes || 0), 0);
@@ -193,14 +236,63 @@ const UserProfileScreen = () => {
     }
   };
 
+  // 날짜별 필터된 게시물 (지도 + 그리드 공통) + 항상 날짜순(최신순) 정렬
+  const filteredUserPosts = useMemo(() => {
+    let list = userPosts;
+    if (selectedDate) {
+      const filterDate = new Date(selectedDate);
+      filterDate.setHours(0, 0, 0, 0);
+      const nextDay = new Date(filterDate);
+      nextDay.setDate(nextDay.getDate() + 1);
+      list = userPosts.filter((p) => {
+        const postDate = new Date(p.createdAt || p.timestamp || Date.now());
+        postDate.setHours(0, 0, 0, 0);
+        return postDate >= filterDate && postDate < nextDay;
+      });
+    }
+    // 사용자가 올린 피드를 날짜순(최신순)으로 정렬
+    return [...list].sort((a, b) => {
+      const ta = (a.createdAt || a.timestamp || 0) ? new Date(a.createdAt || a.timestamp).getTime() : 0;
+      const tb = (b.createdAt || b.timestamp || 0) ? new Date(b.createdAt || b.timestamp).getTime() : 0;
+      return tb - ta;
+    });
+  }, [userPosts, selectedDate]);
+
   const handlePostPress = (post, index) => {
     navigation.navigate('PostDetail', {
       postId: post.id,
       post: post,
-      allPosts: userPosts,
-      currentPostIndex: index >= 0 ? index : userPosts.findIndex(p => p.id === post.id),
+      allPosts: filteredUserPosts,
+      currentPostIndex: index >= 0 ? index : filteredUserPosts.findIndex(p => p.id === post.id),
     });
   };
+
+  // 지도에 표시할 게시물 (filteredUserPosts 중 coordinates 또는 지역명으로 좌표 추출 가능)
+  const postsForMap = useMemo(() => {
+    return filteredUserPosts
+      .map((p) => {
+        const c = p.coordinates || getCoordinatesByLocation(p.detailedLocation || p.location);
+        return c && c.lat != null && c.lng != null ? { ...p, _coords: c } : null;
+      })
+      .filter(Boolean);
+  }, [filteredUserPosts]);
+
+  // 여행 지도 영역 (다른 사용자도 볼 수 있음)
+  const mapRegion = useMemo(() => {
+    if (postsForMap.length === 0) return null;
+    const lats = postsForMap.map((p) => p._coords.lat);
+    const lngs = postsForMap.map((p) => p._coords.lng);
+    const minLat = Math.min(...lats);
+    const maxLat = Math.max(...lats);
+    const minLng = Math.min(...lngs);
+    const maxLng = Math.max(...lngs);
+    return {
+      latitude: (minLat + maxLat) / 2,
+      longitude: (minLng + maxLng) / 2,
+      latitudeDelta: Math.max((maxLat - minLat) * 1.5, 0.01),
+      longitudeDelta: Math.max((maxLng - minLng) * 1.5, 0.01),
+    };
+  }, [postsForMap]);
 
   if (loading) {
     return (
@@ -264,7 +356,7 @@ const UserProfileScreen = () => {
                         {representativeBadge.icon}
                       </Text>
                       <Text style={styles.representativeBadgeName} numberOfLines={1}>
-                        {representativeBadge.name}
+                        {getBadgeDisplayName(representativeBadge)}
                       </Text>
                     </View>
                   )}
@@ -297,14 +389,50 @@ const UserProfileScreen = () => {
                     <Text style={styles.titleText}>{dailyTitle.name}</Text>
                   </View>
                 )}
+                {/* 팔로우 버튼: 로그인 + 다른 사용자 프로필일 때만 */}
+                {currentUser && String(currentUser.id) !== String(userId) && (
+                  <TouchableOpacity
+                    onPress={async () => {
+                      if (followLoading) return;
+                      setFollowLoading(true);
+                      if (isFollow) {
+                        await unfollow(userId);
+                        setIsFollow(false);
+                        setFollowerCount((c) => Math.max(0, c - 1));
+                      } else {
+                        await follow(userId);
+                        setIsFollow(true);
+                        setFollowerCount((c) => c + 1);
+                      }
+                      setFollowLoading(false);
+                    }}
+                    disabled={followLoading}
+                    style={[
+                      styles.followButton,
+                      isFollow && styles.followButtonFollowing,
+                    ]}
+                  >
+                    <Text style={[styles.followButtonText, isFollow && styles.followButtonTextFollowing]}>
+                      {isFollow ? '팔로잉' : '팔로우'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </View>
           </View>
 
           {/* 통계 정보 */}
-          <View style={styles.statsSection}>
+          <View style={[styles.statsSection, { flexWrap: 'wrap' }]}>
             <View style={styles.statItem}>
               <Text style={styles.statNumber}>{stats.posts}</Text>
               <Text style={styles.statLabel}>게시물</Text>
+            </View>
+            <View style={styles.statItem}>
+              <Text style={styles.statNumber}>{followerCount}</Text>
+              <Text style={styles.statLabel}>팔로워</Text>
+            </View>
+            <View style={styles.statItem}>
+              <Text style={styles.statNumber}>{followingCount}</Text>
+              <Text style={styles.statLabel}>팔로잉</Text>
             </View>
             <View style={styles.statItem}>
               <Text style={styles.statNumber}>{stats.likes}</Text>
@@ -317,6 +445,94 @@ const UserProfileScreen = () => {
           </View>
         </View>
 
+        {/* 날짜별 검색 - 여행 지도와 여행 기록에 공통 적용 */}
+        {userPosts.length > 0 && availableDates.length > 0 && (
+          <View style={styles.dateFilterSection}>
+            <Text style={styles.dateFilterLabel}>날짜별 보기</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dateFilterScroll}>
+              <TouchableOpacity
+                style={[styles.dateFilterChip, !selectedDate && styles.dateFilterChipActive]}
+                onPress={() => setSelectedDate('')}
+              >
+                <Text style={[styles.dateFilterChipText, !selectedDate && styles.dateFilterChipTextActive]}>전체</Text>
+              </TouchableOpacity>
+              {availableDates.map((date) => {
+                const dateObj = new Date(date);
+                const label = dateObj.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' });
+                const isSelected = selectedDate === date;
+                return (
+                  <TouchableOpacity
+                    key={date}
+                    style={[styles.dateFilterChip, isSelected && styles.dateFilterChipActive]}
+                    onPress={() => setSelectedDate(isSelected ? '' : date)}
+                  >
+                    <Text style={[styles.dateFilterChipText, isSelected && styles.dateFilterChipTextActive]}>{label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        )}
+
+        {/* 여행 지도 - 이 사용자가 다녀온 장소를 지도에 표시 (다른 사용자도 볼 수 있음) */}
+        {userPosts.length > 0 && (
+          <View style={styles.travelMapSection}>
+            <View style={styles.travelMapTitleRow}>
+              <Ionicons name="map" size={18} color={COLORS.primary} style={{ marginRight: 6 }} />
+              <Text style={styles.travelMapTitle}>{user.username || '사용자'}의 여행 지도</Text>
+            </View>
+            {filteredUserPosts.length === 0 ? (
+              <View style={styles.travelMapPlaceholder}>
+                <Text style={styles.travelMapPlaceholderText}>이 날짜에 등록한 게시물이 없습니다</Text>
+              </View>
+            ) : postsForMap.length === 0 ? (
+              <View style={styles.travelMapPlaceholder}>
+                <Text style={styles.travelMapPlaceholderText}>
+                  {selectedDate ? '이 날짜에 위치 정보가 있는 장소가 없습니다' : '방문한 장소 중 위치 정보가 있는 곳이 없습니다'}
+                </Text>
+              </View>
+            ) : mapRegion ? (
+              <View style={styles.travelMapContainer}>
+                <MapView
+                  style={styles.travelMap}
+                  provider={PROVIDER_GOOGLE}
+                  initialRegion={mapRegion}
+                  region={mapRegion}
+                  scrollEnabled={false}
+                  zoomEnabled={false}
+                  showsUserLocation={false}
+                >
+                  <Polyline
+                    coordinates={[...postsForMap]
+                      .sort((a, b) => new Date(a.createdAt || a.timestamp || 0) - new Date(b.createdAt || b.timestamp || 0))
+                      .map((p) => ({ latitude: p._coords.lat, longitude: p._coords.lng }))}
+                    strokeColor="#14B8A6"
+                    strokeWidth={3}
+                  />
+                  {postsForMap.map((post, index) => (
+                    <Marker
+                      key={post.id || index}
+                      coordinate={{ latitude: post._coords.lat, longitude: post._coords.lng }}
+                      onPress={() => {
+                        const idx = filteredUserPosts.findIndex((p) => p.id === post.id);
+                        setSelectedPost({ post, allPosts: filteredUserPosts, currentPostIndex: idx >= 0 ? idx : 0 });
+                      }}
+                    >
+                      <View style={styles.travelMapMarker}>
+                        <Image
+                          source={{ uri: post.images?.[0] || post.imageUrl || post.image }}
+                          style={styles.travelMapMarkerImage}
+                          resizeMode="cover"
+                        />
+                      </View>
+                    </Marker>
+                  ))}
+                </MapView>
+              </View>
+            ) : null}
+          </View>
+        )}
+
         {/* 여행 기록 그리드 */}
         <View style={styles.postsSection}>
           {userPosts.length === 0 ? (
@@ -324,9 +540,14 @@ const UserProfileScreen = () => {
               <Ionicons name="images-outline" size={64} color={COLORS.textSubtle} />
               <Text style={styles.emptyText}>아직 업로드한 사진이 없습니다</Text>
             </View>
+          ) : filteredUserPosts.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Ionicons name="calendar-outline" size={64} color={COLORS.textSubtle} />
+              <Text style={styles.emptyText}>이 날짜에 등록한 게시물이 없습니다</Text>
+            </View>
           ) : (
             <View style={styles.postsGrid}>
-              {userPosts.map((post, index) => (
+              {filteredUserPosts.map((post, index) => (
                 <PostGridItem
                   key={post.id || index}
                   post={post}
@@ -335,12 +556,72 @@ const UserProfileScreen = () => {
                   isSelected={false}
                   onPress={handlePostPress}
                   onToggleSelection={() => {}}
+                  onTagPress={(t) => navigation.navigate('Search', { initialQuery: '#' + t })}
                 />
               ))}
             </View>
           )}
         </View>
         </ScreenBody>
+
+      {/* 여행 지도 핀 클릭 시 가벼운 사진상세 모달 (지도화면과 동일) */}
+      <Modal
+        visible={!!selectedPost}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setSelectedPost(null)}
+      >
+        {selectedPost ? (
+          <TouchableWithoutFeedback onPress={() => setSelectedPost(null)}>
+            <View style={styles.photoDetailOverlay}>
+              <TouchableWithoutFeedback onPress={() => {}}>
+                <View style={styles.photoDetailCard}>
+                  <View style={styles.photoDetailHeader}>
+                    <Text style={styles.photoDetailTitle} numberOfLines={1}>
+                      {selectedPost.post?.location || selectedPost.post?.detailedLocation || '여행지'}
+                    </Text>
+                    <TouchableOpacity onPress={() => setSelectedPost(null)} style={styles.photoDetailClose}>
+                      <Ionicons name="close" size={22} color={COLORS.text} />
+                    </TouchableOpacity>
+                  </View>
+                  <View style={styles.photoDetailImageWrap}>
+                    <Image
+                      source={{ uri: selectedPost.post?.images?.[0] || selectedPost.post?.imageUrl || selectedPost.post?.image || selectedPost.post?.thumbnail || '' }}
+                      style={styles.photoDetailImage}
+                      resizeMode="cover"
+                    />
+                  </View>
+                  <ScrollView style={styles.photoDetailBody} showsVerticalScrollIndicator={false}>
+                    {selectedPost.post?.note ? (
+                      <Text style={styles.photoDetailNote}>{selectedPost.post.note}</Text>
+                    ) : null}
+                    <View style={styles.photoDetailLocationRow}>
+                      <Ionicons name="location" size={18} color={COLORS.primary} />
+                      <Text style={styles.photoDetailLocation}>
+                        {selectedPost.post?.detailedLocation || selectedPost.post?.location || '위치 정보 없음'}
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.photoDetailFullButton}
+                      onPress={() => {
+                        setSelectedPost(null);
+                        navigation.navigate('PostDetail', {
+                          postId: selectedPost.post.id,
+                          post: selectedPost.post,
+                          allPosts: selectedPost.allPosts,
+                          currentPostIndex: selectedPost.currentPostIndex,
+                        });
+                      }}
+                    >
+                      <Text style={styles.photoDetailFullButtonText}>전체 보기</Text>
+                    </TouchableOpacity>
+                  </ScrollView>
+                </View>
+              </TouchableWithoutFeedback>
+            </View>
+          </TouchableWithoutFeedback>
+        ) : null}
+      </Modal>
 
       {/* 뱃지 모두보기 모달 */}
       <Modal
@@ -385,7 +666,7 @@ const UserProfileScreen = () => {
                         <Text style={styles.allBadgeIcon}>{earnedBadges[0].icon || '🏆'}</Text>
                       </View>
                       <Text style={styles.allBadgeName} numberOfLines={2}>
-                        {earnedBadges[0].name}
+                        {getBadgeDisplayName(earnedBadges[0])}
                       </Text>
                     </View>
                   ) : (
@@ -486,6 +767,27 @@ const styles = StyleSheet.create({
   levelText: {
     fontSize: 14,
     color: COLORS.textSecondary,
+  },
+  followButton: {
+    marginTop: SPACING.sm,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.lg,
+    borderRadius: 12,
+    backgroundColor: COLORS.primary,
+    alignSelf: 'flex-start',
+  },
+  followButtonFollowing: {
+    backgroundColor: COLORS.borderLight,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  followButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textWhite,
+  },
+  followButtonTextFollowing: {
+    color: COLORS.text,
   },
   username: {
     ...TYPOGRAPHY.h3,
@@ -617,6 +919,91 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  photoDetailOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: SPACING.lg,
+  },
+  photoDetailCard: {
+    width: '100%',
+    maxWidth: 360,
+    maxHeight: '80%',
+    backgroundColor: COLORS.backgroundLight,
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+  photoDetailHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  photoDetailTitle: {
+    flex: 1,
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: COLORS.text,
+    marginRight: SPACING.sm,
+  },
+  photoDetailClose: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: COLORS.borderLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  photoDetailImageWrap: {
+    width: '100%',
+    aspectRatio: 4 / 3,
+    backgroundColor: COLORS.borderLight,
+  },
+  photoDetailImage: {
+    width: '100%',
+    height: '100%',
+  },
+  photoDetailBody: {
+    maxHeight: 200,
+    paddingHorizontal: SPACING.lg,
+    paddingTop: SPACING.md,
+    paddingBottom: SPACING.lg,
+  },
+  photoDetailNote: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    lineHeight: 22,
+    marginBottom: SPACING.md,
+  },
+  photoDetailLocationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    paddingVertical: SPACING.sm,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+  photoDetailLocation: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    flex: 1,
+  },
+  photoDetailFullButton: {
+    marginTop: SPACING.md,
+    paddingVertical: SPACING.md,
+    borderRadius: 12,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center',
+  },
+  photoDetailFullButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textWhite,
+  },
   modalScrollView: {
     flex: 1,
   },
@@ -677,6 +1064,91 @@ const styles = StyleSheet.create({
     paddingTop: SPACING.lg,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
+  },
+  dateFilterSection: {
+    backgroundColor: COLORS.backgroundLight,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+  dateFilterLabel: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginBottom: SPACING.sm,
+  },
+  dateFilterScroll: {
+    flexDirection: 'row',
+  },
+  dateFilterChip: {
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderRadius: 20,
+    backgroundColor: COLORS.borderLight,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    marginRight: SPACING.sm,
+  },
+  dateFilterChipActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  dateFilterChipText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  dateFilterChipTextActive: {
+    color: COLORS.textWhite,
+  },
+  travelMapSection: {
+    backgroundColor: COLORS.backgroundLight,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.lg,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+  travelMapTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: SPACING.md,
+  },
+  travelMapTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: COLORS.text,
+  },
+  travelMapPlaceholder: {
+    height: 160,
+    borderRadius: 12,
+    backgroundColor: COLORS.borderLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  travelMapPlaceholderText: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+  },
+  travelMapContainer: {
+    height: 200,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  travelMap: {
+    width: '100%',
+    height: '100%',
+  },
+  travelMapMarker: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: 'white',
+  },
+  travelMapMarkerImage: {
+    width: '100%',
+    height: '100%',
   },
   statItem: {
     alignItems: 'center',

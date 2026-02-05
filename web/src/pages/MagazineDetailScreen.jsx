@@ -10,7 +10,7 @@ const MagazineDetailScreen = () => {
 
   if (!magazine) {
     return (
-      <div className="screen-layout bg-background-light dark:bg-background-dark">
+      <div className="screen-layout bg-background-light dark:bg-background-dark h-screen overflow-hidden">
         <div className="screen-content flex flex-col h-full">
           <div className="screen-header flex-shrink-0 flex items-center justify-between px-4 py-3 bg-white dark:bg-gray-900 border-b border-zinc-200 dark:border-zinc-800 shadow-sm">
             <button
@@ -43,14 +43,14 @@ const MagazineDetailScreen = () => {
 
   const createdDate = magazine.createdAt
     ? new Date(magazine.createdAt).toLocaleDateString('ko-KR', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-      })
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    })
     : null;
 
   return (
-    <div className="screen-layout bg-background-light dark:bg-background-dark">
+    <div className="screen-layout bg-background-light dark:bg-background-dark h-screen overflow-hidden">
       <div className="screen-content flex flex-col h-full">
         {/* 헤더 */}
         <div className="screen-header flex-shrink-0 flex items-center justify-between px-4 py-3 bg-white dark:bg-gray-900 border-b border-zinc-200 dark:border-zinc-800 shadow-sm">
@@ -77,8 +77,8 @@ const MagazineDetailScreen = () => {
                 backgroundImage: magazine.coverImage
                   ? `url("${magazine.coverImage}")`
                   : `url("https://source.unsplash.com/featured/?${encodeURIComponent(
-                      (magazine.regionName || 'travel') + ' landscape'
-                    )}")`,
+                    (magazine.regionName || 'travel') + ' landscape'
+                  )}")`,
                 backgroundSize: 'cover',
                 backgroundPosition: 'center',
               }}
@@ -128,7 +128,7 @@ const MagazineDetailScreen = () => {
               <button
                 onClick={() =>
                   navigate(`/region/${magazine.regionName}`, {
-                    state: { 
+                    state: {
                       region: { name: magazine.regionName },
                       focusLocation: magazine.detailedLocation || magazine.regionName,
                     },

@@ -48,14 +48,20 @@ const calculateRegionStats = (posts, regionName) => {
     bloomPercentage: Math.round(bloomPercentage * 10) / 10,
     activityScore: Math.round(activityScore * 10) / 10,
     popularityScore: Math.round(popularityScore * 10) / 10,
-    // 대표 이미지 (가장 최근 게시물의 이미지)
-    representativeImage: regionPosts
-      .filter(p => p.image || p.images?.[0])
-      .sort((a, b) => {
-        const timeA = a.timestamp || a.createdAt || a.time || 0;
-        const timeB = b.timestamp || b.createdAt || b.time || 0;
-        return timeB - timeA;
-      })[0]?.image || regionPosts[0]?.images?.[0] || null,
+    // 대표 이미지 (가장 최근 게시물의 images[0] → thumbnail → image)
+    representativeImage: (() => {
+      const withImage = regionPosts
+        .filter(p => p.images?.[0] || p.thumbnail || p.image)
+        .sort((a, b) => {
+          const timeA = a.timestamp || a.createdAt || a.time || 0;
+          const timeB = b.timestamp || b.createdAt || b.time || 0;
+          return timeB - timeA;
+        });
+      const first = withImage[0];
+      if (!first) return null;
+      const raw = first.images?.[0] ?? first.thumbnail ?? first.image;
+      return typeof raw === 'string' ? raw : (raw?.url ?? raw?.src ?? null);
+    })(),
     // 최근 게시물 샘플
     recentPosts: recentPosts.slice(0, 3)
   };

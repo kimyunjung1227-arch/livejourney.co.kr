@@ -15,17 +15,20 @@ import {
 import { useNavigation, useRoute } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, TYPOGRAPHY } from '../constants/styles';
 import { filterRecentPosts, getTimeAgo } from '../utils/timeUtils';
 import { isPostLiked } from '../utils/socialInteractions';
 import { toggleInterestPlace, isInterestPlace } from '../utils/interestPlaces';
 import { ScreenLayout, ScreenContent, ScreenHeader, ScreenBody } from '../components/ScreenLayout';
 import { getLandmarksByRegion, isPostMatchingLandmarks } from '../utils/regionLandmarks';
+import { getRegionDefaultImage } from '../utils/regionDefaultImages';
+import { getCombinedPosts } from '../utils/mockData';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // PostItem 컴포넌트 (RegionDetailScreen 전용)
-const PostItem = ({ item, index, onPress }) => {
+const PostItem = ({ item, index, onPress, onTagPress }) => {
   const [isLiked, setIsLiked] = useState(false);
   const imageUrl = item.imageUrl || item.images?.[0] || item.image;
   const likeCount = item.likes || item.likeCount || 0;
@@ -76,14 +79,9 @@ const PostItem = ({ item, index, onPress }) => {
             {item.detailedLocation || item.placeName || item.location || '여행지'}
           </Text>
           {item.time && (
-            <Text style={regionStyles.timeText}>{item.time}</Text>
+            <Text style={regionStyles.timeText}>{item.timeLabel || item.time}</Text>
           )}
         </View>
-        {item.detailedLocation && item.detailedLocation !== item.location && (
-          <Text style={regionStyles.subLocationText} numberOfLines={1}>
-            {item.location}
-          </Text>
-        )}
         {item.tags && item.tags.length > 0 && (
           <ScrollView
             horizontal
@@ -91,19 +89,15 @@ const PostItem = ({ item, index, onPress }) => {
             style={regionStyles.tagsScroll}
             contentContainerStyle={regionStyles.tagsScrollContent}
           >
-            {item.tags.slice(0, 5).map((tag, tagIndex) => (
-              <View key={tagIndex} style={regionStyles.tagBadge}>
-                <Text style={regionStyles.tagText}>
-                  #{typeof tag === 'string' ? tag.replace('#', '') : tag}
-                </Text>
-              </View>
-            ))}
+            {item.tags.slice(0, 5).map((tag, tagIndex) => {
+              const t = typeof tag === 'string' ? tag.replace(/^#+/, '') : (tag.display || tag.name);
+              return (
+                <View key={tagIndex} style={regionStyles.tagBadge}>
+                  <Text style={regionStyles.tagText}>#{t}</Text>
+                </View>
+              );
+            })}
           </ScrollView>
-        )}
-        {item.note && (
-          <Text style={regionStyles.noteText} numberOfLines={2}>
-            {item.note}
-          </Text>
         )}
       </View>
     </TouchableOpacity>
@@ -116,219 +110,102 @@ const RegionDetailScreen = () => {
   const { regionName, focusLocation } = route.params || {};
   const region = route.params?.region || { name: regionName || '서울' };
 
+  // 검색 에러 방어: regionName이 없으면 뒤로가기
+  useEffect(() => {
+    if (!regionName && !route.params?.region) {
+      Alert.alert('알림', '지역 정보가 없습니다.', [{ text: '확인', onPress: () => navigation.goBack() }]);
+    }
+  }, [regionName]);
+
   const [realtimePhotos, setRealtimePhotos] = useState([]);
   const [bloomPhotos, setBloomPhotos] = useState([]);
   const [touristSpots, setTouristSpots] = useState([]);
   const [foodPhotos, setFoodPhotos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isInterest, setIsInterest] = useState(false);
-  const [selectedLandmarks, setSelectedLandmarks] = useState([]); // 선택된 명소 ID 목록
-  const [showLandmarkModal, setShowLandmarkModal] = useState(false); // 명소 선택 모달 표시 여부
-  
+  const [regionHashtags, setRegionHashtags] = useState([]);
+  const [activeCategory, setActiveCategory] = useState('전체');
+
   const [weatherInfo, setWeatherInfo] = useState({
     icon: '☀️',
     condition: '맑음',
-    temperature: '27℃',
+    temperature: '23℃',
     loading: false
   });
-  
+
   const [trafficInfo, setTrafficInfo] = useState({
     icon: '🚗',
     status: '교통 원활',
     loading: false
   });
 
-  // 시간을 숫자로 변환하는 함수 (정렬용)
-  const timeToMinutes = useCallback((timeLabel) => {
-    if (timeLabel === '방금') return 0;
-    if (timeLabel.includes('분 전')) return parseInt(timeLabel);
-    if (timeLabel.includes('시간 전')) return parseInt(timeLabel) * 60;
-    if (timeLabel.includes('일 전')) return parseInt(timeLabel) * 24 * 60;
-    return 999999;
-  }, []);
+  const categories = ['전체', '명소', '맛집', '카페', '개화'];
 
-  // 지역 데이터 로드
+  // 데이터 로드 및 필터링
   const loadRegionData = useCallback(async () => {
     try {
       setLoading(true);
       const uploadedPostsJson = await AsyncStorage.getItem('uploadedPosts');
-      let uploadedPosts = uploadedPostsJson ? JSON.parse(uploadedPostsJson) : [];
-      
-      // 2일 이상 된 게시물 필터링
-      uploadedPosts = filterRecentPosts(uploadedPosts, 2);
-      
-      let regionPosts = uploadedPosts
-        .filter(post => post.location?.includes(region.name) || post.location === region.name);
+      const allMockPosts = getCombinedPosts(JSON.parse(uploadedPostsJson || '[]'));
 
-      // 매거진 등에서 상세 위치(focusLocation)가 넘어온 경우, 해당 위치 중심으로 한 번 더 필터링
-      if (focusLocation) {
-        const focus = focusLocation.toLowerCase();
-        regionPosts = regionPosts.filter(post => {
-          const detailed = (post.detailedLocation || post.placeName || '').toLowerCase();
-          const locText = (post.location || '').toLowerCase();
-          return detailed.includes(focus) || locText.includes(focus);
+      // 해당 지역 게시물 필터링
+      const regionPosts = allMockPosts.filter(post =>
+        (post.location || '').includes(region.name) ||
+        (post.placeName || '').includes(region.name)
+      ).sort((a, b) => (b.timestamp || b.createdAt || 0) - (a.timestamp || a.createdAt || 0));
+
+      setRealtimePhotos(regionPosts);
+
+      // 카테고리별 분리
+      const bloom = regionPosts.filter(p => p.category === 'bloom' || (p.tags || []).includes('꽃') || (p.tags || []).includes('개화'));
+      const spots = regionPosts.filter(p => p.category === 'landmark' || p.category === 'scenic');
+      const food = regionPosts.filter(p => p.category === 'food');
+
+      setBloomPhotos(bloom);
+      setTouristSpots(spots);
+      setFoodPhotos(food);
+
+      // 지역 해시태그 수집
+      const tagsMap = new Map();
+      regionPosts.forEach(p => {
+        const tags = [...(p.tags || []), ...(p.aiLabels || [])];
+        tags.forEach(t => {
+          const display = typeof t === 'string' ? t : (t.display || t.name);
+          if (!display) return;
+          const key = display.replace(/^#+/, '').trim();
+          if (!key) return;
+          tagsMap.set(key, (tagsMap.get(key) || 0) + 1);
         });
-        console.log(`🎯 상세 위치 필터 적용: ${focusLocation} → ${regionPosts.length}개 게시물`);
-      }
+      });
+      const topTags = Array.from(tagsMap.entries())
+        .map(([name, count]) => ({ name, count }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 10);
+      setRegionHashtags(topTags);
 
-      // 선택된 명소로 필터링
-      if (selectedLandmarks.length > 0) {
-        regionPosts = regionPosts.filter(post => 
-          isPostMatchingLandmarks(post, selectedLandmarks, region.name)
-        );
-        console.log(`🏛️ 명소 필터 적용: ${selectedLandmarks.length}개 명소 → ${regionPosts.length}개 게시물`);
-      }
+      // 관심 지역 여부 확인
+      const interested = await isInterestPlace(region.name);
+      setIsInterest(interested);
 
-      regionPosts = regionPosts
-        .sort((a, b) => {
-          const timeA = timeToMinutes(a.timeLabel || '방금');
-          const timeB = timeToMinutes(b.timeLabel || '방금');
-          return timeA - timeB;
-        });
-      
-      const bloomPosts = regionPosts
-        .filter(post => post.category === 'bloom')
-        .map(post => ({
-          ...post, // 원본 게시물의 모든 필드 포함
-          id: post.id,
-          images: post.images || [],
-          videos: post.videos || [],
-          image: post.images?.[0] || post.videos?.[0] || post.image,
-          time: post.timeLabel || getTimeAgo(post.timestamp || post.createdAt || post.time),
-          timeLabel: post.timeLabel || getTimeAgo(post.timestamp || post.createdAt || post.time),
-          category: post.categoryName,
-          categoryName: post.categoryName,
-          labels: post.aiLabels,
-          detailedLocation: post.detailedLocation || post.placeName,
-          placeName: post.placeName,
-          address: post.address,
-          location: post.location,
-          tags: post.tags || post.aiLabels || [],
-          note: post.note || post.content,
-          likes: post.likes || post.likeCount || 0,
-          user: post.user || '여행자',
-          userId: post.userId,
-          comments: post.comments || [],
-          qnaList: post.qnaList || [],
-          timestamp: post.timestamp || post.createdAt || post.time,
-        }));
-      
-      const touristPosts = regionPosts
-        .filter(post => post.category === 'landmark' || post.category === 'scenic')
-        .map(post => ({
-          ...post, // 원본 게시물의 모든 필드 포함
-          id: post.id,
-          images: post.images || [],
-          videos: post.videos || [],
-          image: post.images?.[0] || post.videos?.[0] || post.image,
-          time: post.timeLabel || getTimeAgo(post.timestamp || post.createdAt || post.time),
-          timeLabel: post.timeLabel || getTimeAgo(post.timestamp || post.createdAt || post.time),
-          category: post.categoryName,
-          categoryName: post.categoryName,
-          labels: post.aiLabels,
-          detailedLocation: post.detailedLocation || post.placeName,
-          placeName: post.placeName,
-          address: post.address,
-          location: post.location,
-          tags: post.tags || post.aiLabels || [],
-          note: post.note || post.content,
-          likes: post.likes || post.likeCount || 0,
-          user: post.user || '여행자',
-          userId: post.userId,
-          comments: post.comments || [],
-          qnaList: post.qnaList || [],
-          timestamp: post.timestamp || post.createdAt || post.time,
-        }));
-      
-      const foodPosts = regionPosts
-        .filter(post => post.category === 'food')
-        .map(post => ({
-          ...post, // 원본 게시물의 모든 필드 포함
-          id: post.id,
-          images: post.images || [],
-          videos: post.videos || [],
-          image: post.images?.[0] || post.videos?.[0] || post.image,
-          time: post.timeLabel || getTimeAgo(post.timestamp || post.createdAt || post.time),
-          timeLabel: post.timeLabel || getTimeAgo(post.timestamp || post.createdAt || post.time),
-          category: post.categoryName,
-          categoryName: post.categoryName,
-          labels: post.aiLabels,
-          detailedLocation: post.detailedLocation || post.placeName,
-          placeName: post.placeName,
-          address: post.address,
-          location: post.location,
-          tags: post.tags || post.aiLabels || [],
-          note: post.note || post.content,
-          likes: post.likes || post.likeCount || 0,
-          user: post.user || '여행자',
-          userId: post.userId,
-          comments: post.comments || [],
-          qnaList: post.qnaList || [],
-          timestamp: post.timestamp || post.createdAt || post.time,
-        }));
-      
-      const realtimePosts = regionPosts
-        .map(post => ({
-          ...post, // 원본 게시물의 모든 필드 포함
-          id: post.id,
-          images: post.images || [],
-          videos: post.videos || [],
-          image: post.images?.[0] || post.videos?.[0] || post.image,
-          time: post.timeLabel || getTimeAgo(post.timestamp || post.createdAt || post.time),
-          timeLabel: post.timeLabel || getTimeAgo(post.timestamp || post.createdAt || post.time),
-          category: post.categoryName || '일반',
-          categoryName: post.categoryName,
-          labels: post.aiLabels,
-          detailedLocation: post.detailedLocation || post.placeName,
-          placeName: post.placeName,
-          address: post.address,
-          location: post.location,
-          tags: post.tags || post.aiLabels || [],
-          note: post.note || post.content,
-          likes: post.likes || post.likeCount || 0,
-          user: post.user || '여행자',
-          userId: post.userId,
-          comments: post.comments || [],
-          qnaList: post.qnaList || [],
-          timestamp: post.timestamp || post.createdAt || post.time,
-        }));
-      
-      setBloomPhotos(bloomPosts.slice(0, 6));
-      setTouristSpots(touristPosts.slice(0, 6));
-      setFoodPhotos(foodPosts.slice(0, 6));
-      setRealtimePhotos(realtimePosts.slice(0, 6));
     } catch (error) {
-      console.error('지역 데이터 로드 실패:', error);
+      console.error('Region data load error:', error);
     } finally {
       setLoading(false);
     }
-  }, [region.name, timeToMinutes, selectedLandmarks]);
+  }, [region.name]);
 
   // 날씨 정보 가져오기
   const fetchWeatherData = useCallback(async () => {
     setWeatherInfo(prev => ({ ...prev, loading: true }));
     try {
-      // Mock 데이터 (실제로는 API 호출)
       const mockWeatherData = {
         '서울': { icon: '☀️', condition: '맑음', temperature: '23℃' },
         '부산': { icon: '🌤️', condition: '구름조금', temperature: '25℃' },
-        '제주': { icon: '🌧️', condition: '비', temperature: '20℃' },
-        '인천': { icon: '☁️', condition: '흐림', temperature: '22℃' },
-        '대전': { icon: '☀️', condition: '맑음', temperature: '24℃' },
-        '대구': { icon: '☀️', condition: '맑음', temperature: '26℃' },
-        '광주': { icon: '🌤️', condition: '구름조금', temperature: '24℃' },
-        '울산': { icon: '🌤️', condition: '구름조금', temperature: '25℃' },
-        '강릉': { icon: '☀️', condition: '맑음', temperature: '21℃' },
-        '경주': { icon: '☀️', condition: '맑음', temperature: '24℃' }
+        '제주': { icon: '☀️', condition: '맑음', temperature: '24℃' },
       };
-      
-      const mockWeather = mockWeatherData[region.name] || mockWeatherData['서울'];
-      setWeatherInfo({
-        ...mockWeather,
-        loading: false
-      });
+      const mockWeather = mockWeatherData[region.name] || { icon: '☀️', condition: '맑음', temperature: '23℃' };
+      setWeatherInfo({ ...mockWeather, loading: false });
     } catch (error) {
-      console.error('날씨 정보 조회 실패:', error);
       setWeatherInfo(prev => ({ ...prev, loading: false }));
     }
   }, [region.name]);
@@ -337,27 +214,8 @@ const RegionDetailScreen = () => {
   const fetchTrafficData = useCallback(async () => {
     setTrafficInfo(prev => ({ ...prev, loading: true }));
     try {
-      // Mock 데이터 (실제로는 API 호출)
-      const mockTrafficData = {
-        '서울': { icon: '🚙', status: '교통 보통' },
-        '부산': { icon: '🚗', status: '교통 원활' },
-        '제주': { icon: '🚗', status: '교통 원활' },
-        '인천': { icon: '🚙', status: '교통 보통' },
-        '대전': { icon: '🚗', status: '교통 원활' },
-        '대구': { icon: '🚗', status: '교통 원활' },
-        '광주': { icon: '🚗', status: '교통 원활' },
-        '울산': { icon: '🚗', status: '교통 원활' },
-        '강릉': { icon: '🚗', status: '교통 원활' },
-        '경주': { icon: '🚗', status: '교통 원활' }
-      };
-      
-      const mockTraffic = mockTrafficData[region.name] || { icon: '🚗', status: '교통 원활' };
-      setTrafficInfo({
-        ...mockTraffic,
-        loading: false
-      });
+      setTrafficInfo({ icon: '🚗', status: '교통 원활', loading: false });
     } catch (error) {
-      console.error('교통 정보 조회 실패:', error);
       setTrafficInfo(prev => ({ ...prev, loading: false }));
     }
   }, [region.name]);
@@ -368,6 +226,18 @@ const RegionDetailScreen = () => {
     fetchTrafficData();
   }, [loadRegionData, fetchWeatherData, fetchTrafficData]);
 
+  const toggleInterest = async () => {
+    const newState = await toggleInterestPlace(region.name);
+    setIsInterest(newState);
+  };
+
+  const facetedPhotos = useMemo(() => {
+    if (activeCategory === '전체') return realtimePhotos;
+    const catMap = { '명소': 'scenic', '맛집': 'food', '카페': 'cafe', '개화': 'bloom' };
+    const targetCat = catMap[activeCategory];
+    return realtimePhotos.filter(p => p.category === targetCat || (p.categoryLabel || '').includes(activeCategory));
+  }, [realtimePhotos, activeCategory]);
+
   const handlePostPress = (post, index, allPosts) => {
     navigation.navigate('PostDetail', {
       postId: post.id,
@@ -377,63 +247,49 @@ const RegionDetailScreen = () => {
     });
   };
 
-  const renderSection = (title, data, sectionType, showLandmarkButton = false) => {
-    if (data.length === 0) {
-      return (
-        <View style={styles.emptySection}>
-          <Ionicons name="images-outline" size={48} color={COLORS.textSubtle} />
-          <Text style={styles.emptyText}>
-            {sectionType === 'realtime' && `${region.name}의 실시간 정보가 없어요`}
-            {sectionType === 'spots' && '추천 장소가 아직 없어요'}
-            {sectionType === 'bloom' && '개화 정보가 아직 없어요'}
-            {sectionType === 'food' && '맛집 정보가 아직 없어요'}
-          </Text>
-        </View>
-      );
-    }
+  const renderCategoryFilter = () => (
+    <View style={styles.categoryFilterContainer}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryScroll}>
+        {categories.map((cat) => (
+          <TouchableOpacity
+            key={cat}
+            style={[styles.categoryChip, activeCategory === cat && styles.categoryChipActive]}
+            onPress={() => setActiveCategory(cat)}
+          >
+            <Text style={[styles.categoryText, activeCategory === cat && styles.categoryTextActive]}>{cat}</Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+    </View>
+  );
+
+  const renderSection = (title, data, sectionType) => {
+    if (data.length === 0) return null;
 
     return (
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>{title}</Text>
-          <View style={styles.sectionHeaderRight}>
-            {showLandmarkButton && sectionType === 'realtime' && getLandmarksByRegion(region.name).length > 0 && (
-              <TouchableOpacity
-                style={styles.landmarkButtonInSection}
-                onPress={() => setShowLandmarkModal(true)}
-              >
-                <Text style={styles.landmarkButtonInSectionText}>
-                  {selectedLandmarks.length > 0 
-                    ? `주요 명소 (${selectedLandmarks.length})`
-                    : '주요 명소보기'
-                  }
-                </Text>
-              </TouchableOpacity>
-            )}
-            {data.length > 6 && !showLandmarkButton && (
-              <TouchableOpacity
-                onPress={() => {
-                  navigation.navigate('RegionCategory', {
-                    regionName: region.name,
-                    type: sectionType,
-                  });
-                }}
-              >
-                <Text style={styles.moreButton}>더보기</Text>
-              </TouchableOpacity>
-            )}
-          </View>
+          <TouchableOpacity onPress={() => navigation.navigate('RegionCategory', { regionName: region.name, type: sectionType })}>
+            <Text style={styles.moreButton}>더보기</Text>
+          </TouchableOpacity>
         </View>
-        <View style={styles.gridContainer}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.recommendScroll}>
           {data.map((item, index) => (
-            <PostItem
+            <TouchableOpacity
               key={item.id || index}
-              item={item}
-              index={index}
-              onPress={(item, idx) => handlePostPress(item, idx, data)}
-            />
+              style={styles.diverseCard}
+              onPress={() => handlePostPress(item, index, data)}
+            >
+              <Image source={{ uri: item.image || item.imageUrl || (item.images && item.images[0]) }} style={styles.diverseImage} />
+              <LinearGradient colors={['transparent', 'rgba(0,0,0,0.8)']} style={styles.diverseOverlay} />
+              <View style={styles.diverseInfo}>
+                <Text style={styles.diverseName}>{item.placeName || item.detailedLocation || '명소'}</Text>
+                <Text style={styles.diverseCount}>{item.timeLabel || getTimeAgo(item.timestamp || item.createdAt) || '방금 전'}</Text>
+              </View>
+            </TouchableOpacity>
           ))}
-        </View>
+        </ScrollView>
       </View>
     );
   };
@@ -443,520 +299,162 @@ const RegionDetailScreen = () => {
       <ScreenLayout>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={COLORS.primary} />
-          <Text style={styles.loadingText}>로딩 중...</Text>
         </View>
       </ScreenLayout>
     );
   }
 
+  const bannerImage = realtimePhotos[0]?.image || realtimePhotos[0]?.imageUrl || (realtimePhotos[0]?.images && realtimePhotos[0]?.images[0]) || getRegionDefaultImage(region.name);
+
   return (
     <ScreenLayout>
       <ScreenContent>
-        {/* 헤더 - 웹과 동일한 구조 */}
-        <ScreenHeader>
-          <View style={styles.headerContent}>
-            <TouchableOpacity
-              style={styles.backButton}
-              onPress={() => navigation.goBack()}
-            >
-              <Ionicons name="arrow-back" size={24} color={COLORS.textPrimaryLight} />
+        {/* 배너 섹션 */}
+        <View style={styles.bannerContainer}>
+          <Image source={{ uri: bannerImage }} style={styles.bannerImage} />
+          <LinearGradient colors={['rgba(0,0,0,0.6)', 'transparent', 'rgba(0,0,0,0.8)']} style={styles.bannerOverlay} />
+          <View style={styles.bannerHeader}>
+            <TouchableOpacity style={styles.iconButton} onPress={() => navigation.goBack()}>
+              <Ionicons name="arrow-back" size={24} color="#fff" />
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>{region.name}</Text>
-            <View style={styles.headerPlaceholder} />
+            <TouchableOpacity style={styles.iconButton} onPress={toggleInterest}>
+              <Ionicons name={isInterest ? "heart" : "heart-outline"} size={24} color={isInterest ? COLORS.error : "#fff"} />
+            </TouchableOpacity>
           </View>
-          
-          {/* 날씨/교통 정보 - 지역 이름 바로 아래 */}
-          <View style={styles.infoBar}>
-            <View style={styles.infoItem}>
-              {weatherInfo.loading ? (
-                <ActivityIndicator size="small" color={COLORS.primary} />
-              ) : (
-                <>
-                  <Text style={styles.infoIcon}>{weatherInfo.icon}</Text>
-                  <Text style={styles.infoText}>
-                    {weatherInfo.condition}, {weatherInfo.temperature}
-                  </Text>
-                </>
-              )}
-            </View>
-            <View style={styles.infoItem}>
-              {trafficInfo.loading ? (
-                <ActivityIndicator size="small" color={COLORS.primary} />
-              ) : (
-                <>
-                  <Text style={styles.infoIcon}>{trafficInfo.icon}</Text>
-                  <Text style={styles.infoText}>{trafficInfo.status}</Text>
-                </>
-              )}
-            </View>
-          </View>
-        </ScreenHeader>
-
-        {/* 메인 컨텐츠 - 웹과 동일한 구조 */}
-        <ScreenBody>
-
-        {/* 현장 실시간 정보 */}
-        {renderSection('현장 실시간 정보', realtimePhotos, 'realtime', true)}
-
-        {/* 가볼만한곳 */}
-        {renderSection(`🏞️ ${region.name} 가볼만한곳`, touristSpots, 'spots')}
-
-        {/* 개화 상황 */}
-        {renderSection('🌸 개화 상황', bloomPhotos, 'bloom')}
-
-        {/* 맛집 정보 */}
-        {renderSection('🍜 맛집 정보', foodPhotos, 'food')}
-        </ScreenBody>
-      </ScreenContent>
-
-      {/* 명소 선택 모달 */}
-      <Modal
-        visible={showLandmarkModal}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowLandmarkModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{region.name} 주요 명소</Text>
-              <TouchableOpacity
-                style={styles.modalCloseButton}
-                onPress={() => setShowLandmarkModal(false)}
-              >
-                <Ionicons name="close" size={24} color={COLORS.text} />
-              </TouchableOpacity>
-            </View>
-            
-            <ScrollView style={styles.modalBody}>
-              <Text style={styles.modalDescription}>
-                보고 싶은 명소를 선택하세요. 선택한 명소의 사진만 표시됩니다.
-              </Text>
-              
-              <View style={styles.landmarkList}>
-                {getLandmarksByRegion(region.name).map((landmark) => {
-                  const isSelected = selectedLandmarks.includes(landmark.id);
-                  return (
-                    <TouchableOpacity
-                      key={landmark.id}
-                      style={[
-                        styles.landmarkItem,
-                        isSelected && styles.landmarkItemSelected
-                      ]}
-                      onPress={() => {
-                        if (isSelected) {
-                          setSelectedLandmarks(selectedLandmarks.filter(id => id !== landmark.id));
-                        } else {
-                          setSelectedLandmarks([...selectedLandmarks, landmark.id]);
-                        }
-                      }}
-                    >
-                      <View style={styles.landmarkItemContent}>
-                        <Text style={[
-                          styles.landmarkItemName,
-                          isSelected && styles.landmarkItemNameSelected
-                        ]}>
-                          {landmark.name}
-                        </Text>
-                      </View>
-                      {isSelected && (
-                        <Ionicons name="checkmark-circle" size={24} color={COLORS.primary} />
-                      )}
-                      {!isSelected && (
-                        <Ionicons name="ellipse-outline" size={24} color={COLORS.textSecondary} />
-                      )}
-                    </TouchableOpacity>
-                  );
-                })}
+          <View style={styles.bannerInfo}>
+            <Text style={styles.bannerRegionName}>{region.name}</Text>
+            <View style={styles.bannerMeta}>
+              <View style={styles.metaItem}>
+                <Ionicons name="sunny" size={16} color="#FFE14D" />
+                <Text style={styles.metaText}>{weatherInfo.temperature} {weatherInfo.condition}</Text>
               </View>
-            </ScrollView>
-            
-            <View style={styles.modalFooter}>
-              <TouchableOpacity
-                style={styles.modalButtonCancel}
-                onPress={() => {
-                  setSelectedLandmarks([]);
-                  setShowLandmarkModal(false);
-                }}
-              >
-                <Text style={styles.modalButtonCancelText}>초기화</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.modalButtonConfirm}
-                onPress={() => {
-                  setShowLandmarkModal(false);
-                  loadRegionData();
-                }}
-              >
-                <Text style={styles.modalButtonConfirmText}>
-                  {selectedLandmarks.length > 0 ? `${selectedLandmarks.length}개 선택됨` : '확인'}
-                </Text>
-              </TouchableOpacity>
+              <View style={styles.metaItem}>
+                <Ionicons name="car" size={16} color="#fff" />
+                <Text style={styles.metaText}>{trafficInfo.status}</Text>
+              </View>
             </View>
           </View>
         </View>
-      </Modal>
+
+        <ScreenBody>
+          {/* 카테고리 필터 */}
+          {renderCategoryFilter()}
+
+          {/* 지역 해시태그 */}
+          {regionHashtags.length > 0 && (
+            <View style={styles.tagSection}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tagScroll}>
+                {regionHashtags.map((tag) => (
+                  <TouchableOpacity key={tag.name} style={styles.tagChip} onPress={() => navigation.navigate('Search', { initialQuery: '#' + tag.name })}>
+                    <Text style={styles.tagText}>#{tag.name}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+
+          {/* 인기 게시물 */}
+          {renderSection(`🏞️ ${region.name} 인기 명소`, touristSpots, 'spots')}
+          {renderSection('🍜 지역 대표 맛집', foodPhotos, 'food')}
+          {renderSection('🌸 실시간 개화 정보', bloomPhotos, 'bloom')}
+
+          {/* 실시간 피드 */}
+          <View style={styles.feedSection}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>실시간 지역 피드</Text>
+            </View>
+            <View style={styles.postGrid}>
+              {facetedPhotos.length > 0 ? (
+                facetedPhotos.slice(0, 12).map((post, idx) => (
+                  <TouchableOpacity
+                    key={post.id || idx}
+                    style={styles.postItemSmall}
+                    onPress={() => handlePostPress(post, idx, facetedPhotos)}
+                  >
+                    <Image source={{ uri: post.image || post.imageUrl || (post.images && post.images[0]) }} style={styles.postImageSmall} />
+                  </TouchableOpacity>
+                ))
+              ) : (
+                <View style={styles.emptyFeed}>
+                  <Text style={styles.emptyFeedText}>해당 카테고리의 게시물이 없습니다.</Text>
+                </View>
+              )}
+            </View>
+          </View>
+
+        </ScreenBody>
+      </ScreenContent>
     </ScreenLayout>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: SPACING.md,
-    fontSize: 16,
-    color: COLORS.textSecondary,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: SPACING.md, // p-4
-    paddingTop: SPACING.md, // p-4
-    paddingBottom: 12, // pb-3 = 12px
-    backgroundColor: COLORS.backgroundLight, // bg-white
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB', // border-gray-200
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  backButton: {
-    width: 48, // size-12 = 48px
-    height: 48,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 8, // rounded-lg
-  },
-  headerTitle: {
-    fontSize: 18, // text-lg = 18px
-    fontWeight: 'bold',
-    color: COLORS.text, // text-content-light
-    letterSpacing: -0.27, // tracking-[-0.015em] = -0.27px
-    lineHeight: 21.6, // leading-tight
-    flex: 1,
-    textAlign: 'center',
-  },
-  headerPlaceholder: {
-    width: 48, // w-12 = 48px
-  },
-  scrollView: {
-    flex: 1,
-  },
-  infoBar: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: SPACING.sm,
-    paddingHorizontal: SPACING.md,
-    paddingBottom: SPACING.md,
-    paddingTop: SPACING.sm,
-  },
-  infoItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.xs,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    backgroundColor: COLORS.backgroundLight,
-    borderRadius: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  infoIcon: {
-    fontSize: 16,
-  },
-  infoText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: COLORS.text,
-  },
-  section: {
-    marginTop: SPACING.lg,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: SPACING.md,
-    marginBottom: SPACING.md,
-  },
-  sectionHeaderRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm,
-  },
-  sectionTitle: {
-    ...TYPOGRAPHY.h2,
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: COLORS.text,
-  },
-  moreButton: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: COLORS.textSecondary,
-  },
-  landmarkButtonInSection: {
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.xs,
-    borderRadius: 8,
-    backgroundColor: COLORS.primaryLight,
-  },
-  landmarkButtonInSectionText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.primary,
-  },
-  gridContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    paddingHorizontal: SPACING.md,
-    justifyContent: 'space-between',
-  },
-  emptySection: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: SPACING.xl,
-    paddingHorizontal: SPACING.md,
-  },
-  emptyText: {
-    marginTop: SPACING.md,
-    fontSize: 16,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-  },
-  landmarkButtonContainer: {
-    paddingHorizontal: SPACING.md,
-    paddingBottom: SPACING.sm,
-  },
-  landmarkButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    backgroundColor: COLORS.primaryLight,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.primary + '40',
-  },
-  landmarkButtonText: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.primary,
-  },
-  landmarkClearButton: {
-    padding: 4,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: COLORS.backgroundLight,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: '80%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: SPACING.md,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: COLORS.text,
-  },
-  modalCloseButton: {
-    width: 32,
-    height: 32,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalBody: {
-    padding: SPACING.md,
-    maxHeight: 400,
-  },
-  modalDescription: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-    marginBottom: SPACING.md,
-  },
-  landmarkList: {
-    gap: SPACING.sm,
-  },
-  landmarkItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: SPACING.md,
-    backgroundColor: COLORS.background,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  landmarkItemSelected: {
-    backgroundColor: COLORS.primaryLight,
-    borderColor: COLORS.primary,
-  },
-  landmarkItemContent: {
-    flex: 1,
-  },
-  landmarkItemName: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: COLORS.text,
-  },
-  landmarkItemNameSelected: {
-    color: COLORS.primary,
-    fontWeight: '600',
-  },
-  modalFooter: {
-    flexDirection: 'row',
-    gap: SPACING.sm,
-    padding: SPACING.md,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-  },
-  modalButtonCancel: {
-    flex: 1,
-    padding: SPACING.md,
-    borderRadius: 12,
-    backgroundColor: COLORS.background,
-    alignItems: 'center',
-  },
-  modalButtonCancelText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.textSecondary,
-  },
-  modalButtonConfirm: {
-    flex: 1,
-    padding: SPACING.md,
-    borderRadius: 12,
-    backgroundColor: COLORS.primary,
-    alignItems: 'center',
-  },
-  modalButtonConfirmText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.textWhite,
-  },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+
+  // Banner
+  bannerContainer: { width: '100%', height: 360, position: 'relative' },
+  bannerImage: { width: '100%', height: '100%' },
+  bannerOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
+  bannerHeader: { position: 'absolute', top: 50, left: 16, right: 16, flexDirection: 'row', justifyContent: 'space-between' },
+  iconButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'center', alignItems: 'center' },
+  bannerInfo: { position: 'absolute', bottom: 32, left: 24 },
+  bannerRegionName: { fontSize: 36, fontWeight: 'bold', color: '#fff', marginBottom: 8 },
+  bannerMeta: { flexDirection: 'row', gap: 12 },
+  metaItem: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(0,0,0,0.4)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 },
+  metaText: { color: '#fff', fontSize: 13, fontWeight: '500' },
+
+  // Category Filter
+  categoryFilterContainer: { marginTop: 20, marginBottom: 12 },
+  categoryScroll: { paddingHorizontal: 16, gap: 8 },
+  categoryChip: { paddingHorizontal: 18, paddingVertical: 10, borderRadius: 20, backgroundColor: '#f5f5f5' },
+  categoryChipActive: { backgroundColor: COLORS.primary },
+  categoryText: { fontSize: 14, fontWeight: '600', color: COLORS.textSecondary },
+  categoryTextActive: { color: '#fff' },
+
+  // Tags
+  tagSection: { marginBottom: 24 },
+  tagScroll: { paddingHorizontal: 16, gap: 8 },
+  tagChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, backgroundColor: COLORS.primary + '0D', borderWidth: 1, borderColor: COLORS.primary + '1A' },
+  tagText: { fontSize: 13, fontWeight: '600', color: COLORS.primary },
+
+  // Sections
+  section: { marginBottom: 32 },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, marginBottom: 16 },
+  sectionTitle: { fontSize: 20, fontWeight: 'bold', color: COLORS.text },
+  moreButton: { fontSize: 14, color: COLORS.textSubtle, fontWeight: '500' },
+
+  recommendScroll: { paddingHorizontal: 16, gap: 16 },
+  diverseCard: { width: 200, height: 260, borderRadius: 16, overflow: 'hidden', position: 'relative', backgroundColor: '#eee' },
+  diverseImage: { width: '100%', height: '100%' },
+  diverseOverlay: { position: 'absolute', bottom: 0, left: 0, right: 0, height: '50%' },
+  diverseInfo: { position: 'absolute', bottom: 16, left: 16, right: 16 },
+  diverseName: { fontSize: 16, fontWeight: 'bold', color: '#fff', marginBottom: 2 },
+  diverseCount: { fontSize: 12, color: 'rgba(255,255,255,0.7)' },
+
+  // Feed
+  feedSection: { marginBottom: 40 },
+  postGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 2, paddingHorizontal: 2 },
+  postItemSmall: { width: (SCREEN_WIDTH - 6) / 3, aspectRatio: 1, backgroundColor: '#eee' },
+  postImageSmall: { width: '100%', height: '100%' },
+  emptyFeed: { width: '100%', padding: 40, alignItems: 'center' },
+  emptyFeedText: { color: COLORS.textSubtle, fontSize: 14 },
 });
 
-// RegionDetailScreen 전용 스타일
 const regionStyles = StyleSheet.create({
-  postItem: {
-    width: (SCREEN_WIDTH - SPACING.md * 3) / 2,
-    marginBottom: SPACING.md, // gap-4 = 16px
-  },
-  postImageContainer: {
-    width: '100%',
-    aspectRatio: 4 / 5, // aspect-[4/5]
-    borderRadius: 12, // rounded-lg
-    overflow: 'hidden',
-    marginBottom: 12, // mb-3 = 12px
-    backgroundColor: COLORS.borderLight,
-    position: 'relative',
-  },
-  postImage: {
-    width: '100%',
-    height: '100%',
-  },
-  postImagePlaceholder: {
-    backgroundColor: COLORS.borderLight,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  likeBadge: {
-    position: 'absolute',
-    bottom: 12, // bottom-3 = 12px
-    right: 12, // right-3 = 12px
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4, // gap-1 = 4px
-    backgroundColor: 'rgba(255,255,255,0.9)', // bg-white/90
-    paddingHorizontal: 12, // px-3 = 12px
-    paddingVertical: 6, // py-1.5 = 6px
-    borderRadius: 999, // rounded-full
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1, // shadow-md
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  likeCount: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.text,
-  },
-  postTextContainer: {
-    marginTop: SPACING.sm,
-    gap: SPACING.xs,
-  },
-  locationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: SPACING.xs,
-  },
-  locationText: {
-    fontSize: 16, // text-base = 16px
-    fontWeight: 'bold',
-    color: COLORS.text, // text-text-primary-light
-    flex: 1,
-  },
-  timeText: {
-    fontSize: 12, // text-xs = 12px
-    color: COLORS.textSecondary, // text-text-secondary-light
-  },
-  subLocationText: {
-    fontSize: 14, // text-sm = 14px
-    color: COLORS.textSecondary, // text-text-secondary-light
-    marginTop: 2, // mt-0.5 = 2px
-  },
-  tagsScroll: {
-    marginVertical: SPACING.xs,
-  },
-  tagsScrollContent: {
-    gap: SPACING.xs,
-  },
-  tagBadge: {
-    backgroundColor: COLORS.primary + '1A', // bg-primary/10
-    paddingHorizontal: 10, // px-2.5 = 10px
-    paddingVertical: 4, // py-1 = 4px
-    borderRadius: 999, // rounded-full
-    marginRight: 6, // gap-1.5 = 6px
-  },
-  tagText: {
-    fontSize: 12, // text-xs
-    fontWeight: '500', // font-medium
-    color: COLORS.primary, // text-primary
-  },
-  noteText: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-    lineHeight: 20,
-  },
+  postItem: { width: (SCREEN_WIDTH - 48) / 2, marginBottom: 16 },
+  postImageContainer: { width: '100%', aspectRatio: 1, borderRadius: 12, overflow: 'hidden', marginBottom: 8, position: 'relative' },
+  postImage: { width: '100%', height: '100%' },
+  postImagePlaceholder: { backgroundColor: '#eee', justifyContent: 'center', alignItems: 'center' },
+  likeBadge: { position: 'absolute', bottom: 8, right: 8, flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.9)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
+  likeCount: { fontSize: 12, fontWeight: '600', marginLeft: 4 },
+  postTextContainer: { gap: 4 },
+  locationRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  locationText: { fontSize: 14, fontWeight: 'bold', color: COLORS.text },
+  timeText: { fontSize: 11, color: COLORS.textSubtle },
+  tagsScroll: { marginTop: 4 },
+  tagsScrollContent: { gap: 4 },
+  tagBadge: { backgroundColor: COLORS.primary + '1A', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4 },
+  tagText: { fontSize: 10, color: COLORS.primary, fontWeight: '600' },
 });
 
 export default RegionDetailScreen;

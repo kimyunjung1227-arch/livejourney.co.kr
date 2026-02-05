@@ -1,4 +1,5 @@
 import api from './axios';
+import { logger } from '../utils/logger';
 
 // 게시물 목록 조회
 export const getPosts = async (params = {}) => {
@@ -10,11 +11,25 @@ export const getPosts = async (params = {}) => {
     if (error.code === 'ERR_NETWORK' || error.code === 'ERR_CONNECTION_REFUSED') {
       // 개발 모드에서만 로그 출력
       if (import.meta.env.MODE === 'development') {
-        console.log('💡 백엔드 서버 미연결 (localStorage 사용 중)');
+        logger.log('💡 백엔드 서버 미연결 (localStorage 사용 중)');
       }
       return { success: false, posts: [] };
     }
     console.error('게시물 조회 실패:', error);
+    throw error;
+  }
+};
+
+// 태그 목록 조회
+export const getTags = async () => {
+  try {
+    const response = await api.get('/posts/tags');
+    return response.data;
+  } catch (error) {
+    if (error.code === 'ERR_NETWORK' || error.code === 'ERR_CONNECTION_REFUSED') {
+      return { success: false, tags: [] };
+    }
+    console.error('태그 조회 실패:', error);
     throw error;
   }
 };
@@ -29,7 +44,7 @@ export const getPost = async (postId) => {
     if (error.code === 'ERR_NETWORK' || error.code === 'ERR_CONNECTION_REFUSED') {
       return { success: false, post: null };
     }
-    console.error('게시물 상세 조회 실패:', error);
+    logger.error('게시물 상세 조회 실패:', error);
     throw error;
   }
 };
@@ -74,7 +89,7 @@ export const addComment = async (postId, content) => {
     if (error.code === 'ERR_NETWORK' || error.code === 'ERR_CONNECTION_REFUSED') {
       return { success: false };
     }
-    console.error('댓글 작성 실패:', error);
+    logger.error('댓글 작성 실패:', error);
     throw error;
   }
 };
@@ -89,7 +104,7 @@ export const addQuestion = async (postId, question) => {
     if (error.code === 'ERR_NETWORK' || error.code === 'ERR_CONNECTION_REFUSED') {
       return { success: false };
     }
-    console.error('질문 작성 실패:', error);
+    logger.error('질문 작성 실패:', error);
     throw error;
   }
 };
@@ -104,7 +119,7 @@ export const answerQuestion = async (questionId, answer) => {
     if (error.code === 'ERR_NETWORK' || error.code === 'ERR_CONNECTION_REFUSED') {
       return { success: false };
     }
-    console.error('답변 작성 실패:', error);
+    logger.error('답변 작성 실패:', error);
     throw error;
   }
 };

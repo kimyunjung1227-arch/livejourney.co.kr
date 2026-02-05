@@ -405,7 +405,7 @@ export const analyzeImageForTags = async (imageFile, location = '', existingNote
     }
     
     // 색상 기반 날씨 태그
-    if (colorAnalysis.isBlue && b > 150) {
+    if (colorAnalysis.isBlue && (colorAnalysis.dominantColor?.b ?? 0) > 150) {
       keywords.add('맑은하늘');
       keywords.add('청명한날씨');
     }

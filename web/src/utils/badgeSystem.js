@@ -335,42 +335,7 @@ export const markBadgeAsSeen = (badgeName) => {
  * 특정 유저의 획득한 뱃지
  */
 export const getEarnedBadgesForUser = (userId) => {
-  const earned = getEarnedBadges();
-  if (earned && earned.length > 0) {
-    return earned;
-  }
-
-  // 개발 단계: 아직 실제 뱃지 데이터가 없을 때,
-  // 각 사용자에게 BADGES 기반 임의 뱃지를 몇 개씩 부여해서
-  // UI에서 항상 뱃지와 대표 뱃지가 보이도록 한다.
-  if (import.meta.env && import.meta.env.DEV) {
-    const visibleBadges = Object.values(BADGES);
-    if (visibleBadges.length === 0) return [];
-
-    const baseCount = 3;
-    const maxExtra = 4; // 3~7개
-
-    const hashSource = userId ? userId.toString() : 'default-user';
-    const hash = hashSource
-      .split('')
-      .reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
-
-    const count = baseCount + (hash % maxExtra);
-
-    const mockBadges = [];
-    for (let i = 0; i < count; i += 1) {
-      const idx = (hash + i) % visibleBadges.length;
-      const badge = visibleBadges[idx];
-      mockBadges.push({
-        ...badge,
-        earnedAt: new Date().toISOString(),
-      });
-    }
-
-    return mockBadges;
-  }
-
-  return earned;
+  return getEarnedBadges();
 };
 
 /**

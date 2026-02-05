@@ -1,4 +1,5 @@
 // 실시간 시간 계산 유틸리티
+import { logger } from './logger';
 
 /**
  * timestamp를 현재 시각 기준으로 상대적 시간으로 변환
@@ -65,7 +66,7 @@ export const getTimeAgo = (timestamp) => {
     return `${diffYears}년 전`;
     
   } catch (error) {
-    console.error('시간 계산 오류:', error);
+    logger.error('시간 계산 오류:', error);
     return '방금';
   }
 };
@@ -162,6 +163,9 @@ export const filterRecentPosts = (posts, maxDays = 2, maxHours = null) => {
       return timeB - timeA; // 최신순
     });
 };
+
+// 48시간 이내 게시물만 노출 (피드/검색/추천용 공통)
+export const filterActivePosts48 = (posts) => filterRecentPosts(posts, 2, 48);
 
 // 게시물 나이(시간) 계산 (시간 단위)
 export const getPostAgeInHours = (timestamp) => {

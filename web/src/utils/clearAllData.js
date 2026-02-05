@@ -6,10 +6,10 @@
 export const clearAllPosts = () => {
   try {
     localStorage.removeItem('uploadedPosts');
-    console.log('✅ 모든 게시물 데이터가 삭제되었습니다.');
+    logger.log('✅ 모든 게시물 데이터가 삭제되었습니다.');
     return { success: true, message: '모든 게시물 데이터가 삭제되었습니다.' };
   } catch (error) {
-    console.error('❌ 데이터 삭제 실패:', error);
+    logger.error('❌ 데이터 삭제 실패:', error);
     return { success: false, message: '데이터 삭제에 실패했습니다.' };
   }
 };
@@ -24,10 +24,10 @@ export const clearAllData = () => {
     localStorage.removeItem('userPreferences');
     localStorage.removeItem('visitedPosts');
     
-    console.log('✅ 모든 로컬 데이터가 삭제되었습니다.');
+    logger.log('✅ 모든 로컬 데이터가 삭제되었습니다.');
     return { success: true, message: '모든 로컬 데이터가 삭제되었습니다.' };
   } catch (error) {
-    console.error('❌ 데이터 삭제 실패:', error);
+    logger.error('❌ 데이터 삭제 실패:', error);
     return { success: false, message: '데이터 삭제에 실패했습니다.' };
   }
 };
@@ -49,7 +49,7 @@ export const getStorageInfo = () => {
       totalSizeKB: (totalSize / 1024).toFixed(2)
     };
   } catch (error) {
-    console.error('❌ 저장소 정보 조회 실패:', error);
+    logger.error('❌ 저장소 정보 조회 실패:', error);
     return {
       postsCount: 0,
       routesCount: 0,

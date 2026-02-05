@@ -11,7 +11,7 @@ const LiveJourneyLogo = ({ size = 96, showText = true, className = '' }) => {
         style={{ width: size, height: size }}
       >
         <img
-          src="/logo-camera.png"
+          src={`${import.meta.env.BASE_URL}livejourney-logo.png`}
           alt="LiveJourney 로고"
           className="w-full h-full object-contain"
           onError={(e) => {
@@ -24,15 +24,15 @@ const LiveJourneyLogo = ({ size = 96, showText = true, className = '' }) => {
       {/* 텍스트 로고 */}
       {showText && (
         <div className="flex flex-col items-center gap-1">
-              <h1
-                className="text-4xl font-bold tracking-tight"
-                style={{
-                  background: 'linear-gradient(135deg, #00BCD4 0%, #0097A7 60%, #FFC107 100%)',
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
-                  backgroundClip: 'text',
-                }}
-              >
+          <h1
+            className="text-4xl font-bold tracking-tight"
+            style={{
+              background: 'linear-gradient(135deg, #00BCD4 0%, #0097A7 60%, #FFC107 100%)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              backgroundClip: 'text',
+            }}
+          >
             LiveJourney
           </h1>
         </div>

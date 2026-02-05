@@ -37,10 +37,10 @@ const AccountDeleteConfirmScreen = () => {
   };
 
   return (
-    <div className="flex h-full w-full flex-col bg-background-light dark:bg-background-dark">
+    <div className="flex h-screen w-full flex-col bg-background-light dark:bg-background-dark overflow-hidden">
       {/* 헤더 */}
       <header className="flex-shrink-0 flex h-16 items-center justify-between border-b border-border-light bg-surface-light dark:border-border-dark dark:bg-surface-dark px-4">
-        <button 
+        <button
           onClick={() => navigate('/account-delete')}
           className="flex size-12 shrink-0 items-center justify-start cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
         >
@@ -90,8 +90,8 @@ const AccountDeleteConfirmScreen = () => {
           {/* 동의 체크박스 */}
           <div className="px-6 pt-6">
             <label className="flex items-center space-x-3 cursor-pointer">
-              <input 
-                className="h-5 w-5 rounded border-gray-300 text-primary focus:ring-primary dark:bg-surface-subtle-dark dark:border-border-dark" 
+              <input
+                className="h-5 w-5 rounded border-gray-300 text-primary focus:ring-primary dark:bg-surface-subtle-dark dark:border-border-dark"
                 type="checkbox"
                 checked={agreed}
                 onChange={(e) => setAgreed(e.target.checked)}
@@ -111,22 +111,22 @@ const AccountDeleteConfirmScreen = () => {
               안전한 탈퇴를 위해 비밀번호를 다시 한 번 입력해주세요.
             </p>
             <div className="relative mt-4">
-              <label 
-                className="text-xs font-medium text-black/70 dark:text-white/70" 
+              <label
+                className="text-xs font-medium text-black/70 dark:text-white/70"
                 htmlFor="password"
               >
                 비밀번호 확인
               </label>
               <div className="relative">
-                <input 
-                  className="mt-1 block w-full rounded-lg border border-border-light bg-surface-subtle-light px-4 py-3 pr-12 text-base text-black placeholder:text-black/50 focus:border-primary focus:ring-1 focus:ring-primary dark:border-border-dark dark:bg-surface-subtle-dark dark:text-white dark:placeholder:text-white/50 transition-all" 
+                <input
+                  className="mt-1 block w-full rounded-lg border border-border-light bg-surface-subtle-light px-4 py-3 pr-12 text-base text-black placeholder:text-black/50 focus:border-primary focus:ring-1 focus:ring-primary dark:border-border-dark dark:bg-surface-subtle-dark dark:text-white dark:placeholder:text-white/50 transition-all"
                   id="password"
                   type={showPassword ? 'text' : 'password'}
                   placeholder="현재 비밀번호를 입력해주세요."
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                 />
-                <button 
+                <button
                   onClick={togglePasswordVisibility}
                   className="absolute inset-y-0 right-0 flex items-center pr-4 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 rounded-r-lg transition-colors"
                 >
@@ -142,14 +142,13 @@ const AccountDeleteConfirmScreen = () => {
 
       {/* 하단 버튼 - 네비게이션 바 위에 고정 */}
       <div className="flex-shrink-0 p-4 pb-28 bg-surface-light dark:bg-surface-dark border-t border-border-light dark:border-border-dark" style={{ position: 'relative', zIndex: 60 }}>
-        <button 
+        <button
           onClick={handleDeleteAccount}
           disabled={!agreed || !password}
-          className={`w-full rounded-lg px-4 py-3.5 text-base font-bold transition-colors ${
-            agreed && password
+          className={`w-full rounded-lg px-4 py-3.5 text-base font-bold transition-colors ${agreed && password
               ? 'bg-red-600 text-white hover:bg-red-700 cursor-pointer shadow-lg'
               : 'bg-gray-300 text-white dark:bg-gray-600 dark:text-gray-400 cursor-not-allowed'
-          }`}
+            }`}
           style={{ minHeight: '56px' }}
         >
           계정 삭제

@@ -3,6 +3,8 @@
  * follows_v1: [ { followerId, followingId }, ... ]
  */
 
+import { logger } from './logger';
+
 const STORAGE_KEY = 'follows_v1';
 
 const getRaw = () => {
@@ -19,7 +21,7 @@ const setRaw = (arr) => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(arr));
     window.dispatchEvent(new CustomEvent('followsUpdated'));
   } catch (e) {
-    console.warn('followSystem setRaw:', e);
+    logger.warn('followSystem setRaw:', e);
   }
 };
 

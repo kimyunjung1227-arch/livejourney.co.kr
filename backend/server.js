@@ -79,6 +79,16 @@ app.get('/health', (req, res) => {
   });
 });
 
+// API 헬스 체크 (Render용)
+app.get('/api/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    message: 'API Server is running',
+    timestamp: new Date().toISOString(),
+    mongodb: require('mongoose').connection.readyState === 1 ? 'connected' : 'disconnected'
+  });
+});
+
 // API 라우트
 const postsRouter = require('./routes/posts');
 const usersRouter = require('./routes/users');
@@ -141,7 +151,7 @@ app.use((req, res) => {
 // 에러 핸들러
 app.use((error, req, res, next) => {
   console.error('에러 발생:', error);
-  
+
   // Multer 에러
   if (error.code === 'LIMIT_FILE_SIZE') {
     return res.status(413).json({
@@ -149,7 +159,7 @@ app.use((error, req, res, next) => {
       error: '파일 크기가 너무 큽니다. 최대 10MB까지 업로드 가능합니다.'
     });
   }
-  
+
   // Mongoose 에러
   if (error.name === 'ValidationError') {
     return res.status(400).json({
@@ -158,14 +168,14 @@ app.use((error, req, res, next) => {
       details: error.message
     });
   }
-  
+
   if (error.name === 'CastError') {
     return res.status(400).json({
       success: false,
       error: '잘못된 ID 형식입니다.'
     });
   }
-  
+
   // JWT 에러
   if (error.name === 'JsonWebTokenError') {
     return res.status(401).json({
@@ -173,14 +183,14 @@ app.use((error, req, res, next) => {
       error: '유효하지 않은 토큰입니다.'
     });
   }
-  
+
   if (error.name === 'TokenExpiredError') {
     return res.status(401).json({
       success: false,
       error: '토큰이 만료되었습니다.'
     });
   }
-  
+
   // 기본 에러 응답
   res.status(error.status || 500).json({
     success: false,
@@ -203,11 +213,11 @@ const startServer = async () => {
       console.warn('⚠️ MongoDB 연결 실패 - Mock 모드로 실행');
       console.warn('   로컬에서는 localStorage를 사용합니다.');
     }
-    
+
     // 서버 시작 (MongoDB 연결 여부와 관계없이)
     app.listen(PORT, () => {
       const mongoStatus = require('mongoose').connection.readyState === 1 ? 'MongoDB 연결됨' : 'Mock 모드 (localStorage)';
-      
+
       console.log(`
 ╔════════════════════════════════════════╗
 ║   🚀 백엔드 서버 시작 완료!           ║

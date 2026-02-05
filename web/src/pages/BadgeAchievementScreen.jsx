@@ -1,5 +1,6 @@
 import React from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
+import { logger } from '../utils/logger';
 
 const BadgeAchievementScreen = () => {
   const navigate = useNavigate();
@@ -9,12 +10,12 @@ const BadgeAchievementScreen = () => {
 
   // 뱃지 정보 매핑
   const getBadgeInfo = (badgeName) => {
-    const today = new Date().toLocaleDateString('ko-KR', { 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
+    const today = new Date().toLocaleDateString('ko-KR', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
     });
-    
+
     // 뱃지별 설명 및 이미지
     const badgeInfoMap = {
       '첫 여행 기록': {
@@ -30,7 +31,7 @@ const BadgeAchievementScreen = () => {
         relatedRegion: '전국'
       }
     };
-    
+
     // 지역명 추출 (예: "서울 정복자" → "서울")
     const regionMatch = badgeName.match(/^(.+)\s정복자$/);
     if (regionMatch) {
@@ -44,7 +45,7 @@ const BadgeAchievementScreen = () => {
         relatedRegion: region
       };
     }
-    
+
     // 기타 뱃지
     const info = badgeInfoMap[badgeName] || badgeInfoMap.default;
     return {
@@ -73,23 +74,23 @@ const BadgeAchievementScreen = () => {
         title: `${badge.name} 뱃지 획득!`,
         text: `LiveJourney에서 ${badge.name} 뱃지를 획득했습니다!`,
         url: window.location.href
-      }).catch((error) => console.log('공유 실패:', error));
+      }).catch((error) => logger.log('공유 실패:', error));
     } else {
       alert('이 브라우저는 공유 기능을 지원하지 않습니다.');
     }
   };
 
   return (
-    <div className="relative flex min-h-screen w-full flex-col bg-background-light dark:bg-background-dark">
+    <div className="relative flex h-screen w-full flex-col bg-background-light dark:bg-background-dark overflow-hidden">
       {/* 상단 앱 바 - 깔끔하게 */}
       <div className="sticky top-0 z-10 flex items-center bg-background-light dark:bg-background-dark p-4 justify-between">
-        <button 
+        <button
           onClick={() => navigate(-1)}
           className="flex size-10 shrink-0 items-center justify-center text-zinc-800 dark:text-zinc-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
         >
           <span className="material-symbols-outlined text-xl">close</span>
         </button>
-        <button 
+        <button
           onClick={handleShare}
           className="flex size-10 items-center justify-center text-zinc-800 dark:text-zinc-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
         >
@@ -101,9 +102,9 @@ const BadgeAchievementScreen = () => {
         {/* 뱃지 아이콘 - 단순한 애니메이션 */}
         <div className="flex justify-center mb-6">
           <div className="flex items-center justify-center bg-primary/10 rounded-full p-6 shadow-xl animate-pulse">
-            <img 
+            <img
               alt={`${badge.name} 뱃지 아이콘`}
-              className="h-32 w-32 object-contain" 
+              className="h-32 w-32 object-contain"
               src={badge.badgeIcon}
             />
           </div>
@@ -135,7 +136,7 @@ const BadgeAchievementScreen = () => {
 
       {/* 하단 액션 버튼 */}
       <div className="sticky bottom-0 w-full bg-background-light dark:bg-background-dark px-4 pb-6 pt-4">
-        <button 
+        <button
           onClick={handleExploreRelated}
           className="w-full h-14 bg-primary text-white font-bold rounded-xl text-base flex items-center justify-center shadow-lg hover:bg-primary/90 transition-all active:scale-95"
         >

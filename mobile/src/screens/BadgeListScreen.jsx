@@ -12,7 +12,7 @@ import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, TYPOGRAPHY } from '../constants/styles';
 import { ScreenLayout, ScreenContent, ScreenHeader, ScreenBody } from '../components/ScreenLayout';
-import { getAvailableBadges, getEarnedBadges } from '../utils/badgeSystem';
+import { getAvailableBadges, getEarnedBadges, getBadgeDisplayName } from '../utils/badgeSystem';
 import { useScrollTabBar } from '../hooks/useScrollTabBar';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -32,12 +32,12 @@ const BadgeListScreen = () => {
       console.log('🔄 뱃지 목록 로드 시작');
       const allBadges = await getAvailableBadges();
       const earned = await getEarnedBadges();
-      
+
       console.log('📋 로드된 뱃지:', {
         전체: allBadges.length,
         획득: earned.length,
       });
-      
+
       setBadges(allBadges);
       setEarnedBadges(earned);
     } catch (error) {
@@ -47,19 +47,21 @@ const BadgeListScreen = () => {
 
   useEffect(() => {
     loadBadges();
-    
+
     // 화면 포커스 시 뱃지 다시 로드
     const unsubscribe = navigation.addListener('focus', () => {
       loadBadges();
     });
-    
+
     return unsubscribe;
   }, [navigation]);
 
-  // 필터링된 뱃지
-  const filteredBadges = filter === 'acquired' 
-    ? badges.filter(b => b.isEarned)
-    : badges;
+  const categoryOrder = { '온보딩': 1, '지역 가이드': 2, '실시간 정보': 3, '도움 지수': 4, '정확한 정보': 5, '친절한 여행자': 6, '기여도': 7 };
+  const filteredBadges = (filter === 'acquired' ? badges.filter((b) => b.isEarned) : badges)
+    .sort((a, b) => {
+      const oa = categoryOrder[a.category] ?? 999, ob = categoryOrder[b.category] ?? 999;
+      return oa !== ob ? oa - ob : (a.difficulty || 1) - (b.difficulty || 1);
+    });
 
   const handleBadgeClick = (badge) => {
     setSelectedBadge(badge);
@@ -69,29 +71,25 @@ const BadgeListScreen = () => {
     setSelectedBadge(null);
   };
 
-  // 뱃지 난이도별 보조 컬러 매핑
+  // 난이도 1=하, 2=중, 3=상, 4=최상(상과 동일 컬러)
+  const getDifficultyLabel = (d) => (typeof d === 'number' ? { 1: '하', 2: '중', 3: '상', 4: '상' }[d] : d) || '중';
+
   const getBadgeColor = (difficulty) => {
-    const colorMap = {
-      '하': COLORS.secondary2,      // Green - 쉬운 뱃지
-      '중': COLORS.secondary5,       // Cyan - 중간 뱃지
-      '상': COLORS.secondary1,       // Purple - 어려운 뱃지
-    };
-    return colorMap[difficulty] || COLORS.primary;
+    const label = getDifficultyLabel(difficulty);
+    const colorMap = { '하': COLORS.secondary2, '중': COLORS.secondary5, '상': COLORS.secondary1 };
+    return colorMap[label] || COLORS.primary;
   };
-  
+
   const getBadgeColorSoft = (difficulty) => {
-    const colorMap = {
-      '하': COLORS.secondary2Soft,
-      '중': COLORS.secondary5Soft,
-      '상': COLORS.secondary1Soft,
-    };
-    return colorMap[difficulty] || COLORS.primary + '20';
+    const label = getDifficultyLabel(difficulty);
+    const colorMap = { '하': COLORS.secondary2Soft, '중': COLORS.secondary5Soft, '상': COLORS.secondary1Soft };
+    return colorMap[label] || COLORS.primary + '20';
   };
 
   const renderBadgeItem = ({ item: badge, index }) => {
-    const badgeColor = getBadgeColor(badge.difficulty || '중');
-    const badgeColorSoft = getBadgeColorSoft(badge.difficulty || '중');
-    
+    const badgeColor = getBadgeColor(badge.difficulty ?? 2);
+    const badgeColorSoft = getBadgeColorSoft(badge.difficulty ?? 2);
+
     return (
       <TouchableOpacity
         style={[
@@ -114,7 +112,7 @@ const BadgeListScreen = () => {
             {badge.icon || '🏆'}
           </Text>
         </View>
-        
+
         {/* 뱃지 정보 */}
         <View style={styles.badgeInfo}>
           <Text style={[
@@ -122,9 +120,9 @@ const BadgeListScreen = () => {
             !badge.isEarned && styles.badgeNameLocked,
             badge.isEarned && { color: badgeColor }
           ]} numberOfLines={2}>
-            {badge.name}
+            {getBadgeDisplayName(badge)}
           </Text>
-          
+
           {badge.isEarned ? (
             <View style={styles.earnedBadge}>
               <Ionicons name="checkmark-circle" size={16} color={badgeColor} />
@@ -133,7 +131,7 @@ const BadgeListScreen = () => {
           ) : (
             <View style={styles.progressContainer}>
               <View style={styles.progressBar}>
-                <View 
+                <View
                   style={[
                     styles.progressFill,
                     { width: `${badge.progress || 0}%`, backgroundColor: badgeColor }
@@ -206,7 +204,7 @@ const BadgeListScreen = () => {
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyIcon}>🏆</Text>
               <Text style={styles.emptyText}>
-                {filter === 'acquired' 
+                {filter === 'acquired'
                   ? '획득한 뱃지가 없습니다'
                   : '뱃지가 없습니다'}
               </Text>
@@ -227,7 +225,6 @@ const BadgeListScreen = () => {
         </ScreenBody>
       </ScreenContent>
 
-      {/* 뱃지 상세 모달 */}
       <Modal
         visible={selectedBadge !== null}
         transparent={true}
@@ -235,36 +232,35 @@ const BadgeListScreen = () => {
         onRequestClose={closeModal}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View style={[styles.modalContent, styles.modalContentCentered]}>
             {selectedBadge && (
               <>
                 <View style={styles.modalHeader}>
-                  <Text style={styles.modalTitle}>{selectedBadge.name}</Text>
+                  <Text style={styles.modalTitle}>{getBadgeDisplayName(selectedBadge)}</Text>
                   <TouchableOpacity onPress={closeModal}>
                     <Ionicons name="close" size={24} color={COLORS.textPrimaryLight} />
                   </TouchableOpacity>
                 </View>
-                
+
                 <View style={styles.modalBody}>
                   <View style={styles.modalBadgeIcon}>
                     <Text style={styles.modalBadgeIconText}>
                       {selectedBadge.icon || '🏆'}
                     </Text>
                   </View>
-                  
+
                   <Text style={styles.modalDescription}>
                     {selectedBadge.description}
                   </Text>
-                  
+
                   <View style={styles.modalInfo}>
                     <View style={styles.modalInfoRow}>
                       <Text style={styles.modalInfoLabel}>난이도:</Text>
                       <Text style={styles.modalInfoValue}>
-                        {selectedBadge.difficulty === '하' ? '⭐' : 
-                         selectedBadge.difficulty === '중' ? '⭐⭐' : '⭐⭐⭐'}
+                        {'⭐'.repeat(Math.min(4, Math.max(1, typeof selectedBadge.difficulty === 'number' ? selectedBadge.difficulty : 2)))}
                       </Text>
                     </View>
-                    
+
                     {selectedBadge.isEarned ? (
                       <View style={styles.modalInfoRow}>
                         <Text style={styles.modalInfoLabel}>상태:</Text>

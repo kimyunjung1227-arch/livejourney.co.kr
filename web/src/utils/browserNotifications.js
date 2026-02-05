@@ -1,5 +1,6 @@
 // 브라우저 푸시 알림 유틸리티
 import { addNotification } from './notifications';
+import { logger } from './logger';
 
 // 알림 권한 요청
 export const requestNotificationPermission = async () => {
@@ -42,7 +43,7 @@ export const sendBrowserNotification = (title, options = {}) => {
       });
     }
   } catch (e) {
-    console.warn('개발용 알림 미러링 실패:', e);
+    logger.warn('개발용 알림 미러링 실패:', e);
   }
 
   if (!('Notification' in window)) {
@@ -84,7 +85,7 @@ export const sendBrowserNotification = (title, options = {}) => {
 
     return notification;
   } catch (error) {
-    console.error('알림 발송 실패:', error);
+    logger.error('알림 발송 실패:', error);
     return null;
   }
 };

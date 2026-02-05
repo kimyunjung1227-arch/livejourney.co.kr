@@ -4,7 +4,11 @@
   "webDir": "dist",
   "android": {
     "allowMixedContent": true,
-    "backgroundColor": "#ffffff"
+    "backgroundColor": "#ffffff",
+    "buildOptions": {
+      "keystorePath": "",
+      "keystoreAlias": ""
+    }
   },
   "plugins": {
     "SplashScreen": {
@@ -17,6 +21,17 @@
       "style": "DARK",
       "backgroundColor": "#ffffff",
       "overlaysWebView": false
+    },
+    "Geolocation": {
+      "permissions": {
+        "location": "always"
+      }
+    },
+    "Camera": {
+      "permissions": {
+        "camera": "Camera permission is required to take photos",
+        "photos": "Photos permission is required to select photos"
+      }
     }
   },
   "server": {

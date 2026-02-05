@@ -93,22 +93,24 @@ const styles = StyleSheet.create({
   screenLayout: {
     flex: 1,
     width: '100%',
-    backgroundColor: '#f8fafc', // 웹과 동일: background: #f8fafc
+    backgroundColor: '#ffffff', // 웹: bg-background-light = #ffffff
   },
   screenContent: {
     flex: 1,
+    overflow: 'hidden', // 웹: overflow-hidden
   },
   screenContentContainer: {
     flexGrow: 1,
-    paddingBottom: 100, // 하단 네비게이션 바(80px) + 여유 공간(20px)
+    paddingBottom: 100, // 웹: padding-bottom: 100px (네비게이션 바 80px + 여유 20px)
   },
   screenHeader: {
-    backgroundColor: 'transparent', // 웹과 동일: background: transparent
-    // 웹에서는 border와 shadow가 없음
+    position: 'relative', // 웹: position: sticky (RN에서는 relative로 처리)
+    zIndex: 20, // 웹과 동일
   },
   screenBody: {
-    paddingBottom: 100, // 하단 네비게이션 바(80px) + 여유 공간(20px) (웹: paddingBottom: '100px')
-    flex: 1, // 랜딩페이지: flex: 1
+    paddingBottom: 100, // 웹: padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px))
+    minHeight: '100%', // 웹: min-height: calc(100vh - 80px)
+    flex: 1,
   },
 });
 

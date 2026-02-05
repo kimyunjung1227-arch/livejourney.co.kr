@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { logger } from '../utils/logger';
 
 const KakaoMap = ({ 
   center = { lat: 37.5665, lng: 126.9780 }, // 서울 시청 기본값
@@ -15,7 +16,7 @@ const KakaoMap = ({
   // Kakao Map 초기화
   useEffect(() => {
     if (!window.kakao || !window.kakao.maps) {
-      console.error('Kakao Maps SDK가 로드되지 않았습니다.');
+      logger.error('Kakao Maps SDK가 로드되지 않았습니다.');
       return;
     }
 

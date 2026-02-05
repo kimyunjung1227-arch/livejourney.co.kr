@@ -89,16 +89,16 @@ export const toggleLike = async (postId) => {
           console.log(`   총 좋아요 수: ${verifyTotalLikes}개`);
           
           console.log('🔍 뱃지 체크 실행 중...');
-          const newBadges = await checkNewBadges();
+          const userJson = await AsyncStorage.getItem('user');
+          const currentUser = userJson ? JSON.parse(userJson) : {};
+          const stats = calculateUserStats(verifyMyPosts, currentUser);
+          const newBadges = await checkNewBadges(stats);
           console.log(`📋 발견된 새 뱃지: ${newBadges.length}개`);
-          
+
           if (newBadges.length > 0) {
-            // 첫 좋아요 뱃지를 우선적으로 찾기
-            const firstLikeBadge = newBadges.find(b => b.name === '첫 좋아요');
-            const badge = firstLikeBadge || newBadges[0];
-            
+            const badge = newBadges[0];
             console.log(`🎁 뱃지 획득 시도: ${badge.name}`);
-            const awarded = await awardBadge(badge);
+            const awarded = await awardBadge(badge, { region: stats?.topRegionName });
             
             if (awarded) {
               console.log(`✅ 뱃지 획득 성공: ${badge.name}`);
@@ -110,11 +110,7 @@ export const toggleLike = async (postId) => {
             }
           } else {
             console.log('📭 획득 가능한 새 뱃지 없음');
-            // 디버깅: 통계 다시 확인
-            const stats = await calculateUserStats();
             console.log('📊 현재 통계:', stats);
-            console.log(`   totalLikes: ${stats.totalLikes}`);
-            console.log(`   첫 좋아요 조건: ${stats.totalLikes >= 1}`);
           }
         } catch (error) {
           console.error('❌ 뱃지 체크 실패:', error);

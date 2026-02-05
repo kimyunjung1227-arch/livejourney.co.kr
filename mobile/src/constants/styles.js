@@ -7,27 +7,27 @@ export const COLORS = {
   primaryDark: '#0097A7',       // Hover/Active 용 약간 더 딥한 블루
   primaryLight: '#E0F7FA',      // 배경/하이라이트용 소프트 블루
   
-  // Background (웹과 동일)
-  background: '#F9FAFB',
-  backgroundLight: '#FFFFFF', // background-light
-  backgroundDark: '#181410', // background-dark
+  // Background (웹 Tailwind와 완전히 동일)
+  background: '#ffffff',
+  backgroundLight: '#ffffff', // 웹: background-light = #ffffff
+  backgroundDark: '#0B1020', // 웹: background-dark = #0B1020
   
-  // Text (웹과 동일)
-  text: '#181411', // text-light
-  textDark: '#f8f7f5', // text-dark
-  textPrimaryLight: '#212121', // text-primary-light
-  textSecondaryLight: '#757575', // text-secondary-light
-  textPrimaryDark: '#f8f7f5', // text-primary-dark
-  textSecondaryDark: '#8d755e', // text-secondary-dark
-  textSubtle: '#8a7560', // text-subtle-light
-  textSubtleDark: '#a1988e', // text-subtle-dark
-  textSecondary: '#757575',
+  // Text (웹 Tailwind와 완전히 동일)
+  text: '#111827', // 웹: text-light = #111827
+  textDark: '#F9FAFB', // 웹: text-dark = #F9FAFB
+  textPrimaryLight: '#111827', // 웹: text-primary-light = #111827
+  textSecondaryLight: '#6B7280', // 웹: text-secondary-light = #6B7280
+  textPrimaryDark: '#F9FAFB', // 웹: text-primary-dark = #F9FAFB
+  textSecondaryDark: '#9CA3AF', // 웹: text-secondary-dark = #9CA3AF
+  textSubtle: '#9CA3AF', // 웹: text-subtle-light = #9CA3AF
+  textSubtleDark: '#6B7280', // 웹: text-subtle-dark = #6B7280
+  textSecondary: '#6B7280',
   textWhite: '#FFFFFF',
   
-  // Border (웹과 동일)
-  border: '#E0E0E0',
-  borderLight: '#e6e0db', // border-light
-  borderDark: '#3c3329', // border-dark
+  // Border (웹 Tailwind와 완전히 동일)
+  border: '#E5E7EB',
+  borderLight: '#E5E7EB', // 웹: border-light = #E5E7EB
+  borderDark: '#1F2937', // 웹: border-dark = #1F2937
   
   // Card (웹과 동일)
   cardLight: '#ffffff', // card-light

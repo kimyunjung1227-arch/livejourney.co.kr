@@ -28,146 +28,142 @@ const FeedUpdateFrequencyScreen = () => {
   };
 
   return (
-    <div className="flex h-full w-full flex-col bg-background-light dark:bg-background-dark group/design-root">
+    <div className="flex h-screen w-full flex-col bg-background-light dark:bg-background-dark group/design-root overflow-hidden">
       <div className="flex-1 overflow-y-auto overflow-x-hidden">
         <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-border-light bg-surface-light/80 dark:border-border-dark dark:bg-surface-dark/80 backdrop-blur-sm px-4">
-        <button
-          onClick={() => navigate('/settings')}
-          className="flex size-12 shrink-0 items-center justify-center cursor-pointer text-black dark:text-white hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
-        >
-          <span className="material-symbols-outlined text-2xl">arrow_back</span>
-        </button>
-        <h1 className="text-lg font-bold leading-tight tracking-[-0.015em] text-black dark:text-white">실시간 피드 업데이트 주기</h1>
-        <div className="flex size-12 shrink-0 items-center justify-end">
           <button
-            onClick={handleSave}
-            className="text-base font-bold text-black dark:text-white hover:text-black/80 dark:hover:text-white/80 transition-colors"
+            onClick={() => navigate('/settings')}
+            className="flex size-12 shrink-0 items-center justify-center cursor-pointer text-black dark:text-white hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
           >
-            저장
+            <span className="material-symbols-outlined text-2xl">arrow_back</span>
           </button>
-        </div>
-      </header>
-
-      <main className="flex-grow pb-24">
-        <div className="flex flex-col">
-          {/* Information Section */}
-          <div className="bg-surface-subtle-light dark:bg-surface-subtle-dark p-4">
-            <h2 className="text-lg font-bold leading-normal text-black dark:text-white mb-1">설정 안내</h2>
-            <p className="text-sm font-normal leading-normal text-black/70 dark:text-white/70">
-              피드 업데이트 주기가 짧을수록 배터리 소모가 많아질 수 있습니다. 최적의 사용을 위해 '권장' 설정을 유지하는 것이 좋습니다.
-            </p>
+          <h1 className="text-lg font-bold leading-tight tracking-[-0.015em] text-black dark:text-white">실시간 피드 업데이트 주기</h1>
+          <div className="flex size-12 shrink-0 items-center justify-end">
+            <button
+              onClick={handleSave}
+              className="text-base font-bold text-black dark:text-white hover:text-black/80 dark:hover:text-white/80 transition-colors"
+            >
+              저장
+            </button>
           </div>
+        </header>
 
-          {/* Radio Options Section */}
-          <div className="bg-surface-light dark:bg-surface-dark">
-            <div className="px-4 pt-6 pb-2">
-              <h2 className="text-lg font-bold leading-normal text-black dark:text-white">주기 선택 옵션</h2>
+        <main className="flex-grow pb-24">
+          <div className="flex flex-col">
+            {/* Information Section */}
+            <div className="bg-surface-subtle-light dark:bg-surface-subtle-dark p-4">
+              <h2 className="text-lg font-bold leading-normal text-black dark:text-white mb-1">설정 안내</h2>
+              <p className="text-sm font-normal leading-normal text-black/70 dark:text-white/70">
+                피드 업데이트 주기가 짧을수록 배터리 소모가 많아질 수 있습니다. 최적의 사용을 위해 '권장' 설정을 유지하는 것이 좋습니다.
+              </p>
             </div>
 
-            <div className="flex flex-col" role="radiogroup">
-              {/* 30초 (권장) */}
-              <label
-                className={`flex h-auto cursor-pointer items-start justify-between p-4 transition-colors ${
-                  selectedFrequency === '30s' ? 'bg-primary/10 dark:bg-primary/20' : 'hover:bg-surface-subtle-light dark:hover:bg-surface-subtle-dark'
-                }`}
-                htmlFor="option1"
-              >
-                <div className="flex-grow pr-4">
-                  <p className={`text-base leading-normal ${selectedFrequency === '30s' ? 'font-bold' : 'font-medium'} text-black dark:text-white`}>
-                    30초 (권장)
-                  </p>
-                  <p className="text-sm font-normal leading-normal text-black/70 dark:text-white/70 mt-1">
-                    가장 일반적인 설정으로, 실시간 정보와 배터리 효율의 균형을 맞춥니다.
-                  </p>
-                </div>
-                <input
-                  className="form-radio mt-1 size-5 shrink-0 border-gray-300 text-primary focus:ring-primary dark:border-gray-600 dark:bg-gray-700 dark:focus:ring-offset-gray-800"
-                  id="option1"
-                  name="update-frequency"
-                  type="radio"
-                  checked={selectedFrequency === '30s'}
-                  onChange={() => setSelectedFrequency('30s')}
-                />
-              </label>
+            {/* Radio Options Section */}
+            <div className="bg-surface-light dark:bg-surface-dark">
+              <div className="px-4 pt-6 pb-2">
+                <h2 className="text-lg font-bold leading-normal text-black dark:text-white">주기 선택 옵션</h2>
+              </div>
 
-              {/* 1분 */}
-              <label
-                className={`flex h-auto cursor-pointer items-start justify-between p-4 transition-colors ${
-                  selectedFrequency === '1m' ? 'bg-primary/10 dark:bg-primary/20' : 'hover:bg-surface-subtle-light dark:hover:bg-surface-subtle-dark'
-                }`}
-                htmlFor="option2"
-              >
-                <div className="flex-grow pr-4">
-                  <p className={`text-base leading-normal ${selectedFrequency === '1m' ? 'font-bold' : 'font-medium'} text-black dark:text-white`}>
-                    1분
-                  </p>
-                  <p className="text-sm font-normal leading-normal text-black/70 dark:text-white/70 mt-1">
-                    배터리 소모를 줄이고 싶을 때 적합한 설정입니다.
-                  </p>
-                </div>
-                <input
-                  className="form-radio mt-1 size-5 shrink-0 border-gray-300 text-primary focus:ring-primary dark:border-gray-600 dark:bg-gray-700 dark:focus:ring-offset-gray-800"
-                  id="option2"
-                  name="update-frequency"
-                  type="radio"
-                  checked={selectedFrequency === '1m'}
-                  onChange={() => setSelectedFrequency('1m')}
-                />
-              </label>
+              <div className="flex flex-col" role="radiogroup">
+                {/* 30초 (권장) */}
+                <label
+                  className={`flex h-auto cursor-pointer items-start justify-between p-4 transition-colors ${selectedFrequency === '30s' ? 'bg-primary/10 dark:bg-primary/20' : 'hover:bg-surface-subtle-light dark:hover:bg-surface-subtle-dark'
+                    }`}
+                  htmlFor="option1"
+                >
+                  <div className="flex-grow pr-4">
+                    <p className={`text-base leading-normal ${selectedFrequency === '30s' ? 'font-bold' : 'font-medium'} text-black dark:text-white`}>
+                      30초 (권장)
+                    </p>
+                    <p className="text-sm font-normal leading-normal text-black/70 dark:text-white/70 mt-1">
+                      가장 일반적인 설정으로, 실시간 정보와 배터리 효율의 균형을 맞춥니다.
+                    </p>
+                  </div>
+                  <input
+                    className="form-radio mt-1 size-5 shrink-0 border-gray-300 text-primary focus:ring-primary dark:border-gray-600 dark:bg-gray-700 dark:focus:ring-offset-gray-800"
+                    id="option1"
+                    name="update-frequency"
+                    type="radio"
+                    checked={selectedFrequency === '30s'}
+                    onChange={() => setSelectedFrequency('30s')}
+                  />
+                </label>
 
-              {/* 5분 */}
-              <label
-                className={`flex h-auto cursor-pointer items-start justify-between p-4 transition-colors ${
-                  selectedFrequency === '5m' ? 'bg-primary/10 dark:bg-primary/20' : 'hover:bg-surface-subtle-light dark:hover:bg-surface-subtle-dark'
-                }`}
-                htmlFor="option3"
-              >
-                <div className="flex-grow pr-4">
-                  <p className={`text-base leading-normal ${selectedFrequency === '5m' ? 'font-bold' : 'font-medium'} text-black dark:text-white`}>
-                    5분
-                  </p>
-                  <p className="text-sm font-normal leading-normal text-black/70 dark:text-white/70 mt-1">
-                    중요한 업데이트만 간헐적으로 확인하고 싶을 때 사용합니다.
-                  </p>
-                </div>
-                <input
-                  className="form-radio mt-1 size-5 shrink-0 border-gray-300 text-primary focus:ring-primary dark:border-gray-600 dark:bg-gray-700 dark:focus:ring-offset-gray-800"
-                  id="option3"
-                  name="update-frequency"
-                  type="radio"
-                  checked={selectedFrequency === '5m'}
-                  onChange={() => setSelectedFrequency('5m')}
-                />
-              </label>
+                {/* 1분 */}
+                <label
+                  className={`flex h-auto cursor-pointer items-start justify-between p-4 transition-colors ${selectedFrequency === '1m' ? 'bg-primary/10 dark:bg-primary/20' : 'hover:bg-surface-subtle-light dark:hover:bg-surface-subtle-dark'
+                    }`}
+                  htmlFor="option2"
+                >
+                  <div className="flex-grow pr-4">
+                    <p className={`text-base leading-normal ${selectedFrequency === '1m' ? 'font-bold' : 'font-medium'} text-black dark:text-white`}>
+                      1분
+                    </p>
+                    <p className="text-sm font-normal leading-normal text-black/70 dark:text-white/70 mt-1">
+                      배터리 소모를 줄이고 싶을 때 적합한 설정입니다.
+                    </p>
+                  </div>
+                  <input
+                    className="form-radio mt-1 size-5 shrink-0 border-gray-300 text-primary focus:ring-primary dark:border-gray-600 dark:bg-gray-700 dark:focus:ring-offset-gray-800"
+                    id="option2"
+                    name="update-frequency"
+                    type="radio"
+                    checked={selectedFrequency === '1m'}
+                    onChange={() => setSelectedFrequency('1m')}
+                  />
+                </label>
 
-              {/* 수동 업데이트 */}
-              <label
-                className={`flex h-auto cursor-pointer items-start justify-between p-4 transition-colors ${
-                  selectedFrequency === 'manual' ? 'bg-primary/10 dark:bg-primary/20' : 'hover:bg-surface-subtle-light dark:hover:bg-surface-subtle-dark'
-                }`}
-                htmlFor="option4"
-              >
-                <div className="flex-grow pr-4">
-                  <p className={`text-base leading-normal ${selectedFrequency === 'manual' ? 'font-bold' : 'font-medium'} text-black dark:text-white`}>
-                    수동 업데이트
-                  </p>
-                  <p className="text-sm font-normal leading-normal text-black/70 dark:text-white/70 mt-1">
-                    필요할 때만 직접 새로고침하여 데이터를 업데이트합니다.
-                  </p>
-                </div>
-                <input
-                  className="form-radio mt-1 size-5 shrink-0 border-gray-300 text-primary focus:ring-primary dark:border-gray-600 dark:bg-gray-700 dark:focus:ring-offset-gray-800"
-                  id="option4"
-                  name="update-frequency"
-                  type="radio"
-                  checked={selectedFrequency === 'manual'}
-                  onChange={() => setSelectedFrequency('manual')}
-                />
-              </label>
+                {/* 5분 */}
+                <label
+                  className={`flex h-auto cursor-pointer items-start justify-between p-4 transition-colors ${selectedFrequency === '5m' ? 'bg-primary/10 dark:bg-primary/20' : 'hover:bg-surface-subtle-light dark:hover:bg-surface-subtle-dark'
+                    }`}
+                  htmlFor="option3"
+                >
+                  <div className="flex-grow pr-4">
+                    <p className={`text-base leading-normal ${selectedFrequency === '5m' ? 'font-bold' : 'font-medium'} text-black dark:text-white`}>
+                      5분
+                    </p>
+                    <p className="text-sm font-normal leading-normal text-black/70 dark:text-white/70 mt-1">
+                      중요한 업데이트만 간헐적으로 확인하고 싶을 때 사용합니다.
+                    </p>
+                  </div>
+                  <input
+                    className="form-radio mt-1 size-5 shrink-0 border-gray-300 text-primary focus:ring-primary dark:border-gray-600 dark:bg-gray-700 dark:focus:ring-offset-gray-800"
+                    id="option3"
+                    name="update-frequency"
+                    type="radio"
+                    checked={selectedFrequency === '5m'}
+                    onChange={() => setSelectedFrequency('5m')}
+                  />
+                </label>
+
+                {/* 수동 업데이트 */}
+                <label
+                  className={`flex h-auto cursor-pointer items-start justify-between p-4 transition-colors ${selectedFrequency === 'manual' ? 'bg-primary/10 dark:bg-primary/20' : 'hover:bg-surface-subtle-light dark:hover:bg-surface-subtle-dark'
+                    }`}
+                  htmlFor="option4"
+                >
+                  <div className="flex-grow pr-4">
+                    <p className={`text-base leading-normal ${selectedFrequency === 'manual' ? 'font-bold' : 'font-medium'} text-black dark:text-white`}>
+                      수동 업데이트
+                    </p>
+                    <p className="text-sm font-normal leading-normal text-black/70 dark:text-white/70 mt-1">
+                      필요할 때만 직접 새로고침하여 데이터를 업데이트합니다.
+                    </p>
+                  </div>
+                  <input
+                    className="form-radio mt-1 size-5 shrink-0 border-gray-300 text-primary focus:ring-primary dark:border-gray-600 dark:bg-gray-700 dark:focus:ring-offset-gray-800"
+                    id="option4"
+                    name="update-frequency"
+                    type="radio"
+                    checked={selectedFrequency === 'manual'}
+                    onChange={() => setSelectedFrequency('manual')}
+                  />
+                </label>
+              </div>
             </div>
           </div>
-        </div>
-      </main>
+        </main>
 
       </div>
 

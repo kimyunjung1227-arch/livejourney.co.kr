@@ -1,200 +1,33 @@
 const mongoose = require('mongoose');
 
 /**
- * 라이브저니 뱃지 시스템 v3.0
- * 단순하고 명확한 달성 기준만!
+ * 라이브저니 뱃지 시스템 v5.0
+ * 7 카테고리 20개: 온보딩, 지역 가이드, 실시간 정보, 도움 지수, 정확한 정보, 친절한 여행자, 기여도
+ * - clientOnly: 서버 미집계, 클라이언트에서만 지급
+ * - 첫 걸음: postCount 1 / 지역 가이드: regionMaxPosts 10 (서버 지급)
  */
 
 const BADGES = {
-  // 시작 단계
-  '첫 걸음': {
-    name: '첫 걸음',
-    description: '첫 번째 여행 사진을 올렸어요!',
-    icon: '🌱',
-    category: '시작',
-    difficulty: 1,
-    gradient: 'from-green-400 to-emerald-500',
-    condition: { type: 'postCount', value: 1 }
-  },
-  
-  '여행 시작': {
-    name: '여행 시작',
-    description: '3개의 여행 기록을 남겼어요',
-    icon: '🎒',
-    category: '시작',
-    difficulty: 1,
-    gradient: 'from-blue-400 to-cyan-500',
-    condition: { type: 'postCount', value: 3 }
-  },
-  
-  '첫 좋아요': {
-    name: '첫 좋아요',
-    description: '다른 사람이 내 사진을 좋아해줬어요!',
-    icon: '💖',
-    category: '시작',
-    difficulty: 1,
-    gradient: 'from-pink-400 to-rose-500',
-    condition: { type: 'likesReceived', value: 1 }
-  },
-  
-  // 활동 단계
-  '여행 애호가': {
-    name: '여행 애호가',
-    description: '10개의 여행 기록을 남겼어요',
-    icon: '✈️',
-    category: '활동',
-    difficulty: 2,
-    gradient: 'from-sky-400 to-blue-500',
-    condition: { type: 'postCount', value: 10 }
-  },
-  
-  '사진 수집가': {
-    name: '사진 수집가',
-    description: '25개의 여행 사진을 모았어요',
-    icon: '📷',
-    category: '활동',
-    difficulty: 2,
-    gradient: 'from-purple-400 to-violet-500',
-    condition: { type: 'postCount', value: 25 }
-  },
-  
-  '인기 여행자': {
-    name: '인기 여행자',
-    description: '좋아요를 50개 받았어요!',
-    icon: '⭐',
-    category: '활동',
-    difficulty: 2,
-    gradient: 'from-yellow-400 to-orange-500',
-    condition: { type: 'likesReceived', value: 50 }
-  },
-  
-  // 전문가 단계
-  '여행 전문가': {
-    name: '여행 전문가',
-    description: '50개의 여행 기록! 진정한 여행 전문가예요',
-    icon: '🏆',
-    category: '전문가',
-    difficulty: 3,
-    gradient: 'from-amber-400 to-yellow-600',
-    condition: { type: 'postCount', value: 50 }
-  },
-  
-  '슈퍼 인기': {
-    name: '슈퍼 인기',
-    description: '좋아요를 100개나 받았어요!',
-    icon: '🌟',
-    category: '전문가',
-    difficulty: 3,
-    gradient: 'from-yellow-500 to-amber-600',
-    condition: { type: 'likesReceived', value: 100 }
-  },
-  
-  '지역 탐험가': {
-    name: '지역 탐험가',
-    description: '5개 이상의 다른 지역을 방문했어요',
-    icon: '🗺️',
-    category: '전문가',
-    difficulty: 3,
-    gradient: 'from-teal-400 to-cyan-600',
-    condition: { type: 'regionCount', value: 5 }
-  },
-  
-  // 마스터 단계
-  '여행 마스터': {
-    name: '여행 마스터',
-    description: '100개의 여행 기록! 정말 대단해요!',
-    icon: '👑',
-    category: '마스터',
-    difficulty: 4,
-    gradient: 'from-purple-500 to-pink-600',
-    condition: { type: 'postCount', value: 100 }
-  },
-  
-  '전국 정복자': {
-    name: '전국 정복자',
-    description: '10개 이상의 지역을 모두 방문했어요!',
-    icon: '🌍',
-    category: '마스터',
-    difficulty: 4,
-    gradient: 'from-green-500 to-teal-600',
-    condition: { type: 'regionCount', value: 10 }
-  },
-  
-  '메가 스타': {
-    name: '메가 스타',
-    description: '좋아요를 500개나 받았어요! 슈퍼스타!',
-    icon: '🌠',
-    category: '마스터',
-    difficulty: 4,
-    gradient: 'from-yellow-400 via-orange-500 to-red-600',
-    condition: { type: 'likesReceived', value: 500 }
-  },
-  
-  // 지역 특화 뱃지
-  '내 지역 알리미': {
-    name: '내 지역 알리미',
-    description: '한 지역에서 30개 이상 게시했어요! 지역 홍보 대사!',
-    icon: '📍',
-    category: '지역',
-    difficulty: 3,
-    gradient: 'from-red-400 to-pink-500',
-    condition: { type: 'regionMaxPosts', value: 30 }
-  },
-  
-  '도시 홍보대사': {
-    name: '도시 홍보대사',
-    description: '한 지역에서 50개 이상! 이제 그 지역의 전문가예요',
-    icon: '🏙️',
-    category: '지역',
-    difficulty: 4,
-    gradient: 'from-cyan-400 to-blue-600',
-    condition: { type: 'regionMaxPosts', value: 50 }
-  },
-  
-  // 숨겨진 뱃지
-  '행운아': {
-    name: '행운아',
-    description: '게시물 하나가 좋아요 100개를 받았어요!',
-    icon: '🍀',
-    category: '숨김',
-    difficulty: 4,
-    gradient: 'from-green-400 via-emerald-500 to-teal-600',
-    hidden: true,
-    condition: { type: 'singlePostLikes', value: 100 }
-  },
-  
-  '신속 게시자': {
-    name: '신속 게시자',
-    description: '하루에 게시물을 5개 올렸어요!',
-    icon: '⚡',
-    category: '숨김',
-    difficulty: 3,
-    gradient: 'from-yellow-300 to-orange-500',
-    hidden: true,
-    condition: { type: 'dailyPosts', value: 5 }
-  },
-  
-  '전설의 여행자': {
-    name: '전설의 여행자',
-    description: '200개의 여행 기록! 당신은 전설입니다!',
-    icon: '🦄',
-    category: '숨김',
-    difficulty: 5,
-    gradient: 'from-pink-400 via-purple-500 to-indigo-600',
-    hidden: true,
-    condition: { type: 'postCount', value: 200 }
-  },
-  
-  '도시 탐험가': {
-    name: '도시 탐험가',
-    description: '한 지역에서 20개 이상 게시! 숨겨진 명소를 찾았어요',
-    icon: '🌃',
-    category: '숨김',
-    difficulty: 3,
-    gradient: 'from-indigo-400 to-purple-600',
-    hidden: true,
-    condition: { type: 'regionMaxPosts', value: 20 }
-  }
+  '첫 걸음': { name: '첫 걸음', description: '첫 번째 실시간 여행 정보를 공유했어요. 여행의 첫걸음을 내딛었어요!', icon: '👣', category: '온보딩', difficulty: 1, gradient: 'from-green-400 to-emerald-500', condition: { type: 'postCount', value: 1 } },
+  '지역 가이드': { name: '지역 가이드', description: '해당 지역 실시간 제보 10회 이상. 가장 직관적인 로컬 전문가 인증', icon: '🗺️', category: '지역 가이드', difficulty: 2, gradient: 'from-indigo-600 to-blue-800', condition: { type: 'regionMaxPosts', value: 10 } },
+  '지역 지킴이': { name: '지역 지킴이', description: '해당 지역의 중요 정보(폐업, 혼잡 등) 5회 이상 공유. 지역의 실패 없는 여행을 수호', icon: '🛡️', category: '지역 가이드', difficulty: 2, gradient: 'from-amber-600 to-amber-800', condition: { type: 'clientOnly', value: 0 } },
+  '지역 통신원': { name: '지역 통신원', description: '해당 지역에서 3일 연속 실시간 중계. 지역 소식을 실시간으로 전하는 특파원', icon: '📡', category: '지역 가이드', difficulty: 3, gradient: 'from-cyan-500 to-blue-600', condition: { type: 'clientOnly', value: 0 } },
+  '지역 마스터': { name: '지역 마스터', description: '해당 지역 활동량 상위 1% 기록. 그 지역에 대해선 모르는 게 없는 권위자', icon: '👑', category: '지역 가이드', difficulty: 4, gradient: 'from-purple-600 to-fuchsia-700', condition: { type: 'clientOnly', value: 0 } },
+  '날씨요정': { name: '날씨요정', description: '비/눈 등 기상 변화 시 10분 이내 현장 제보 5회. 친근하고 확실한 날씨 알림이', icon: '🌦️', category: '실시간 정보', difficulty: 2, gradient: 'from-cyan-400 to-blue-600', condition: { type: 'clientOnly', value: 0 } },
+  '웨이팅 요정': { name: '웨이팅 요정', description: '실시간 대기 줄 상황과 예상 시간 10회 공유. 헛걸음과 시간 낭비를 막아주는 구세주', icon: '⏱️', category: '실시간 정보', difficulty: 2, gradient: 'from-lime-400 to-green-600', condition: { type: 'clientOnly', value: 0 } },
+  '0.1초 셔터': { name: '0.1초 셔터', description: '현장 도착 즉시 실시간 라이브 사진 업로드. 누구보다 빠르게 현장을 중계하는 유저', icon: '⚡', category: '실시간 정보', difficulty: 3, gradient: 'from-yellow-300 to-amber-500', condition: { type: 'clientOnly', value: 0 } },
+  '베스트 나침반': { name: '베스트 나침반', description: '실시간 게시글 총 조회수 10,000회 돌파. 많은 이들의 길잡이가 된 영향력 인증', icon: '🧭', category: '도움 지수', difficulty: 4, gradient: 'from-amber-400 to-yellow-600', condition: { type: 'clientOnly', value: 0 } },
+  '실패 구조대': { name: '실패 구조대', description: '내 정보로 헛걸음을 피한 감사 피드백 50회. 라이브저니의 사명을 가장 잘 실천한 유저', icon: '🫀', category: '도움 지수', difficulty: 3, gradient: 'from-red-400 to-rose-600', condition: { type: 'likesReceived', value: 50 } },
+  '라이트하우스': { name: '라이트하우스', description: '정보가 귀한 시점(밤, 악천후)에 유용한 정보 제공. 어려운 상황에서 타인의 여행을 밝혀준 존재', icon: '🗼', category: '도움 지수', difficulty: 3, gradient: 'from-cyan-400 to-blue-600', condition: { type: 'clientOnly', value: 0 } },
+  '팩트 체크 마스터': { name: '팩트 체크 마스터', description: '잘못된 과거 정보를 최신으로 수정/갱신 10회. 정보의 최신성을 유지하는 커뮤니티의 기둥', icon: '✅', category: '정확한 정보', difficulty: 3, gradient: 'from-emerald-600 to-teal-700', condition: { type: 'clientOnly', value: 0 } },
+  '인간 GPS': { name: '인간 GPS', description: '제보 위치와 실제 GPS 일치율 100% 유지. 데이터 신뢰도를 보장하는 물리적 인증', icon: '🛡️', category: '정확한 정보', difficulty: 2, gradient: 'from-slate-500 to-slate-700', condition: { type: 'clientOnly', value: 0 } },
+  '트래블 셜록': { name: '트래블 셜록', description: '주차 꿀팁, 숨은 입구 등 디테일한 정보 공유. 남들이 놓치는 세밀한 부분까지 챙기는 유저', icon: '🔍', category: '정확한 정보', difficulty: 2, gradient: 'from-amber-600 to-amber-800', condition: { type: 'clientOnly', value: 0 } },
+  '실시간 답변러': { name: '실시간 답변러', description: '질문 게시글에 10분 이내로 답변 5회 이상. 여행자의 궁금증을 즉시 해결해 주는 해결사', icon: '💬', category: '친절한 여행자', difficulty: 2, gradient: 'from-sky-400 to-blue-500', condition: { type: 'clientOnly', value: 0 } },
+  '길 위의 천사': { name: '길 위의 천사', description: '타인의 게시글에 응원 및 격려 댓글 50회 이상. 커뮤니티의 긍정적인 활력을 불어넣는 유저', icon: '👼', category: '친절한 여행자', difficulty: 1, gradient: 'from-yellow-400 to-orange-500', condition: { type: 'clientOnly', value: 0 } },
+  '동행 가이드': { name: '동행 가이드', description: '사진을 포함한 정성스러운 답변으로 도움 제공. 가장 헌신적으로 정보를 나누는 친절한 유저', icon: '🤝', category: '친절한 여행자', difficulty: 3, gradient: 'from-violet-500 to-purple-600', condition: { type: 'clientOnly', value: 0 } },
+  '라이브 기록가': { name: '라이브 기록가', description: '총 실시간 제보 게시글 100개 달성. 서비스의 성장을 이끄는 핵심 기여자', icon: '📝', category: '기여도', difficulty: 3, gradient: 'from-blue-600 to-indigo-700', condition: { type: 'postCount', value: 100 } },
+  '연속 중계 마스터': { name: '연속 중계 마스터', description: '30일 연속으로 실시간 상황 1회 이상 공유. 변함없는 성실함으로 신뢰를 쌓는 유저', icon: '📅', category: '기여도', difficulty: 4, gradient: 'from-emerald-500 to-green-700', condition: { type: 'clientOnly', value: 0 } },
+  '지도 개척자': { name: '지도 개척자', description: '정보가 없던 새로운 장소의 첫 실시간 정보 등록. 라이브저니의 지도를 확장하는 선구자', icon: '🗺️', category: '기여도', difficulty: 2, gradient: 'from-amber-600 to-orange-700', condition: { type: 'clientOnly', value: 0 } }
 };
 
 // 뱃지 획득 기록 스키마
@@ -283,6 +116,12 @@ rewardSchema.statics.checkAndAwardBadges = async function(userId) {
       case 'dailyPosts':
         shouldAward = maxDailyPosts >= badgeInfo.condition.value;
         break;
+      case 'clientOnly':
+        shouldAward = false; // 클라이언트에서만 집계·지급
+        break;
+      default:
+        shouldAward = false;
+        break;
     }
     
     if (shouldAward) {
@@ -319,7 +158,7 @@ rewardSchema.statics.getUserBadges = async function(userId) {
   
   return badges.map(b => ({
     ...b.toObject(),
-    ...BADGES[b.badgeName]
+    ...(BADGES[b.badgeName] || {})
   }));
 };
 

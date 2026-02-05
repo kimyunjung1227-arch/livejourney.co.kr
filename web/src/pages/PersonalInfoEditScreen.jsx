@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import BottomNavigation from '../components/BottomNavigation';
+import { logger } from '../utils/logger';
 
 const PersonalInfoEditScreen = () => {
   const navigate = useNavigate();
@@ -57,7 +58,7 @@ const PersonalInfoEditScreen = () => {
       alert('개인 정보가 저장되었습니다!');
       navigate('/settings');
     } catch (error) {
-      console.error('❌ 저장 실패:', error);
+      logger.error('❌ 저장 실패:', error);
       alert('저장에 실패했습니다.');
     }
   };

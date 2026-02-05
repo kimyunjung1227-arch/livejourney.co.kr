@@ -120,7 +120,7 @@ const SettingsScreen = () => {
           
           <TouchableOpacity
             style={styles.settingItem}
-            onPress={() => {/* TODO: 공지사항 */ }}
+            onPress={() => navigation.navigate('Notices')}
           >
             <Text style={styles.settingLabel}>공지사항</Text>
             <Ionicons name="chevron-forward" size={20} color={COLORS.textSecondary} />

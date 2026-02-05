@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING } from '../constants/styles';
 import { isPostLiked } from '../utils/socialInteractions';
 
-const PostGridItem = ({ post, index, isEditMode, isSelected, onPress, onToggleSelection }) => {
+const PostGridItem = ({ post, index, isEditMode, isSelected, onPress, onToggleSelection, onTagPress }) => {
   const [isLiked, setIsLiked] = useState(false);
   const imageUrl = post.imageUrl || post.images?.[0] || post.image;
   const likeCount = post.likes || post.likeCount || 0;
@@ -73,11 +73,16 @@ const PostGridItem = ({ post, index, isEditMode, isSelected, onPress, onToggleSe
         </Text>
         {post.tags && post.tags.length > 0 && (
           <View style={styles.tagsContainer}>
-            {post.tags.slice(0, 3).map((tag, tagIndex) => (
-              <Text key={tagIndex} style={styles.tag}>
-                #{typeof tag === 'string' ? tag.replace('#', '') : tag}
-              </Text>
-            ))}
+            {post.tags.slice(0, 3).map((tag, tagIndex) => {
+              const t = typeof tag === 'string' ? tag.replace(/^#+/, '') : tag;
+              return onTagPress ? (
+                <TouchableOpacity key={tagIndex} onPress={() => onTagPress(t)} activeOpacity={0.7}>
+                  <Text style={styles.tag}>#{t}</Text>
+                </TouchableOpacity>
+              ) : (
+                <Text key={tagIndex} style={styles.tag}>#{t}</Text>
+              );
+            })}
           </View>
         )}
       </View>

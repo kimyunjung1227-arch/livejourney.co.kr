@@ -27,7 +27,7 @@ const ExchangeSuccessScreen = () => {
   }
 
   return (
-    <div className="flex h-full w-full flex-col bg-white dark:bg-background-dark">
+    <div className="flex h-screen w-full flex-col bg-white dark:bg-background-dark overflow-hidden">
       <div className="flex flex-1 flex-col justify-between p-6 overflow-y-auto overflow-x-hidden">
         {/* 성공 메시지 영역 */}
         <div className="flex flex-1 flex-col items-center justify-center pt-16">
@@ -46,13 +46,13 @@ const ExchangeSuccessScreen = () => {
 
         {/* 액션 버튼 영역 */}
         <div className="w-full space-y-3 pb-4">
-          <button 
+          <button
             onClick={handleGoToCoupons}
             className="flex w-full cursor-pointer items-center justify-center overflow-hidden rounded-lg h-14 px-5 bg-primary text-white text-lg font-bold leading-normal tracking-[0.015em] hover:bg-primary/90 transition-colors"
           >
             <span className="truncate">내 쿠폰함 바로가기</span>
           </button>
-          <button 
+          <button
             onClick={handleGoHome}
             className="flex w-full cursor-pointer items-center justify-center overflow-hidden rounded-lg h-14 px-5 bg-transparent text-gray-500 dark:text-gray-400 text-base font-bold leading-normal tracking-[0.015em] hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
           >

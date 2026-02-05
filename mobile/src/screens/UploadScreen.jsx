@@ -27,7 +27,7 @@ import { analyzeImageForTags, getRecommendedTags } from '../utils/aiImageAnalyze
 import { getCurrentTimestamp, getTimeAgo } from '../utils/timeUtils';
 import { checkAndAwardTitles } from '../utils/dailyTitleSystem';
 import { gainExp } from '../utils/levelSystem';
-import { checkNewBadges, awardBadge } from '../utils/badgeSystem';
+import { checkNewBadges, awardBadge, calculateUserStats } from '../utils/badgeSystem';
 import { getBadgeCongratulationMessage, getBadgeDifficultyEffects } from '../utils/badgeMessages';
 import { checkAndNotifyInterestPlace } from '../utils/interestPlaces';
 import { ScreenLayout, ScreenContent, ScreenHeader, ScreenBody } from '../components/ScreenLayout';
@@ -340,13 +340,18 @@ const UploadScreen = () => {
       const posts = postsJson ? JSON.parse(postsJson) : [];
       console.log(`📊 저장된 게시물 수: ${posts.length}개`);
       
-      const newBadges = await checkNewBadges();
+      const userJson = await AsyncStorage.getItem('user');
+      const currentUser = userJson ? JSON.parse(userJson) : {};
+      const uid = currentUser?.id || currentUser?._id || '';
+      const myPosts = posts.filter((p) => String(p.userId || p.user?.id || p.user) === String(uid));
+      const stats = calculateUserStats(myPosts, currentUser);
+      const newBadges = await checkNewBadges(stats);
       console.log(`📋 발견된 새 뱃지: ${newBadges.length}개`);
-      
+
       if (newBadges.length > 0) {
         const badge = newBadges[0];
         console.log(`🎁 뱃지 획득 시도: ${badge.name} (난이도: ${badge.difficulty})`);
-        const awarded = await awardBadge(badge);
+        const awarded = await awardBadge(badge, { region: stats?.topRegionName });
         
         if (awarded) {
           console.log(`✅ 뱃지 획득 성공: ${badge.name}`);
@@ -516,7 +521,6 @@ const UploadScreen = () => {
       
       const aiCategory = formData.aiCategory || 'scenic';
       const aiCategoryName = formData.aiCategoryName || '추천 장소';
-      const aiLabels = formData.tags || [];
       
       setUploadProgress(60);
       
@@ -536,11 +540,15 @@ const UploadScreen = () => {
       // 지역 정보 추출 (첫 번째 단어를 지역으로 사용)
       const region = formData.location?.split(' ')[0] || '기타';
       
+      // localStorage/AsyncStorage에는 이미지를 저장하지 않음 (용량 문제)
+      // 메타데이터만 저장하고, 이미지는 서버에서 불러옴
       const uploadedPost = {
         id: `local-${Date.now()}`,
         userId: currentUserId,
-        images: formData.images,
-        videos: formData.videos,
+        images: [], // 이미지 데이터 저장 안 함
+        videos: [], // 비디오 데이터 저장 안 함
+        imageCount: formData.images.length, // 이미지 개수만 저장
+        videoCount: formData.videos.length, // 비디오 개수만 저장
         location: formData.location,
         tags: formData.tags,
         note: formData.note,
@@ -553,7 +561,6 @@ const UploadScreen = () => {
         isLocal: true,
         category: aiCategory,
         categoryName: aiCategoryName,
-        aiLabels: aiLabels,
         coordinates: formData.coordinates,
         detailedLocation: formData.location,
         placeName: formData.location,
@@ -594,6 +601,11 @@ const UploadScreen = () => {
           console.log('✅ 뱃지 획득! 성공 모달 닫고 뱃지 모달 표시');
           setShowSuccessModal(false);
           // 뱃지 모달은 checkAndAwardBadge에서 이미 표시됨
+          // 뱃지 모달 표시 후 3초 뒤 메인으로 이동
+          setTimeout(() => {
+            setShowBadgeModal(false);
+            navigation.navigate('MainTab');
+          }, 3000);
           return;
         }
         
@@ -605,6 +617,11 @@ const UploadScreen = () => {
           setShowSuccessModal(false); // 성공 모달 닫기
           setShowTitleModal(true);
           await gainExp('24시간 타이틀');
+          // 타이틀 모달 표시 후 3초 뒤 메인으로 이동
+          setTimeout(() => {
+            setShowTitleModal(false);
+            navigation.navigate('MainTab');
+          }, 3000);
           return;
         }
         
@@ -629,35 +646,50 @@ const UploadScreen = () => {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
       >
-        {/* 헤더 - 웹과 동일한 구조 (ScreenContent 밖) */}
+        {/* 헤더 - 웹과 동일한 구조 */}
         <ScreenHeader>
           <View style={styles.headerContent}>
             <TouchableOpacity
               style={styles.closeButton}
               onPress={() => navigation.goBack()}
+              activeOpacity={0.7}
             >
-              <Ionicons name="arrow-back" size={24} color={COLORS.text} />
+              <Ionicons name="arrow-back" size={24} color="#333" />
             </TouchableOpacity>
             <Text style={styles.headerTitle}>업로드: 여행 기록</Text>
-            <View style={styles.headerPlaceholder} />
+            <TouchableOpacity
+              style={styles.submitButton}
+              onPress={handleSubmit}
+              disabled={uploading || formData.images.length === 0 || !formData.location.trim()}
+              activeOpacity={0.7}
+            >
+              <Text style={[
+                styles.submitButtonText,
+                (uploading || formData.images.length === 0 || !formData.location.trim()) && styles.submitButtonTextDisabled
+              ]}>
+                업로드
+              </Text>
+            </TouchableOpacity>
           </View>
         </ScreenHeader>
 
-        {/* 메인 컨텐츠 - 웹과 동일한 구조 */}
+        {/* 메인 컨텐츠 - 웹과 동일한 구조: padding: '0 16px 100px 16px' */}
         <ScreenContent>
-          <ScreenBody>
-            <View style={styles.content}>
+          <ScreenBody style={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 100 }}>
             {/* 사진 추가 */}
             <View style={styles.section}>
+              <Text style={styles.sectionTitle}>사진 / 동영상</Text>
               {formData.images.length === 0 && formData.videos.length === 0 ? (
                 <TouchableOpacity
                   style={styles.addPhotoButton}
                   onPress={() => setShowPhotoOptions(true)}
                   activeOpacity={0.9}
                 >
-                  <Ionicons name="add-circle" size={48} color={COLORS.primary} />
+                  <View style={styles.addPhotoIconContainer}>
+                    <Text style={styles.addPhotoIcon}>📷</Text>
+                  </View>
                   <Text style={styles.addPhotoText}>사진 또는 동영상 추가</Text>
-                  <Text style={styles.addPhotoSubtext}>최대 10개까지</Text>
+                  <Text style={styles.addPhotoSubtext}>최대 10개 (동영상 100MB까지)</Text>
                 </TouchableOpacity>
               ) : (
                 <ScrollView 
@@ -846,7 +878,6 @@ const UploadScreen = () => {
                 </Text>
               )}
             </View>
-            </View>
           </ScreenBody>
         </ScreenContent>
 
@@ -886,6 +917,50 @@ const UploadScreen = () => {
               </TouchableOpacity>
             </View>
           </TouchableOpacity>
+        </Modal>
+
+        {/* 업로드 중 로딩 모달 */}
+        <Modal
+          visible={uploading}
+          transparent
+          animationType="fade"
+        >
+          <View style={styles.loadingModalOverlay}>
+            <View style={styles.loadingModalContent}>
+              <View style={styles.loadingIconContainer}>
+                <ActivityIndicator size="large" color={COLORS.primary} />
+                <View style={styles.loadingGlow} />
+              </View>
+              <Text style={styles.loadingTitle}>업로드 중...</Text>
+              <Text style={styles.loadingMessage}>
+                여행 기록을 업로드하고 있습니다
+              </Text>
+
+              {/* 진행률 바 */}
+              <View style={styles.progressContainer}>
+                <View style={styles.progressBar}>
+                  <View style={[styles.progressFill, { width: `${uploadProgress}%` }]} />
+                </View>
+                <View style={styles.progressInfo}>
+                  <Text style={styles.progressStatus}>
+                    {uploadProgress < 30 ? '파일 준비 중...' : 
+                     uploadProgress < 60 ? '이미지 업로드 중...' : 
+                     uploadProgress < 80 ? '게시물 저장 중...' : 
+                     uploadProgress < 100 ? '처리 중...' : '완료!'}
+                  </Text>
+                  <Text style={styles.progressPercent}>{uploadProgress}%</Text>
+                </View>
+              </View>
+
+              {/* 단계 표시 */}
+              <View style={styles.stepIndicators}>
+                <View style={[styles.stepDot, uploadProgress >= 20 && styles.stepDotActive]} />
+                <View style={[styles.stepDot, uploadProgress >= 60 && styles.stepDotActive]} />
+                <View style={[styles.stepDot, uploadProgress >= 80 && styles.stepDotActive]} />
+                <View style={[styles.stepDot, uploadProgress >= 100 && styles.stepDotActive]} />
+              </View>
+            </View>
+          </View>
         </Modal>
 
         {/* 성공 모달 */}
@@ -1090,9 +1165,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 12, // py-3 = 12px (웹: padding: 12px 16px)
-    paddingHorizontal: SPACING.md, // px-4 = 16px (웹: padding: 12px 16px)
-    backgroundColor: 'transparent', // 웹: background: transparent
+    paddingVertical: 15, // 웹: padding: 15px 20px
+    paddingHorizontal: 20, // 웹: padding: 15px 20px
+    backgroundColor: '#FFFFFF', // 웹: background: white
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0', // 웹: border-bottom: 1px solid #e0e0e0
   },
   header: {
     flexDirection: 'row',
@@ -1118,42 +1195,69 @@ const styles = StyleSheet.create({
     borderRadius: 8, // rounded-lg (웹과 동일)
   },
   headerTitle: {
-    fontSize: 18, // text-lg = 18px (웹: fontSize: '18px')
-    fontWeight: '700', // font-bold (웹: fontWeight: 700)
-    color: COLORS.text, // text-gray-900 (웹: color: '#111827')
+    fontSize: 18, // 웹: fontSize: '18px'
+    fontWeight: '600', // 웹: fontWeight: 600
+    color: '#333', // 웹: color: #333
     flex: 1,
     textAlign: 'center',
   },
-  headerPlaceholder: {
-    width: 40, // w-10 = 40px
+  submitButton: {
+    paddingHorizontal: 16, // 웹: padding: 8px 16px
+    paddingVertical: 8,
+    borderRadius: 8, // 웹: border-radius: 8px
+    backgroundColor: COLORS.primary, // 웹: background: #667eea
+  },
+  submitButtonText: {
+    fontSize: 14, // 웹: font-size: 14px
+    fontWeight: '600', // 웹: font-weight: 600
+    color: '#FFFFFF', // 웹: color: white
+  },
+  submitButtonTextDisabled: {
+    opacity: 0.5, // 웹: opacity: 0.5
   },
   content: {
-    padding: SPACING.md, // p-4 = 16px (웹: padding: '0 16px 100px 16px'에서 내부 div는 p-4)
-    gap: SPACING.md, // space-y-4 = 16px (웹: space-y-4)
+    gap: 20, // 웹: space-y-5 = 20px
   },
   section: {
-    marginBottom: SPACING.md,
+    marginBottom: 20, // 웹: margin-bottom: 20px
+  },
+  sectionTitle: {
+    fontSize: 14, // 웹: text-sm = 14px
+    fontWeight: '600', // 웹: font-semibold
+    color: '#1F2937', // 웹: text-gray-800
+    marginBottom: 12, // 웹: mb-3 = 12px
   },
   addPhotoButton: {
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: 48,
+    paddingHorizontal: 16, // 웹: px-4
+    paddingVertical: 40, // 웹: py-10
     borderWidth: 2,
-    borderColor: COLORS.border,
+    borderColor: COLORS.primaryLight, // 웹: border-primary-soft
     borderStyle: 'dashed',
-    borderRadius: 12,
+    borderRadius: 8, // 웹: rounded-lg
+    backgroundColor: COLORS.primaryLight + '4D', // 웹: bg-primary-soft/30
     justifyContent: 'center',
     alignItems: 'center',
-    gap: SPACING.sm,
+    gap: 8, // 웹: gap-2
+  },
+  addPhotoIconContainer: {
+    width: 48, // 웹: w-12
+    height: 48, // 웹: h-12
+    borderRadius: 24, // 웹: rounded-full
+    backgroundColor: COLORS.primaryLight, // 웹: bg-primary-soft
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  addPhotoIcon: {
+    fontSize: 24, // 웹: text-2xl
   },
   addPhotoText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: COLORS.text,
+    fontSize: 14, // 웹: text-sm
+    fontWeight: '500', // 웹: font-medium
+    color: '#374151', // 웹: text-gray-700
   },
   addPhotoSubtext: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    marginTop: 2,
+    fontSize: 12, // 웹: text-xs
+    color: '#6B7280', // 웹: text-gray-500
     textAlign: 'center',
   },
   photoScrollView: {
@@ -1455,6 +1559,78 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.body,
     fontWeight: '600',
     color: COLORS.text,
+  },
+  // 업로드 중 로딩 모달 스타일
+  loadingModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: SPACING.lg,
+  },
+  loadingModalContent: {
+    width: '100%',
+    maxWidth: 400,
+    backgroundColor: COLORS.backgroundLight,
+    borderRadius: 24,
+    padding: SPACING.xl,
+    alignItems: 'center',
+  },
+  loadingIconContainer: {
+    alignItems: 'center',
+    marginBottom: SPACING.lg,
+    position: 'relative',
+  },
+  loadingGlow: {
+    position: 'absolute',
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: COLORS.primary + '20',
+    opacity: 0.5,
+  },
+  loadingTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: COLORS.text,
+    textAlign: 'center',
+    marginBottom: SPACING.sm,
+  },
+  loadingMessage: {
+    fontSize: 16,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    marginBottom: SPACING.xl,
+  },
+  progressInfo: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    width: '100%',
+    marginTop: SPACING.sm,
+  },
+  progressStatus: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+  },
+  progressPercent: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: COLORS.primary,
+  },
+  stepIndicators: {
+    flexDirection: 'row',
+    gap: SPACING.xs,
+    marginTop: SPACING.lg,
+  },
+  stepDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: COLORS.border,
+  },
+  stepDotActive: {
+    backgroundColor: COLORS.primary,
   },
   successModalOverlay: {
     flex: 1,

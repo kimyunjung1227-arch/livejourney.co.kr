@@ -1,0 +1,55 @@
+.env 파일 수정 가이드
+====================
+
+현재 문제:
+- GEMINI_API_KEY=your_gemini_api_key (기본값 그대로)
+- USE_AI_TAG_GENERATION=false (true로 변경 필요)
+
+수정 방법:
+==========
+
+1. backend/.env 파일을 텍스트 에디터로 엽니다
+   (메모장, VS Code 등)
+
+2. 다음 두 줄을 찾아서 수정합니다:
+
+   찾기:
+   GEMINI_API_KEY=your_gemini_api_key
+   USE_AI_TAG_GENERATION=false
+
+   변경:
+   GEMINI_API_KEY=여기에_실제_API_키_붙여넣기
+   USE_AI_TAG_GENERATION=true
+
+3. 주의사항:
+   - 따옴표 사용하지 마세요
+   - 공백 없이 입력하세요
+   - = 기호 앞뒤 공백 없이
+   - true는 소문자로
+
+예시:
+=====
+올바른 형식:
+GEMINI_API_KEY=AIzaSyAbc123def456ghi789jkl012mno345pqr678stu
+USE_AI_TAG_GENERATION=true
+
+잘못된 형식:
+GEMINI_API_KEY="AIzaSy..."  ← 따옴표 사용 안 됨
+GEMINI_API_KEY = AIzaSy...  ← 공백 사용 안 됨
+USE_AI_TAG_GENERATION="true"  ← 따옴표 사용 안 됨
+USE_AI_TAG_GENERATION=TRUE  ← 대문자 안 됨
+
+Gemini API 키 발급:
+==================
+1. https://aistudio.google.com/app/apikey 접속
+2. "Get API Key" 또는 "Create API Key" 클릭
+3. API 키 복사 (보통 AIzaSy로 시작, 약 39자)
+4. .env 파일에 붙여넣기
+
+수정 후:
+========
+1. 파일 저장
+2. 백엔드 서버 재시작 (중요!)
+3. 서버 시작 시 콘솔 확인:
+   USE_AI_TAG_GENERATION: true
+   GEMINI_API_KEY 존재: true

@@ -1,4 +1,5 @@
 import api from './axios';
+import { logger } from '../utils/logger';
 
 // 로그인 / 회원가입
 export const login = async (username) => {
@@ -62,7 +63,7 @@ export const login = async (username) => {
       };
     }
     
-    console.error('로그인 실패:', error);
+    logger.error('로그인 실패:', error);
     throw error;
   }
 };
@@ -82,7 +83,7 @@ export const getMe = async () => {
       return { success: false, error: '로그인이 필요합니다.' };
     }
     
-    console.error('사용자 정보 조회 실패:', error);
+    logger.error('사용자 정보 조회 실패:', error);
     throw error;
   }
 };
@@ -126,7 +127,7 @@ export const updateProfile = async (userId, profileData) => {
       return { success: false, error: '사용자를 찾을 수 없습니다.' };
     }
     
-    console.error('프로필 업데이트 실패:', error);
+    logger.error('프로필 업데이트 실패:', error);
     throw error;
   }
 };
@@ -147,7 +148,7 @@ export const getUser = async (userId) => {
       return { success: false, error: '사용자를 찾을 수 없습니다.' };
     }
     
-    console.error('사용자 조회 실패:', error);
+    logger.error('사용자 조회 실패:', error);
     throw error;
   }
 };

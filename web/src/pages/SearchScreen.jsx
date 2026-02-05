@@ -3,6 +3,12 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import BottomNavigation from '../components/BottomNavigation';
 import { getRegionDefaultImage } from '../utils/regionDefaultImages';
 import { getTimeAgo } from '../utils/timeUtils';
+import { logger } from '../utils/logger';
+import { filterActivePosts48 } from '../utils/timeUtils';
+import { getCombinedPosts } from '../utils/mockData';
+import { getDisplayImageUrl } from '../api/upload';
+import { getWeatherByRegion } from '../api/weather';
+import { useHorizontalDragScroll } from '../hooks/useHorizontalDragScroll';
 
 // 해시태그 파싱: #동백꽃 #바다 #힐링 → ['동백꽃','바다','힐링']
 const parseHashtags = (q) => {
@@ -25,20 +31,15 @@ const SearchScreen = () => {
   const [allPosts, setAllPosts] = useState([]);
   const [selectedHashtag, setSelectedHashtag] = useState(null);
   const [searchCount, setSearchCount] = useState(0);
-  const [statsMode, setStatsMode] = useState('search'); // 'search' | 'info' — 검색 / 정보제공 번갈아
-  const [activeUploaderIndex, setActiveUploaderIndex] = useState(0);
-  const [photoFocusMode, setPhotoFocusMode] = useState(false); // 스크롤로 사진 영역 진입 시. 최상단이면 false→원래 구조. 그리드는 항상 3x3
+  const [photoFocusMode, setPhotoFocusMode] = useState(false);
+  const [weatherData, setWeatherData] = useState({});
 
   const recommendedScrollRef = useRef(null);
   const screenBodyRef = useRef(null);
   const recentScrollRef = useRef(null);
   const hotScrollRef = useRef(null);
   const searchContainerRef = useRef(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const [startX, setStartX] = useState(0);
-  const [scrollLeft, setScrollLeft] = useState(0);
-  const [currentScrollRef, setCurrentScrollRef] = useState(null);
-  const [hasMoved, setHasMoved] = useState(false);
+  const { handleDragStart, hasMovedRef } = useHorizontalDragScroll();
 
   // 추천 지역 데이터 (메모이제이션) - 기본 이미지는 getRegionDefaultImage 사용
   const recommendedRegions = useMemo(() => [
@@ -112,7 +113,7 @@ const SearchScreen = () => {
     { id: 68, name: '서귀포', image: getRegionDefaultImage('서귀포'), keywords: ['바다', '섬', '폭포', '정방폭포', '천지연', '감귤', '자연'] }
   ], []);
 
-  // 추천 카드: 사용자가 올린 정보만 사용, 개화·맛집·명소별 짧은 설명
+  // 추천 카드: 사용자가 올린 정보만 사용, 다양한 카테고리별 짧은 설명
   const diverseRegionCards = useMemo(() => {
     const cat = (s) => String(s || '').toLowerCase();
     const str = (arr) => (Array.isArray(arr) ? arr : []).map((x) => (typeof x === 'string' ? x : (x?.name || x?.label || ''))).join(' ');
@@ -124,15 +125,36 @@ const SearchScreen = () => {
       const c = cat(post.categoryName || '');
       const t = cat(str(post.tags) + ' ' + str(post.aiLabels));
       let type = '명소';
-      if (/꽃|개화|bloom|flower|벚꽃|매화|개화/.test(c + t)) type = '개화';
-      else if (/맛집|음식|food|밥|음식점|맛/.test(c + t)) type = '맛집';
+      // 더 다양한 카테고리 분류
+      if (/꽃|개화|bloom|flower|벚꽃|매화|벚꽃|개화/.test(c + t)) type = '개화';
+      else if (/맛집|음식|food|밥|음식점|맛|식당|레스토랑|restaurant/.test(c + t)) type = '맛집';
+      else if (/카페|coffee|cafe|커피|브런치/.test(c + t)) type = '카페';
+      else if (/바다|해변|beach|sea|해수욕장|서핑/.test(c + t)) type = '해변';
+      else if (/산|등산|mountain|hiking|트레킹/.test(c + t)) type = '등산';
+      else if (/야경|night|밤|nightview|야경명소/.test(c + t)) type = '야경';
+      else if (/일출|일몰|sunrise|sunset|해돋이|해질녘/.test(c + t)) type = '일출일몰';
+      else if (/축제|festival|이벤트|행사/.test(c + t)) type = '축제';
+      else if (/전통|한옥|문화|역사|heritage|traditional/.test(c + t)) type = '문화';
+      else if (/액티비티|activity|체험|adventure/.test(c + t)) type = '액티비티';
       const key = `${r.name}|${type}`;
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key).push(post);
     }
     const cards = [];
-    const order = { 개화: 0, 맛집: 1, 명소: 2 };
-    const labels = { 개화: '개화정보', 맛집: '맛집정보', 명소: '가볼 만한 곳' };
+    const order = { 개화: 0, 맛집: 1, 카페: 2, 해변: 3, 등산: 4, 야경: 5, 일출일몰: 6, 축제: 7, 문화: 8, 액티비티: 9, 명소: 10 };
+    const labels = { 
+      개화: '개화정보', 
+      맛집: '맛집정보', 
+      카페: '카페정보',
+      해변: '해변정보',
+      등산: '등산정보',
+      야경: '야경정보',
+      일출일몰: '일출일몰',
+      축제: '축제정보',
+      문화: '문화정보',
+      액티비티: '액티비티',
+      명소: '가볼만한 곳' 
+    };
     const bloomPcts = [70, 75, 80, 85, 90, 95];
     for (const [key, posts] of groups) {
       const [name, type] = key.split('|');
@@ -141,11 +163,19 @@ const SearchScreen = () => {
       let shortDesc = '';
       if (type === '개화') shortDesc = `개화상태 ${bloomPcts[(name.length + posts.length) % bloomPcts.length]}% 이상`;
       else if (type === '맛집') shortDesc = '웨이팅 필수 맛집';
+      else if (type === '카페') shortDesc = '인기 카페';
+      else if (type === '해변') shortDesc = '아름다운 해변';
+      else if (type === '등산') shortDesc = '추천 등산로';
+      else if (type === '야경') shortDesc = '아름다운 야경';
+      else if (type === '일출일몰') shortDesc = '일출/일몰 명소';
+      else if (type === '축제') shortDesc = '진행 중인 축제';
+      else if (type === '문화') shortDesc = '문화유산 탐방';
+      else if (type === '액티비티') shortDesc = '즐길 거리';
       else shortDesc = `${name}의 필수 여행지`;
       cards.push({
         name,
         category: type,
-        categoryLabel: labels[type] || '가볼 만한 곳',
+        categoryLabel: labels[type] || '가볼만한 곳',
         image: p.images?.[0] || p.image,
         shortDesc,
         detailedLocation: p.detailedLocation || p.placeName || shortDesc,
@@ -154,34 +184,40 @@ const SearchScreen = () => {
         hasUploadedPhoto: true
       });
     }
-    cards.sort((a, b) => (order[a.category] ?? 2) - (order[b.category] ?? 2) || b.count - a.count);
+    cards.sort((a, b) => (order[a.category] ?? 10) - (order[b.category] ?? 10) || b.count - a.count);
     return cards.slice(0, 12);
   }, [allPosts, recommendedRegions]);
 
-  // 정보를 올린 고유 사용자 수
-  const uploaderCount = useMemo(() => {
-    const set = new Set();
-    allPosts.forEach((p) => {
-      const u = p.userId || (typeof p.user === 'string' ? p.user : p.user?.id) || p.user;
-      if (u) set.add(String(u));
-    });
-    return set.size;
-  }, [allPosts]);
+  // 지역별 날씨 정보 가져오기
+  useEffect(() => {
+    if (!diverseRegionCards || diverseRegionCards.length === 0) return;
 
-  // 정보를 올린 고유 사용자 목록 (프로필: userId, username, profileImage)
-  const uploaders = useMemo(() => {
-    const map = new Map();
-    allPosts.forEach((p) => {
-      const uid = p.userId || (typeof p.user === 'object' && p.user?.id) || (typeof p.user === 'string' ? p.user : null);
-      if (!uid) return;
-      const sid = String(uid);
-      if (map.has(sid)) return;
-      const username = (typeof p.user === 'object' && p.user?.username) ? p.user.username : (typeof p.user === 'string' ? p.user : '여행자');
-      const profileImage = (typeof p.user === 'object' && p.user?.profileImage) ? p.user.profileImage : null;
-      map.set(sid, { userId: sid, username, profileImage });
-    });
-    return Array.from(map.values());
-  }, [allPosts]);
+    const fetchWeatherForCards = async () => {
+      const weatherPromises = diverseRegionCards.map(async (card) => {
+        try {
+          const weatherResult = await getWeatherByRegion(card.name);
+          if (weatherResult?.success && weatherResult?.weather) {
+            return { regionName: card.name, weather: weatherResult.weather };
+          }
+        } catch (error) {
+          logger.error(`날씨 정보 가져오기 실패 (${card.name}):`, error);
+        }
+        return null;
+      });
+
+      const weatherResults = await Promise.all(weatherPromises);
+      const weatherMap = {};
+      weatherResults.forEach((result) => {
+        if (result) {
+          weatherMap[result.regionName] = result.weather;
+        }
+      });
+      setWeatherData(weatherMap);
+    };
+
+    fetchWeatherForCards();
+  }, [diverseRegionCards]);
+
 
   // 최근 검색한 지역만 (#해시태그 제외)
   const recentRegionSearches = useMemo(
@@ -233,7 +269,7 @@ const SearchScreen = () => {
   const getChosung = useCallback((str) => {
     const CHOSUNG = ['ㄱ', 'ㄲ', 'ㄴ', 'ㄷ', 'ㄸ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅃ', 'ㅅ', 'ㅆ', 'ㅇ', 'ㅈ', 'ㅉ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ'];
     let result = '';
-    
+
     for (let i = 0; i < str.length; i++) {
       const code = str.charCodeAt(i) - 44032;
       if (code > -1 && code < 11172) {
@@ -249,10 +285,10 @@ const SearchScreen = () => {
   const matchChosung = useCallback((text, search) => {
     const textChosung = getChosung(text);
     const searchChosung = getChosung(search);
-    
+
     // 초성 매칭: 검색어의 초성이 지역명 초성에 포함되는지
     const matches = textChosung.includes(searchChosung) || textChosung.includes(search);
-    
+
     return matches;
   }, [getChosung]);
 
@@ -275,10 +311,21 @@ const SearchScreen = () => {
       .map((x) => x.region);
   }, [recommendedRegions, matchChosung]);
 
-  const incrementSearchCount = useCallback(() => {
+  const incrementSearchCount = useCallback((term = '') => {
     const n = parseInt(localStorage.getItem('searchCount') || '0', 10) + 1;
     localStorage.setItem('searchCount', String(n));
     setSearchCount(n);
+
+    // 검색 이벤트 저장 (핫플 의도 신호용)
+    if (term) {
+      try {
+        const raw = JSON.parse(localStorage.getItem('searchEvents') || '[]');
+        const next = [{ term: String(term).trim().toLowerCase(), ts: Date.now() }, ...raw].slice(0, 500);
+        localStorage.setItem('searchEvents', JSON.stringify(next));
+      } catch {
+        localStorage.setItem('searchEvents', JSON.stringify([{ term: String(term).trim().toLowerCase(), ts: Date.now() }]));
+      }
+    }
   }, []);
 
   // 검색어 입력 핸들러: 지역 + 해시태그 자동완성
@@ -311,7 +358,7 @@ const SearchScreen = () => {
   const handleSearch = useCallback((e) => {
     e.preventDefault();
     if (!searchQuery.trim()) return;
-    incrementSearchCount();
+    incrementSearchCount(searchQuery);
 
     const raw = searchQuery.replace(/^#+/, '').trim();
     const searchTerm = raw.toLowerCase();
@@ -346,22 +393,22 @@ const SearchScreen = () => {
 
   // 자동완성 항목 클릭 (useCallback)
   const handleSuggestionClick = useCallback((regionName) => {
-    incrementSearchCount();
+    incrementSearchCount(regionName);
     setSearchQuery(regionName);
     setShowSuggestions(false);
-    
+
     const updatedRecentSearches = recentSearches.includes(regionName)
       ? recentSearches
       : [regionName, ...recentSearches.slice(0, 3)];
     setRecentSearches(updatedRecentSearches);
     localStorage.setItem('recentSearches', JSON.stringify(updatedRecentSearches));
-    
+
     navigate(`/region/${regionName}`, { state: { region: { name: regionName } } });
   }, [recentSearches, navigate, incrementSearchCount]);
 
   // 해시태그 자동완성 클릭 (최근 검색에는 넣지 않음)
   const handleHashtagSuggestionClick = useCallback((display) => {
-    incrementSearchCount();
+    incrementSearchCount(display);
     setSelectedHashtag(display);
     setSearchQuery('');
     setShowSuggestions(false);
@@ -390,7 +437,7 @@ const SearchScreen = () => {
     if (event) {
       event.stopPropagation();
     }
-    
+
     const updatedSearches = recentSearches.filter(search => search !== searchToDelete);
     setRecentSearches(updatedSearches);
     localStorage.setItem('recentSearches', JSON.stringify(updatedSearches));
@@ -400,61 +447,17 @@ const SearchScreen = () => {
     navigate(`/region/${regionName}`, { state: { region: { name: regionName } } });
   }, [navigate]);
 
-  // 마우스 드래그 스크롤 핸들러 (useCallback)
-  const handleMouseDown = useCallback((e, scrollRef) => {
-    setIsDragging(true);
-    setHasMoved(false);
-    setCurrentScrollRef(scrollRef);
-    setStartX(e.pageX - scrollRef.current.offsetLeft);
-    setScrollLeft(scrollRef.current.scrollLeft);
-    scrollRef.current.style.cursor = 'grabbing';
-    scrollRef.current.style.userSelect = 'none';
-  }, []);
-
-  const handleMouseMove = useCallback((e) => {
-    if (!isDragging || !currentScrollRef) return;
-    e.preventDefault();
-    const x = e.pageX - currentScrollRef.current.offsetLeft;
-    const walk = (x - startX) * 1.2;
-    
-    if (Math.abs(walk) > 5) {
-      setHasMoved(true);
-    }
-    
-    if (currentScrollRef.current) {
-      currentScrollRef.current.scrollLeft = scrollLeft - walk;
-    }
-  }, [isDragging, currentScrollRef, startX, scrollLeft]);
-
-  const handleMouseUp = useCallback(() => {
-    setIsDragging(false);
-    if (currentScrollRef) {
-      currentScrollRef.current.style.cursor = 'grab';
-      currentScrollRef.current.style.userSelect = 'auto';
-    }
-    setCurrentScrollRef(null);
-  }, [currentScrollRef]);
-
-  const handleMouseLeave = useCallback(() => {
-    if (isDragging && currentScrollRef) {
-      currentScrollRef.current.style.cursor = 'grab';
-      currentScrollRef.current.style.userSelect = 'auto';
-    }
-    setIsDragging(false);
-    setCurrentScrollRef(null);
-  }, [isDragging, currentScrollRef]);
-
   const handleRegionClickWithDragCheck = useCallback((regionName) => {
-    if (!hasMoved) {
+    if (!hasMovedRef.current) {
       handleRegionClick(regionName);
     }
-  }, [hasMoved, handleRegionClick]);
+  }, [handleRegionClick]);
 
   const handleRecentSearchClickWithDragCheck = useCallback((search) => {
-    if (!hasMoved) {
+    if (!hasMovedRef.current) {
       handleRecentSearchClick(search);
     }
-  }, [hasMoved, handleRecentSearchClick]);
+  }, [handleRecentSearchClick]);
 
 
   // URL 파라미터: ?q=#해시태그 시 해시태그 칩 선택 (다른 화면에서 해시태그 클릭 후 진입)
@@ -469,24 +472,28 @@ const SearchScreen = () => {
     }
   }, [searchParams]);
 
-  // 전체 게시물, 최근 검색어, 검색 횟수 로드
+  // 전체 게시물, 최근 검색어, 검색 횟수, 관심 지역 로드
   useEffect(() => {
-    setAllPosts(JSON.parse(localStorage.getItem('uploadedPosts') || '[]'));
+    const loadAllPosts = () => {
+      const localPosts = JSON.parse(localStorage.getItem('uploadedPosts') || '[]');
+      setAllPosts(filterActivePosts48(getCombinedPosts(Array.isArray(localPosts) ? localPosts : [])));
+    };
+
+    loadAllPosts();
 
     const savedRecentSearches = localStorage.getItem('recentSearches');
     if (savedRecentSearches) {
       try {
         setRecentSearches(JSON.parse(savedRecentSearches));
       } catch (e) {
-        console.error('최근 검색어 로드 실패:', e);
+        logger.error('최근 검색어 로드 실패:', e);
       }
     }
     setSearchCount(parseInt(localStorage.getItem('searchCount') || '0', 10));
 
     const handlePostsUpdate = () => {
-      setTimeout(() => setAllPosts(JSON.parse(localStorage.getItem('uploadedPosts') || '[]')), 200);
+      setTimeout(loadAllPosts, 200);
     };
-
     window.addEventListener('postsUpdated', handlePostsUpdate);
     window.addEventListener('newPostsAdded', handlePostsUpdate);
     return () => {
@@ -509,18 +516,6 @@ const SearchScreen = () => {
     };
   }, []);
 
-  // 검색 / 정보제공 번갈아가며 표시 (4초마다)
-  useEffect(() => {
-    const t = setInterval(() => setStatsMode((m) => (m === 'search' ? 'info' : 'search')), 4000);
-    return () => clearInterval(t);
-  }, []);
-
-  // 정보제공 모드일 때 사용자 프로필 인덱스 순환 (2.5초마다, 생동감)
-  useEffect(() => {
-    if (statsMode !== 'info' || uploaders.length <= 1) return;
-    const t = setInterval(() => setActiveUploaderIndex((i) => (i + 1) % uploaders.length), 2500);
-    return () => clearInterval(t);
-  }, [statsMode, uploaders.length]);
 
   // 스크롤: 최상단이면 원래 구조(3열), 사진 영역 들어가면 2열·크게(최고 잘 보이게)
   const handleScroll = useCallback(() => {
@@ -540,11 +535,11 @@ const SearchScreen = () => {
       <div className="screen-content flex flex-col flex-1 min-h-0 overflow-hidden">
         {/* 헤더 - 최소화 (고정) */}
         <div className="flex-shrink-0 flex items-center px-4 pt-4 pb-2 bg-white dark:bg-gray-900">
-          <button 
+          <button
             onClick={() => navigate(-1)}
-            className="flex size-10 shrink-0 items-center justify-center text-black dark:text-white hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+            className="flex size-12 shrink-0 items-center justify-center text-black dark:text-white hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
           >
-            <span className="material-symbols-outlined text-xl">arrow_back</span>
+            <span className="material-symbols-outlined text-2xl">arrow_back</span>
           </button>
         </div>
 
@@ -567,12 +562,12 @@ const SearchScreen = () => {
 
           {/* 검색 결과 - 지역 + 해시태그 자동완성 */}
           {showSuggestions && (filteredRegions.length > 0 || filteredHashtags.length > 0 || searchQuery.trim()) && (
-            <div 
+            <div
               className="mt-3 absolute left-4 right-4 z-[200]"
               style={{ top: 'calc(100% + 12px)' }}
             >
               {filteredRegions.length > 0 || filteredHashtags.length > 0 ? (
-                <div 
+                <div
                   className="bg-white dark:bg-[#2F2418] rounded-2xl shadow-2xl ring-2 ring-primary/30 dark:ring-primary/50 overflow-y-auto"
                   style={{ maxHeight: 'calc(60px * 6)' }}
                 >
@@ -617,265 +612,229 @@ const SearchScreen = () => {
           )}
         </div>
 
-        {/* 메인 컨텐츠 - 스크롤하면 위로 올라감, 그리드 3x3. 헤더·검색창은 고정 */}
+        {/* 메인 컨텐츠 - 스크롤하면 위로 올라감 */}
         <div
           ref={screenBodyRef}
           onScroll={handleScroll}
           className="screen-body flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain"
           style={{ minHeight: 0, WebkitOverflowScrolling: 'touch' }}
         >
-        {/* 최근 검색한 지역 - 해시태그 위 */}
-        {recentRegionSearches.length > 0 && (
-          <div className={`px-6 pt-5 pb-3 ${showSuggestions ? 'opacity-30' : ''}`}>
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-[#1c140d] dark:text-background-light text-lg font-bold leading-tight tracking-[-0.015em] pb-3">
-                최근 검색한 지역
-              </h2>
-              <button
-                onClick={handleClearRecentSearches}
-                className="text-sm font-medium text-gray-500 dark:text-gray-400 hover:text-primary dark:hover:text-primary transition-colors"
+          {/* 최근 검색한 지역 - 해시태그 위 */}
+          {recentRegionSearches.length > 0 && (
+            <div className={`px-6 pt-5 pb-3 ${showSuggestions ? 'opacity-30' : ''}`}>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-[#1c140d] dark:text-background-light text-lg font-bold leading-tight tracking-[-0.015em] pb-3">
+                  최근 검색한 지역
+                </h2>
+                <button
+                  onClick={handleClearRecentSearches}
+                  className="text-sm font-medium text-gray-500 dark:text-gray-400 hover:text-primary dark:hover:text-primary transition-colors"
+                >
+                  지우기
+                </button>
+              </div>
+              <div
+                className={`flex overflow-x-scroll overflow-y-hidden [-ms-scrollbar-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden snap-x snap-mandatory scroll-smooth ${showSuggestions ? 'opacity-30 pointer-events-none' : ''}`}
+                onMouseDown={handleDragStart}
+                style={{ scrollBehavior: 'smooth', WebkitOverflowScrolling: 'touch' }}
               >
-                지우기
-              </button>
-            </div>
-            <div
-              ref={recentScrollRef}
-              onMouseDown={(e) => handleMouseDown(e, recentScrollRef)}
-              onMouseMove={handleMouseMove}
-              onMouseUp={handleMouseUp}
-              onMouseLeave={handleMouseLeave}
-              className={`flex overflow-x-scroll overflow-y-hidden [-ms-scrollbar-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden snap-x snap-mandatory scroll-smooth ${showSuggestions ? 'opacity-30 pointer-events-none' : ''}`}
-              style={{ scrollBehavior: 'smooth', WebkitOverflowScrolling: 'touch' }}
-            >
-              <div className="flex items-center px-4 gap-2 pb-2">
-                {recentRegionSearches.map((search, index) => (
-                  <button
-                    key={index}
-                    onClick={() => handleRecentSearchClickWithDragCheck(search)}
-                    className={`flex-shrink-0 cursor-pointer items-center justify-center rounded-full px-4 py-2 text-sm font-medium transition-colors snap-start select-none flex gap-1.5 ${
-                      index === 0
+                <div className="flex items-center px-4 gap-2 pb-2">
+                  {recentRegionSearches.map((search, index) => (
+                    <button
+                      key={index}
+                      onClick={() => handleRecentSearchClickWithDragCheck(search)}
+                      className={`flex-shrink-0 cursor-pointer items-center justify-center rounded-full px-4 py-2 text-sm font-medium transition-colors snap-start select-none flex gap-1.5 ${index === 0
                         ? 'bg-primary/20 dark:bg-primary/30 text-primary dark:text-[#FFC599]'
                         : 'bg-background-light dark:bg-[#2F2418] text-[#1c140d] dark:text-background-light ring-1 ring-inset ring-black/10 dark:ring-white/10 shadow-sm hover:bg-primary/10'
-                    }`}
-                  >
-                    <span>{search}</span>
-                    <span
-                      className="material-symbols-outlined text-[16px] opacity-60 hover:opacity-100 transition-opacity"
-                      onClick={(e) => { e.stopPropagation(); handleDeleteRecentSearch(search, e); }}
-                      style={{ cursor: 'pointer' }}
+                        }`}
                     >
-                      close
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* 지금 가장 핫한 추천 여행지 - 가로 스크롤 카드 (이미지 스타일) */}
-        <div className={`px-4 pt-5 pb-4 ${showSuggestions ? 'opacity-30 pointer-events-none' : ''}`}>
-          <h2 className="text-black dark:text-white text-lg font-bold leading-tight tracking-[-0.015em] mb-4">
-            지금 가장 핫한 추천 여행지
-          </h2>
-          <div
-            ref={hotScrollRef}
-            onMouseDown={(e) => handleMouseDown(e, hotScrollRef)}
-            onMouseMove={handleMouseMove}
-            onMouseUp={handleMouseUp}
-            onMouseLeave={handleMouseLeave}
-            className="flex overflow-x-auto overflow-y-hidden gap-4 pb-2 scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-            style={{ WebkitOverflowScrolling: 'touch' }}
-          >
-            {diverseRegionCards.length === 0 ? (
-              <div className="w-full py-10 px-4 text-center">
-                <span className="material-symbols-outlined text-gray-300 dark:text-gray-600 text-4xl mb-2">photo_camera</span>
-                <p className="text-gray-500 dark:text-gray-400 text-sm">사용자가 올린 여행 정보가 아직 없어요</p>
-                <p className="text-gray-400 dark:text-gray-500 text-xs mt-1">첫 사진을 올리면 여기 추천에 반영돼요</p>
-              </div>
-            ) : (
-              diverseRegionCards.map((card, index) => {
-                const isFlower = card.category === '개화';
-                const isFood = card.category === '맛집';
-                const tagBg = isFlower ? '#F97316' : isFood ? '#EF4444' : '#8B5CF6';
-                const displayImage = card.image || getRegionDefaultImage(card.name);
-                return (
-                  <div
-                    key={`${card.name}-${card.category}-${index}`}
-                    onClick={() => handleRegionClickWithDragCheck(card.name)}
-                    className="flex-shrink-0 w-[280px] rounded-2xl bg-white dark:bg-gray-800 overflow-hidden cursor-pointer hover:shadow-lg transition-shadow"
-                    style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.08)' }}
-                  >
-                    <div className="relative h-40 overflow-hidden">
-                      <img src={displayImage} alt={card.name} className="w-full h-full object-cover" />
+                      <span>{search}</span>
                       <span
-                        className="absolute top-3 right-3 text-white text-xs font-semibold px-2.5 py-1 rounded-lg"
-                        style={{ backgroundColor: tagBg }}
+                        className="material-symbols-outlined text-[16px] opacity-60 hover:opacity-100 transition-opacity"
+                        onClick={(e) => { e.stopPropagation(); handleDeleteRecentSearch(search, e); }}
+                        style={{ cursor: 'pointer' }}
                       >
-                        {card.categoryLabel}
+                        close
                       </span>
-                      {card.time && (
-                        <span className="absolute bottom-2 left-2 text-white text-[10px] bg-black/55 px-2 py-1 rounded">
-                          🕐 {card.time} 업로드
-                        </span>
-                      )}
-                    </div>
-                    <div className="p-4">
-                      <p className="text-black dark:text-white font-bold text-base mb-1">{card.name} – {card.categoryLabel}</p>
-                      <p className="text-gray-700 dark:text-gray-300 text-sm font-medium">{card.shortDesc}</p>
-                      <button
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); handleRegionClick(card.name); }}
-                        className="w-full mt-3 py-2.5 rounded-xl bg-gray-100 dark:bg-gray-700 text-black dark:text-white text-sm font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-                      >
-                        더 보기
-                      </button>
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </div>
-
-        {/* 해시태그 - 추천 여행지 밑, 클릭 시 하단에 사진 표시 */}
-        {hashtagChips.length > 0 && (
-          <div className={`px-4 pt-2 pb-3 ${showSuggestions ? 'opacity-30 pointer-events-none' : ''}`}>
-            <div className="flex items-center justify-between mb-2">
-              <h2 className="text-black dark:text-white text-base font-bold">해시태그</h2>
-              <button
-                type="button"
-                onClick={() => navigate('/hashtags')}
-                className="text-xs font-medium text-primary dark:text-primary hover:underline"
-              >
-                태그 전체보기
-              </button>
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
+          )}
+
+          {/* 지금 가장 핫한 추천 여행지 - 가로 스크롤 카드 (이미지 스타일) */}
+          <div className={`px-4 pt-5 pb-4 ${showSuggestions ? 'opacity-30 pointer-events-none' : ''}`}>
+            <h2 className="text-black dark:text-white text-lg font-bold leading-tight tracking-[-0.015em] mb-4">
+              지금 가장 핫한 추천 여행지
+            </h2>
             <div
-              ref={recommendedScrollRef}
-              onMouseDown={(e) => handleMouseDown(e, recommendedScrollRef)}
-              onMouseMove={handleMouseMove}
-              onMouseUp={handleMouseUp}
-              onMouseLeave={handleMouseLeave}
-              className="flex overflow-x-auto overflow-y-hidden gap-2 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              onMouseDown={handleDragStart}
+              className="flex overflow-x-auto overflow-y-hidden gap-4 pb-4 scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden snap-x snap-mandatory"
               style={{ WebkitOverflowScrolling: 'touch' }}
             >
-              {hashtagChips.map(({ key, display }) => {
-                const isSelected = selectedHashtag && (selectedHashtag || '').replace(/^#+/, '').trim().toLowerCase() === key;
-                return (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => {
-                      if (isSelected) {
-                        setSelectedHashtag(null);
-                      } else {
-                        incrementSearchCount();
-                        setSelectedHashtag(display);
-                      }
-                    }}
-                    className={`flex-shrink-0 px-4 py-2.5 rounded-full text-sm font-medium transition-colors ${
-                      isSelected ? 'bg-primary text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-primary/20 dark:hover:bg-primary/30'
-                    }`}
-                  >
-                    #{display}
-                  </button>
-                );
-              })}
+              {diverseRegionCards.length === 0 ? (
+                <div className="w-full py-10 px-4 text-center">
+                  <span className="material-symbols-outlined text-gray-300 dark:text-gray-600 text-4xl mb-2">photo_camera</span>
+                  <p className="text-gray-500 dark:text-gray-400 text-sm">사용자가 올린 여행 정보가 아직 없어요</p>
+                  <p className="text-gray-400 dark:text-gray-500 text-xs mt-1">첫 사진을 올리면 여기 추천에 반영돼요</p>
+                </div>
+              ) : (
+                diverseRegionCards.map((card, index) => {
+                  // 카테고리별 색상 매핑
+                  const categoryColors = {
+                    '개화': '#F97316',
+                    '맛집': '#EF4444',
+                    '카페': '#8B4513',
+                    '해변': '#0EA5E9',
+                    '등산': '#10B981',
+                    '야경': '#6366F1',
+                    '일출일몰': '#F59E0B',
+                    '축제': '#EC4899',
+                    '문화': '#8B5CF6',
+                    '액티비티': '#14B8A6',
+                    '명소': '#64748B'
+                  };
+                  const tagBg = categoryColors[card.category] || '#8B5CF6';
+                  const displayImage = getDisplayImageUrl(card.image || getRegionDefaultImage(card.name));
+                  const weather = weatherData[card.name];
+                  return (
+                    <div
+                      key={`${card.name}-${card.category}-${index}`}
+                      onClick={() => handleRegionClickWithDragCheck(card.name)}
+                      className="flex-shrink-0 w-[16vw] rounded-2xl bg-white dark:bg-gray-800 overflow-hidden cursor-pointer hover:shadow-lg transition-all snap-start mx-1"
+                      style={{ boxShadow: '0 2px 10px rgba(0,0,0,0.06)', scrollSnapStop: 'always' }}
+                    >
+                      <div className="relative h-32 overflow-hidden">
+                        <img src={displayImage} alt={card.name} className="w-full h-full object-cover" />
+                        <span
+                          className="absolute top-3 right-3 text-white text-xs font-semibold px-2.5 py-1 rounded-lg"
+                          style={{ backgroundColor: tagBg }}
+                        >
+                          {card.categoryLabel}
+                        </span>
+                        {weather && (
+                          <span className="absolute top-3 left-3 text-white text-xs font-semibold bg-black/60 backdrop-blur-sm px-2.5 py-1 rounded-lg flex items-center gap-1">
+                            <span>{weather.icon}</span>
+                            <span>{weather.temperature}</span>
+                          </span>
+                        )}
+                      </div>
+                      <div className="p-3">
+                        <div className="flex items-center gap-1.5 mb-1">
+                          <p className="text-black dark:text-white font-bold text-sm truncate">{card.name}</p>
+                          {card.time && (
+                            <span className="text-gray-400 dark:text-gray-500 text-[10px] whitespace-nowrap">🕐 {card.time}</span>
+                          )}
+                        </div>
+                        <p className="text-gray-500 dark:text-gray-400 text-[11px] font-medium mb-0.5 truncate">{card.categoryLabel}</p>
+                        <p className="text-gray-600 dark:text-gray-300 text-[11px] font-medium truncate">{card.shortDesc}</p>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+              {/* 끝까지 시원하게 슬라이드 가능하도록 여백 추가 */}
+              <div className="flex-shrink-0 w-[16vw]"></div>
             </div>
           </div>
-        )}
 
-        {/* 선택된 해시태그 사진 그리드 */}
-        {selectedHashtag && (
-          <div className={`px-4 pt-0 pb-4 ${showSuggestions ? 'opacity-30 pointer-events-none' : ''}`}>
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-black dark:text-white text-sm font-bold">#{selectedHashtag} ({hashtagPostResults.length}장)</h3>
-              <button
-                type="button"
-                onClick={() => setSelectedHashtag(null)}
-                className="text-xs text-gray-500 dark:text-gray-400 hover:text-primary"
+          {/* 해시태그 - 추천 여행지 밑, 클릭 시 하단에 사진 표시 */}
+          {hashtagChips.length > 0 && (
+            <div className={`px-4 pt-2 pb-3 ${showSuggestions ? 'opacity-30 pointer-events-none' : ''}`}>
+              <div className="flex items-center justify-between mb-2">
+                <h2 className="text-black dark:text-white text-base font-bold">해시태그</h2>
+                <button
+                  type="button"
+                  onClick={() => navigate('/hashtags')}
+                  className="text-xs font-medium text-primary dark:text-primary hover:underline"
+                >
+                  태그 전체보기
+                </button>
+              </div>
+              <div
+                onMouseDown={handleDragStart}
+                className="flex overflow-x-auto overflow-y-hidden gap-2 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                style={{ WebkitOverflowScrolling: 'touch' }}
               >
-                해제
-              </button>
-            </div>
-            {hashtagPostResults.length > 0 ? (
-              <div className="grid grid-cols-3 gap-2">
-                {hashtagPostResults.map((post) => {
-                  const img = post.images?.[0] || post.image;
-                  const id = post.id || post._id;
-                  const upTime = getTimeAgo(post.timestamp || post.createdAt);
+                {hashtagChips.map(({ key, display }) => {
+                  const isSelected = selectedHashtag && (selectedHashtag || '').replace(/^#+/, '').trim().toLowerCase() === key;
                   return (
                     <button
-                      key={id || (post.timestamp || 0)}
+                      key={key}
                       type="button"
-                      onClick={() => navigate(`/post/${id}`, { state: { post, allPosts: hashtagPostResults } })}
-                      className="relative aspect-square rounded overflow-hidden bg-gray-200 dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-primary/50"
+                      onClick={() => {
+                        if (!hasMovedRef.current) {
+                          if (isSelected) {
+                            setSelectedHashtag(null);
+                          } else {
+                            incrementSearchCount();
+                            setSelectedHashtag(display);
+                          }
+                        }
+                      }}
+                      className={`flex-shrink-0 px-4 py-2.5 rounded-full text-sm font-medium transition-colors snap-start ${isSelected ? 'bg-primary text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-primary/20 dark:hover:bg-primary/30'
+                        }`}
+                      style={{ scrollSnapStop: 'always' }}
                     >
-                      {img ? (
-                        <img src={img} alt="" className="w-full h-full object-cover" />
-                      ) : (
-                        <span className="material-symbols-outlined text-gray-400 w-full h-full flex items-center justify-center">image</span>
-                      )}
-                      <span className="absolute bottom-1 left-1 right-1 text-[9px] text-white bg-black/50 px-1 py-0.5 rounded truncate text-center">
-                        🕐 {upTime}
-                      </span>
+                      #{display}
                     </button>
                   );
                 })}
               </div>
-            ) : (
-              <p className="text-sm text-gray-500 dark:text-gray-400 py-4 text-center">이 해시태그가 달린 사진이 없습니다</p>
-            )}
-          </div>
-        )}
-
-        {/* 추천 여행지 하단: 검색 / 정보제공 번갈아가며 + 실시간 사용자 프로필 (생동감) */}
-        <div className="px-4 pt-2 pb-4 min-h-[72px] relative">
-          {/* 검색 — 4초마다 정보제공과 번갈아 표시 */}
-          <div
-            className={`transition-opacity duration-300 ${statsMode === 'search' ? 'opacity-100' : 'opacity-0 absolute inset-x-0 pointer-events-none'}`}
-          >
-            <div className="flex items-center gap-2 text-[11px] text-gray-500 dark:text-gray-400">
-              <span className="material-symbols-outlined text-base text-primary">search</span>
-              <span>검색 {searchCount}건</span>
             </div>
-          </div>
+          )}
 
-          {/* 정보 제공 — 글 왼쪽에 프로필 하나씩 (2.5초마다 순환), 클릭 없음 */}
-          <div
-            className={`transition-opacity duration-300 ${statsMode === 'info' ? 'opacity-100' : 'opacity-0 absolute inset-x-0 pointer-events-none'}`}
-          >
-            <div className="flex items-center gap-3 text-[11px] text-gray-500 dark:text-gray-400">
-              {uploaders.length > 0 ? (
-                <>
-                  <div
-                    key={uploaders[activeUploaderIndex % uploaders.length]?.userId}
-                    className="flex-shrink-0 w-9 h-9 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-600 ring-1 ring-primary/30"
-                  >
-                    <img
-                      src={uploaders[activeUploaderIndex % uploaders.length].profileImage || `https://i.pravatar.cc/64?u=${encodeURIComponent(uploaders[activeUploaderIndex % uploaders.length].userId)}`}
-                      alt=""
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <span>{uploaderCount}명이 여행 정보를 올렸어요</span>
-                </>
+          {/* 선택된 해시태그 사진 그리드 */}
+          {selectedHashtag && (
+            <div className={`px-4 pt-0 pb-4 ${showSuggestions ? 'opacity-30 pointer-events-none' : ''}`}>
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-black dark:text-white text-sm font-bold">#{selectedHashtag} ({hashtagPostResults.length}장)</h3>
+                <button
+                  type="button"
+                  onClick={() => setSelectedHashtag(null)}
+                  className="text-xs text-gray-500 dark:text-gray-400 hover:text-primary"
+                >
+                  해제
+                </button>
+              </div>
+              {hashtagPostResults.length > 0 ? (
+                <div className="grid grid-cols-3 gap-1">
+                  {hashtagPostResults.map((post) => {
+                    const img = getDisplayImageUrl(post.images?.[0] || post.image || post.thumbnail);
+                    const id = post.id || post._id;
+                    const upTime = getTimeAgo(post.timestamp || post.createdAt);
+                    return (
+                      <button
+                        key={id || (post.timestamp || 0)}
+                        type="button"
+                        onClick={() => navigate(`/post/${id}`, { state: { post, allPosts: hashtagPostResults } })}
+                        className="relative aspect-square rounded overflow-hidden bg-gray-200 dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-primary/50"
+                      >
+                        {img ? (
+                          <img src={img} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          <span className="material-symbols-outlined text-gray-400 w-full h-full flex items-center justify-center">image</span>
+                        )}
+                        <span className="absolute bottom-1 left-1 right-1 text-[9px] text-white bg-black/50 px-1 py-0.5 rounded truncate text-center">
+                          🕐 {upTime}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
               ) : (
-                <>
-                  <span className="material-symbols-outlined text-base text-primary">info</span>
-                  <span>{uploaderCount}명이 여행 정보를 올렸어요</span>
-                </>
+                <p className="text-sm text-gray-500 dark:text-gray-400 py-4 text-center">이 해시태그가 달린 사진이 없습니다</p>
               )}
             </div>
-          </div>
-        </div>
+          )}
+
 
         </div>
       </div>
 
       <BottomNavigation />
-    </div>
+    </div >
   );
 };
 

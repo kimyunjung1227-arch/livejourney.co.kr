@@ -1,4 +1,5 @@
 import api from './axios';
+import { logger } from '../utils/logger';
 
 // 통합 검색
 export const search = async (query, params = {}) => {
@@ -8,7 +9,7 @@ export const search = async (query, params = {}) => {
     });
     return response.data;
   } catch (error) {
-    console.error('검색 실패:', error);
+    logger.error('검색 실패:', error);
     throw error;
   }
 };
@@ -19,7 +20,7 @@ export const getTrendingSearches = async () => {
     const response = await api.get('/search/trending');
     return response.data;
   } catch (error) {
-    console.error('인기 검색어 조회 실패:', error);
+    logger.error('인기 검색어 조회 실패:', error);
     throw error;
   }
 };
@@ -32,7 +33,7 @@ export const getAutocomplete = async (query) => {
     });
     return response.data;
   } catch (error) {
-    console.error('자동완성 조회 실패:', error);
+    logger.error('자동완성 조회 실패:', error);
     throw error;
   }
 };

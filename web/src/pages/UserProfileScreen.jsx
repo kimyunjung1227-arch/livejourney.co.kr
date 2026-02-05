@@ -3,9 +3,10 @@ import { useNavigate, useParams } from 'react-router-dom';
 import BottomNavigation from '../components/BottomNavigation';
 import { useAuth } from '../contexts/AuthContext';
 import { getEarnedBadgesForUser, BADGES, getBadgeDisplayName } from '../utils/badgeSystem';
-import { getUserLevel } from '../utils/levelSystem';
 import { getCoordinatesByLocation } from '../utils/regionLocationMapping';
 import { follow, unfollow, isFollowing, getFollowerCount, getFollowingCount } from '../utils/followSystem';
+import { logger } from '../utils/logger';
+import { getDisplayImageUrl } from '../api/upload';
 
 const UserProfileScreen = () => {
   const navigate = useNavigate();
@@ -18,7 +19,6 @@ const UserProfileScreen = () => {
   const [stats, setStats] = useState({ posts: 0 });
   const [loading, setLoading] = useState(true);
   const [showAllBadges, setShowAllBadges] = useState(false);
-  const [levelInfo, setLevelInfo] = useState(null);
   const [mapLoading, setMapLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState('');
   const [availableDates, setAvailableDates] = useState([]);
@@ -50,40 +50,40 @@ const UserProfileScreen = () => {
 
     // 해당 사용자의 정보 찾기 (게시물에서)
     const uploadedPosts = JSON.parse(localStorage.getItem('uploadedPosts') || '[]');
-    
+
     // userId 매칭 (일관된 로직 - PostDetailScreen과 동일)
     const userPost = uploadedPosts.find(p => {
       // userId 추출 로직 (PostDetailScreen과 동일)
       let postUserId = p.userId;
-      
+
       // p.user가 문자열인 경우
       if (!postUserId && typeof p.user === 'string') {
         postUserId = p.user;
       }
-      
+
       // p.user가 객체인 경우
       if (!postUserId && p.user && typeof p.user === 'object') {
         postUserId = p.user.id || p.user.userId;
       }
-      
+
       // 그 외의 경우
       if (!postUserId) {
         postUserId = p.user;
       }
-      
+
       // 문자열 비교를 위해 모두 문자열로 변환
       return String(postUserId) === String(userId);
     });
-    
+
     if (userPost) {
-      const postUserId = userPost.userId || 
-                        (typeof userPost.user === 'string' ? userPost.user : userPost.user?.id) ||
-                        userPost.user;
+      const postUserId = userPost.userId ||
+        (typeof userPost.user === 'string' ? userPost.user : userPost.user?.id) ||
+        userPost.user;
       const foundUser = {
         id: String(userId), // 일관성을 위해 문자열로 변환
-        username: (typeof userPost.user === 'string' ? userPost.user : userPost.user?.username) || 
-                 String(postUserId) || 
-                 '사용자',
+        username: (typeof userPost.user === 'string' ? userPost.user : userPost.user?.username) ||
+          String(postUserId) ||
+          '사용자',
         profileImage: null
       };
       setUser(foundUser);
@@ -99,7 +99,7 @@ const UserProfileScreen = () => {
     // 뱃지 로드 - 실제 구현된 뱃지 시스템 사용
     const badges = getEarnedBadgesForUser(userId) || [];
     setEarnedBadges(badges);
-    
+
     // 대표 뱃지 로드
     const repBadgeJson = localStorage.getItem(`representativeBadge_${userId}`);
     if (repBadgeJson) {
@@ -122,22 +122,22 @@ const UserProfileScreen = () => {
     const posts = uploadedPosts.filter(post => {
       // userId 추출 로직 (PostDetailScreen과 동일)
       let postUserId = post.userId;
-      
+
       // post.user가 문자열인 경우
       if (!postUserId && typeof post.user === 'string') {
         postUserId = post.user;
       }
-      
+
       // post.user가 객체인 경우
       if (!postUserId && post.user && typeof post.user === 'object') {
         postUserId = post.user.id || post.user.userId;
       }
-      
+
       // 그 외의 경우
       if (!postUserId) {
         postUserId = post.user;
       }
-      
+
       // 문자열 비교를 위해 모두 문자열로 변환
       return String(postUserId) === String(userId);
     });
@@ -160,15 +160,11 @@ const UserProfileScreen = () => {
     });
     const dates = [...dateSet].sort((a, b) => new Date(b) - new Date(a));
     setAvailableDates(dates);
-    
+
     setStats({ posts: posts.length });
-    
-    // 레벨 정보 로드 (현재는 전역 경험치 기준)
-    const level = getUserLevel();
-    setLevelInfo(level);
-    
+
     setLoading(false);
-    
+
     // cleanup 함수: userId가 변경될 때 이전 상태 완전 초기화
     return () => {
       setLoading(true);
@@ -244,7 +240,7 @@ const UserProfileScreen = () => {
           if (markerData.overlay) markerData.overlay.setMap(null);
           if (markerData.marker) markerData.marker.setMap(null);
           if (markerData.polyline) markerData.polyline.setMap(null);
-        } catch (_) {}
+        } catch (_) { }
       });
       markersRef.current = [];
 
@@ -286,7 +282,7 @@ const UserProfileScreen = () => {
         const position = new window.kakao.maps.LatLng(coords.lat, coords.lng);
         pathCoordinates.push(position);
 
-        const imageUrl = post.images?.[0] || post.imageUrl || post.image;
+        const imageUrl = getDisplayImageUrl(post.images?.[0] || post.imageUrl || post.image || post.thumbnail);
         const el = document.createElement('div');
         el.innerHTML = `
           <button class="relative w-10 h-10 border-2 border-white shadow-md rounded-md overflow-hidden hover:scale-110 transition-all cursor-pointer" style="z-index:${index}" data-post-id="${post.id}">
@@ -330,7 +326,7 @@ const UserProfileScreen = () => {
         }
       }
     } catch (err) {
-      console.warn('여행 지도 초기화 오류:', err);
+      logger.warn('여행 지도 초기화 오류:', err);
     } finally {
       setMapLoading(false);
     }
@@ -345,7 +341,7 @@ const UserProfileScreen = () => {
           try {
             if (md.overlay) md.overlay.setMap(null);
             if (md.polyline) md.polyline.setMap(null);
-          } catch (_) {}
+          } catch (_) { }
         });
         markersRef.current = [];
       };
@@ -370,7 +366,7 @@ const UserProfileScreen = () => {
       <div className="screen-content flex flex-col flex-1 min-h-0 overflow-hidden">
         {/* 헤더 (고정) */}
         <header className="screen-header flex-shrink-0 bg-white dark:bg-gray-900 flex items-center p-4 justify-between">
-          <button 
+          <button
             onClick={() => navigate(-1)}
             className="flex size-12 shrink-0 items-center justify-center text-text-primary-light dark:text-text-primary-dark hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
           >
@@ -391,9 +387,9 @@ const UserProfileScreen = () => {
               {/* 프로필 사진 */}
               <div className="flex-shrink-0">
                 {user.profileImage ? (
-                  <img 
-                    src={user.profileImage} 
-                    alt="Profile" 
+                  <img
+                    src={user.profileImage}
+                    alt="Profile"
                     className="w-16 h-16 rounded-full object-cover"
                   />
                 ) : (
@@ -428,11 +424,10 @@ const UserProfileScreen = () => {
                         setFollowLoading(false);
                       }}
                       disabled={followLoading}
-                      className={`shrink-0 py-1.5 px-3 rounded-lg text-sm font-semibold transition-colors ${
-                        isFollow
-                          ? 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700'
-                          : 'bg-primary text-white'
-                      }`}
+                      className={`shrink-0 py-1.5 px-3 rounded-lg text-sm font-semibold transition-colors ${isFollow
+                        ? 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700'
+                        : 'bg-primary text-white'
+                        }`}
                     >
                       {isFollow ? '팔로잉' : '팔로우'}
                     </button>
@@ -446,7 +441,7 @@ const UserProfileScreen = () => {
                       </span>
                     </div>
                   )}
-                  
+
                   {/* 획득한 뱃지 개수 표시 */}
                   {earnedBadges.length > (representativeBadge ? 1 : 0) && (
                     <button
@@ -460,14 +455,6 @@ const UserProfileScreen = () => {
                   )}
                 </div>
 
-                {/* 레벨 표시 */}
-                <div className="mt-0.5">
-                  <p className="text-xs text-text-secondary-light dark:text-text-secondary-dark">
-                    {levelInfo
-                      ? `Lv. ${levelInfo.level} ${levelInfo.title}`
-                      : 'Lv. 1 여행 입문자'}
-                  </p>
-                </div>
               </div>
             </div>
           </div>
@@ -497,11 +484,10 @@ const UserProfileScreen = () => {
               <div className="flex items-center gap-2 flex-wrap">
                 <button
                   onClick={() => setSelectedDate('')}
-                  className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                    !selectedDate
-                      ? 'bg-primary text-white'
-                      : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
-                  }`}
+                  className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${!selectedDate
+                    ? 'bg-primary text-white'
+                    : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
+                    }`}
                 >
                   전체
                 </button>
@@ -513,11 +499,10 @@ const UserProfileScreen = () => {
                     <button
                       key={date}
                       onClick={() => setSelectedDate(isSelected ? '' : date)}
-                      className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                        isSelected
-                          ? 'bg-primary text-white'
-                          : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
-                      }`}
+                      className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${isSelected
+                        ? 'bg-primary text-white'
+                        : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700'
+                        }`}
                     >
                       {label}
                     </button>
@@ -602,12 +587,12 @@ const UserProfileScreen = () => {
                       key={post.id || index}
                       onClick={() => {
                         const currentIndex = filteredUserPosts.findIndex(p => p.id === post.id);
-                        navigate(`/post/${post.id}`, { 
-                          state: { 
+                        navigate(`/post/${post.id}`, {
+                          state: {
                             post: post,
                             allPosts: filteredUserPosts,
                             currentPostIndex: currentIndex >= 0 ? currentIndex : 0
-                          } 
+                          }
                         });
                       }}
                       className="cursor-pointer"
@@ -630,7 +615,7 @@ const UserProfileScreen = () => {
                           />
                         )}
                       </div>
-                      
+
                       {/* 이미지 밖 하단 텍스트 */}
                       <div className="space-y-1">
                         <p className="text-sm font-semibold text-text-primary-light dark:text-text-primary-dark line-clamp-2">
@@ -658,217 +643,220 @@ const UserProfileScreen = () => {
       <BottomNavigation />
 
       {/* 게시물 상세화면 모달 - 지도화면과 동일하게 화면 내 절대위치 오버레이 */}
-      {selectedPost && (
-        <div
-          onClick={() => setSelectedPost(null)}
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: '68px',
-            background: 'rgba(0, 0, 0, 0.5)',
-            zIndex: 1000,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '20px'
-          }}
-        >
+      {
+        selectedPost && (
           <div
-            onClick={(e) => e.stopPropagation()}
+            onClick={() => setSelectedPost(null)}
             style={{
-              background: 'white',
-              borderRadius: '20px',
-              width: '100%',
-              maxWidth: 'calc(100% - 40px)',
-              maxHeight: 'calc(100vh - 200px)',
-              overflow: 'hidden',
-              display: 'flex',
-              flexDirection: 'column',
-              boxShadow: '0 10px 40px rgba(0,0,0,0.3)'
-            }}
-          >
-            {/* 헤더 */}
-            <div style={{
-              padding: '16px',
-              borderBottom: '1px solid #f0f0f0',
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgba(0, 0, 0, 0.5)',
+              zIndex: 1000,
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'space-between'
-            }}>
-              <h2 style={{
-                margin: 0,
-                fontSize: '18px',
-                fontWeight: 'bold',
-                color: '#333'
-              }}>
-                {selectedPost.post.location || selectedPost.post.detailedLocation || '여행지'}
-              </h2>
-              <button
-                onClick={() => setSelectedPost(null)}
-                style={{
-                  width: '32px',
-                  height: '32px',
-                  borderRadius: '16px',
-                  border: 'none',
-                  background: '#f5f5f5',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer'
-                }}
-              >
-                <span className="material-symbols-outlined" style={{ fontSize: '20px', color: '#666' }}>
-                  close
-                </span>
-              </button>
-            </div>
-
-            {/* 이미지 */}
-            <div style={{
-              width: '100%',
-              aspectRatio: '4/3',
-              overflow: 'hidden',
-              background: '#f5f5f5'
-            }}>
-              <img
-                src={selectedPost.post.images?.[0] || selectedPost.post.imageUrl || selectedPost.post.image || selectedPost.post.thumbnail}
-                alt={selectedPost.post.location || '여행지'}
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  objectFit: 'cover'
-                }}
-                onError={(e) => {
-                  e.currentTarget.style.display = 'none';
-                }}
-              />
-            </div>
-
-            {/* 내용 */}
-            <div style={{
-              padding: '16px',
-              overflowY: 'auto',
-              flex: 1
-            }}>
-              {selectedPost.post.note && (
-                <p style={{
-                  margin: '0 0 12px 0',
-                  fontSize: '14px',
-                  color: '#666',
-                  lineHeight: '1.6'
-                }}>
-                  {selectedPost.post.note}
-                </p>
-              )}
-
+              justifyContent: 'center',
+              padding: '20px'
+            }}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: 'white',
+                borderRadius: '20px',
+                width: '100%',
+                maxWidth: 'calc(100% - 40px)',
+                maxHeight: 'calc(100vh - 200px)',
+                overflow: 'hidden',
+                display: 'flex',
+                flexDirection: 'column',
+                boxShadow: '0 10px 40px rgba(0,0,0,0.3)'
+              }}
+            >
+              {/* 헤더 */}
               <div style={{
+                padding: '16px',
+                borderBottom: '1px solid #f0f0f0',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '8px',
-                marginTop: '12px',
-                paddingTop: '12px',
-                borderTop: '1px solid #f0f0f0'
+                justifyContent: 'space-between'
               }}>
-                <span className="material-symbols-outlined" style={{ fontSize: '18px', color: '#00BCD4' }}>
-                  location_on
-                </span>
-                <span style={{
-                  fontSize: '13px',
-                  color: '#999'
+                <h2 style={{
+                  margin: 0,
+                  fontSize: '18px',
+                  fontWeight: 'bold',
+                  color: '#333'
                 }}>
-                  {selectedPost.post.detailedLocation || selectedPost.post.location || '위치 정보 없음'}
-                </span>
+                  {selectedPost.post.location || selectedPost.post.detailedLocation || '여행지'}
+                </h2>
+                <button
+                  onClick={() => setSelectedPost(null)}
+                  style={{
+                    width: '32px',
+                    height: '32px',
+                    borderRadius: '16px',
+                    border: 'none',
+                    background: '#f5f5f5',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: '20px', color: '#666' }}>
+                    close
+                  </span>
+                </button>
               </div>
 
-              <button
-                onClick={() => {
-                  setSelectedPost(null);
-                  navigate(`/post/${selectedPost.post.id}`, {
-                    state: {
-                      post: selectedPost.post,
-                      allPosts: selectedPost.allPosts,
-                      currentPostIndex: selectedPost.currentPostIndex
-                    }
-                  });
-                }}
-                style={{
-                  width: '100%',
-                  marginTop: '16px',
-                  padding: '12px',
-                  background: '#00BCD4',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '12px',
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  cursor: 'pointer'
-                }}
-              >
-                전체 보기
-              </button>
+              {/* 이미지 */}
+              <div style={{
+                width: '100%',
+                aspectRatio: '4/3',
+                overflow: 'hidden',
+                background: '#f5f5f5'
+              }}>
+                <img
+                  src={getDisplayImageUrl(selectedPost.post.images?.[0] || selectedPost.post.imageUrl || selectedPost.post.image || selectedPost.post.thumbnail)}
+                  alt={selectedPost.post.location || '여행지'}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover'
+                  }}
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                  }}
+                />
+              </div>
+
+              {/* 내용 */}
+              <div style={{
+                padding: '16px',
+                overflowY: 'auto',
+                flex: 1
+              }}>
+                {selectedPost.post.note && (
+                  <p style={{
+                    margin: '0 0 12px 0',
+                    fontSize: '14px',
+                    color: '#666',
+                    lineHeight: '1.6'
+                  }}>
+                    {selectedPost.post.note}
+                  </p>
+                )}
+
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  marginTop: '12px',
+                  paddingTop: '12px',
+                  borderTop: '1px solid #f0f0f0'
+                }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: '18px', color: '#00BCD4' }}>
+                    location_on
+                  </span>
+                  <span style={{
+                    fontSize: '13px',
+                    color: '#999'
+                  }}>
+                    {selectedPost.post.detailedLocation || selectedPost.post.location || '위치 정보 없음'}
+                  </span>
+                </div>
+
+                <button
+                  onClick={() => {
+                    setSelectedPost(null);
+                    navigate(`/post/${selectedPost.post.id}`, {
+                      state: {
+                        post: selectedPost.post,
+                        allPosts: selectedPost.allPosts,
+                        currentPostIndex: selectedPost.currentPostIndex
+                      }
+                    });
+                  }}
+                  style={{
+                    width: '100%',
+                    marginTop: '16px',
+                    padding: '12px',
+                    background: '#00BCD4',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '12px',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    cursor: 'pointer'
+                  }}
+                >
+                  전체 보기
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      }
 
       {/* 뱃지 모두보기 모달 */}
-      {showAllBadges && (
-        <div 
-          className="fixed inset-0 bg-black/50 z-[200] flex items-end justify-center"
-          onClick={() => setShowAllBadges(false)}
-        >
-          <div 
-            className="bg-white dark:bg-gray-900 w-full max-w-[360px] rounded-3xl overflow-hidden mb-2 mx-2 flex flex-col"
-            onClick={(e) => e.stopPropagation()}
-            style={{ maxHeight: 'calc(100vh - 16px)' }}
+      {
+        showAllBadges && (
+          <div
+            className="fixed inset-0 bg-black/50 z-[200] flex items-end justify-center"
+            onClick={() => setShowAllBadges(false)}
           >
-            {/* 모달 헤더 */}
-            <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
-              <h2 className="text-lg font-bold text-gray-900 dark:text-white">획득한 뱃지</h2>
-              <button
-                onClick={() => setShowAllBadges(false)}
-                className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
-              >
-                <span className="material-symbols-outlined">close</span>
-              </button>
-            </div>
-            
-            {/* 뱃지 그리드 - 스크롤 가능 */}
-            <div className="p-4 overflow-y-auto flex-1" style={{ maxHeight: 'calc(100vh - 120px)' }}>
-              <div className="grid grid-cols-3 gap-4">
-                {earnedBadges.map((badge, index) => {
-                  const isRepresentative = representativeBadge?.name === badge.name;
-                  return (
-                    <div
-                      key={index}
-                      className="flex flex-col items-center"
-                    >
-                      <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-2 ${
-                        isRepresentative
+            <div
+              className="bg-white dark:bg-gray-900 w-full max-w-[360px] rounded-3xl overflow-hidden mb-2 mx-2 flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+              style={{ maxHeight: 'calc(100vh - 16px)' }}
+            >
+              {/* 모달 헤더 */}
+              <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+                <h2 className="text-lg font-bold text-gray-900 dark:text-white">획득한 뱃지</h2>
+                <button
+                  onClick={() => setShowAllBadges(false)}
+                  className="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
+                >
+                  <span className="material-symbols-outlined">close</span>
+                </button>
+              </div>
+
+              {/* 뱃지 그리드 - 스크롤 가능 */}
+              <div className="p-4 overflow-y-auto flex-1" style={{ maxHeight: 'calc(100vh - 120px)' }}>
+                <div className="grid grid-cols-3 gap-4">
+                  {earnedBadges.map((badge, index) => {
+                    const isRepresentative = representativeBadge?.name === badge.name;
+                    return (
+                      <div
+                        key={index}
+                        className="flex flex-col items-center"
+                      >
+                        <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-2 ${isRepresentative
                           ? 'bg-primary/20 border-2 border-primary'
                           : 'bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700'
-                      }`}>
-                        <span className="text-3xl">{badge.icon}</span>
+                          }`}>
+                          <span className="text-3xl">{badge.icon}</span>
+                        </div>
+                        <p className="text-xs font-semibold text-gray-900 dark:text-white text-center mb-1">
+                          {getBadgeDisplayName(badge)}
+                        </p>
+                        {isRepresentative && (
+                          <span className="text-[10px] font-bold text-white bg-primary px-2 py-0.5 rounded">
+                            대표
+                          </span>
+                        )}
                       </div>
-                      <p className="text-xs font-semibold text-gray-900 dark:text-white text-center mb-1">
-                        {getBadgeDisplayName(badge)}
-                      </p>
-                      {isRepresentative && (
-                        <span className="text-[10px] font-bold text-white bg-primary px-2 py-0.5 rounded">
-                          대표
-                        </span>
-                      )}
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
-    </div>
+        )
+      }
+    </div >
   );
 };
 

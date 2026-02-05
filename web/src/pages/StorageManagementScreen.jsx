@@ -1,20 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import BottomNavigation from '../components/BottomNavigation';
-import { 
-  getLocalStorageSizeMB, 
-  cleanOldMockData, 
-  clearAllMockData, 
+import {
+  getLocalStorageSizeMB,
   cleanOldUserPosts,
   limitPostsCount,
-  logLocalStorageStatus 
+  logLocalStorageStatus,
+  removeAllImageData
 } from '../utils/localStorageManager';
 
 const StorageManagementScreen = () => {
   const navigate = useNavigate();
   const [storageInfo, setStorageInfo] = useState({
     totalSize: '0',
-    mockCount: 0,
     userCount: 0,
     totalPosts: 0
   });
@@ -28,43 +26,14 @@ const StorageManagementScreen = () => {
   const loadStorageInfo = () => {
     const sizeMB = getLocalStorageSizeMB();
     const posts = JSON.parse(localStorage.getItem('uploadedPosts') || '[]');
-    const mockCount = posts.filter(p => p.id && p.id.toString().startsWith('mock-')).length;
-    const userCount = posts.filter(p => !p.id || !p.id.toString().startsWith('mock-')).length;
 
     setStorageInfo({
       totalSize: sizeMB,
-      mockCount,
-      userCount,
+      userCount: posts.length,
       totalPosts: posts.length
     });
 
     logLocalStorageStatus();
-  };
-
-  const handleCleanMockData = () => {
-    setConfirmAction({
-      title: 'Mock 데이터 정리',
-      message: 'Mock 데이터를 정리하시겠습니까?\n\n최근 30개의 Mock 데이터만 유지되고 나머지는 삭제됩니다.',
-      action: () => {
-        cleanOldMockData();
-        loadStorageInfo();
-        alert('Mock 데이터가 정리되었습니다.');
-      }
-    });
-    setShowConfirmModal(true);
-  };
-
-  const handleClearAllMockData = () => {
-    setConfirmAction({
-      title: '모든 Mock 데이터 삭제',
-      message: '모든 Mock 데이터를 삭제하시겠습니까?\n\n이 작업은 되돌릴 수 없습니다.',
-      action: () => {
-        clearAllMockData();
-        loadStorageInfo();
-        alert('모든 Mock 데이터가 삭제되었습니다.');
-      }
-    });
-    setShowConfirmModal(true);
   };
 
   const handleCleanOldPosts = () => {
@@ -88,6 +57,23 @@ const StorageManagementScreen = () => {
         limitPostsCount(100);
         loadStorageInfo();
         alert('게시물 수가 제한되었습니다.');
+      }
+    });
+    setShowConfirmModal(true);
+  };
+
+  const handleRemoveAllImages = () => {
+    setConfirmAction({
+      title: '모든 사진 데이터 삭제',
+      message: '모든 게시물에서 사진과 동영상 데이터를 완전히 삭제하시겠습니까?\n\n이미지 URL, base64 데이터 등 모든 사진 데이터가 제거되고 메타데이터만 남습니다.\n\n이 작업은 되돌릴 수 없습니다.',
+      action: () => {
+        const result = removeAllImageData();
+        if (result.success) {
+          loadStorageInfo();
+          alert(`모든 사진 데이터가 삭제되었습니다.\n\n${result.postsCleaned}개 게시물에서 ${result.imagesRemoved}개의 이미지/동영상이 제거되었습니다.`);
+        } else {
+          alert('사진 데이터 삭제에 실패했습니다.');
+        }
       }
     });
     setShowConfirmModal(true);
@@ -120,11 +106,11 @@ const StorageManagementScreen = () => {
   };
 
   return (
-    <div className="flex h-full w-full flex-col bg-background-light dark:bg-background-dark">
+    <div className="flex h-screen w-full flex-col bg-background-light dark:bg-background-dark relative overflow-hidden">
       <div className="flex-1 overflow-y-auto overflow-x-hidden">
         {/* 헤더 */}
         <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-border-light bg-surface-light/80 dark:border-border-dark dark:bg-surface-dark/80 backdrop-blur-sm px-4">
-          <button 
+          <button
             onClick={() => navigate('/settings')}
             className="flex size-12 shrink-0 items-center justify-center cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
           >
@@ -154,14 +140,6 @@ const StorageManagementScreen = () => {
                 <span className="text-sm font-medium text-black dark:text-white">전체 게시물</span>
                 <span className="text-base font-bold text-black dark:text-white">{storageInfo.totalPosts}개</span>
               </div>
-              <div className="flex items-center justify-between p-4 bg-surface-subtle-light dark:bg-surface-subtle-dark rounded-lg">
-                <span className="text-sm font-medium text-black dark:text-white">사용자 게시물</span>
-                <span className="text-base font-bold text-black dark:text-white">{storageInfo.userCount}개</span>
-              </div>
-              <div className="flex items-center justify-between p-4 bg-surface-subtle-light dark:bg-surface-subtle-dark rounded-lg">
-                <span className="text-sm font-medium text-black dark:text-white">Mock 데이터</span>
-                <span className="text-base font-bold text-black dark:text-white">{storageInfo.mockCount}개</span>
-              </div>
             </div>
           </div>
 
@@ -179,24 +157,7 @@ const StorageManagementScreen = () => {
               </p>
             </div>
             <div className="flex flex-col">
-              <button 
-                onClick={handleCleanMockData}
-                className="flex h-auto items-start justify-between px-4 py-4 hover:bg-surface-subtle-light dark:hover:bg-surface-subtle-dark transition-colors"
-              >
-                <div className="flex flex-col text-left">
-                  <p className="text-base font-semibold leading-normal text-black dark:text-white">
-                    Mock 데이터 정리
-                  </p>
-                  <p className="text-sm font-normal leading-normal text-black/70 dark:text-white/70 mt-1">
-                    오래된 Mock 데이터를 정리합니다 (최근 30개 유지)
-                  </p>
-                </div>
-                <span className="material-symbols-outlined text-black/70 dark:text-white/70 mt-1">
-                  chevron_right
-                </span>
-              </button>
-              
-              <button 
+              <button
                 onClick={handleCleanOldPosts}
                 className="flex h-auto items-start justify-between px-4 py-4 hover:bg-surface-subtle-light dark:hover:bg-surface-subtle-dark transition-colors border-t border-border-light dark:border-border-dark"
               >
@@ -213,7 +174,7 @@ const StorageManagementScreen = () => {
                 </span>
               </button>
 
-              <button 
+              <button
                 onClick={handleLimitPosts}
                 className="flex h-auto items-start justify-between px-4 py-4 hover:bg-surface-subtle-light dark:hover:bg-surface-subtle-dark transition-colors border-t border-border-light dark:border-border-dark"
               >
@@ -246,24 +207,24 @@ const StorageManagementScreen = () => {
               </p>
             </div>
             <div className="flex flex-col">
-              <button 
-                onClick={handleClearAllMockData}
+              <button
+                onClick={handleRemoveAllImages}
                 className="flex h-auto items-start justify-between px-4 py-4 hover:bg-surface-subtle-light dark:hover:bg-surface-subtle-dark transition-colors"
               >
                 <div className="flex flex-col text-left">
-                  <p className="text-base font-semibold leading-normal text-black dark:text-white">
-                    모든 Mock 데이터 삭제
+                  <p className="text-base font-semibold leading-normal text-red-600 dark:text-red-400">
+                    모든 사진 데이터 삭제
                   </p>
                   <p className="text-sm font-normal leading-normal text-black/70 dark:text-white/70 mt-1">
-                    모든 Mock 데이터를 완전히 삭제합니다
+                    모든 게시물에서 이미지/동영상 데이터를 완전히 제거합니다
                   </p>
                 </div>
-                <span className="material-symbols-outlined text-black/70 dark:text-white/70 mt-1">
+                <span className="material-symbols-outlined text-red-600 dark:text-red-400 mt-1">
                   chevron_right
                 </span>
               </button>
 
-              <button 
+              <button
                 onClick={handleClearAllData}
                 className="flex h-auto items-start justify-between px-4 py-4 hover:bg-surface-subtle-light dark:hover:bg-surface-subtle-dark transition-colors border-t border-border-light dark:border-border-dark"
               >
@@ -288,7 +249,7 @@ const StorageManagementScreen = () => {
 
       {/* 확인 모달 */}
       {showConfirmModal && confirmAction && (
-        <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/50 p-4">
+        <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-sm rounded-xl bg-surface-light dark:bg-surface-dark p-6 text-center shadow-2xl">
             <h3 className="text-lg font-bold text-black dark:text-white">
               {confirmAction.title}
@@ -297,13 +258,13 @@ const StorageManagementScreen = () => {
               {confirmAction.message}
             </p>
             <div className="mt-6 flex gap-3">
-              <button 
+              <button
                 onClick={cancelAction}
                 className="h-12 w-full rounded-lg bg-surface-subtle-light dark:bg-surface-subtle-dark text-base font-bold text-black dark:text-white hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
               >
                 취소
               </button>
-              <button 
+              <button
                 onClick={executeAction}
                 className="h-12 w-full rounded-lg bg-black dark:bg-white text-base font-bold text-white dark:text-black hover:bg-black/80 dark:hover:bg-white/80 transition-colors"
               >

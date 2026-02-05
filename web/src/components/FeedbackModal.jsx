@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { logger } from '../utils/logger';
 
 const FeedbackModal = ({ isOpen, onClose, onSubmit }) => {
   const [formData, setFormData] = useState({
@@ -92,7 +93,7 @@ const FeedbackModal = ({ isOpen, onClose, onSubmit }) => {
         setError(data.message || '피드백 제출에 실패했습니다.');
       }
     } catch (err) {
-      console.error('피드백 제출 오류:', err);
+      logger.error('피드백 제출 오류:', err);
       setError('네트워크 오류가 발생했습니다. 다시 시도해주세요.');
     } finally {
       setSubmitting(false);

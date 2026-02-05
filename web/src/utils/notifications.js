@@ -59,23 +59,23 @@ export const addNotification = (notification) => {
       timestamp: new Date().toISOString(),
       ...notification
     };
-    
+
     // 타입별 기본 설정 적용
     const typeConfig = NOTIFICATION_TYPES[notification.type] || NOTIFICATION_TYPES.system;
     newNotification.icon = newNotification.icon || typeConfig.icon;
     newNotification.iconBg = newNotification.iconBg || typeConfig.iconBg;
     newNotification.iconColor = newNotification.iconColor || typeConfig.iconColor;
-    
+
     notifications.unshift(newNotification);
-    
+
     // 최대 100개까지만 저장
     const limitedNotifications = notifications.slice(0, 100);
     localStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(limitedNotifications));
-    
+
     // 알림 업데이트 이벤트 발생
     window.dispatchEvent(new Event('notificationUpdate'));
     window.dispatchEvent(new Event('notificationCountChanged'));
-    
+
     logger.log('✅ 알림 추가:', newNotification.title);
     return newNotification;
   } catch (error) {
@@ -88,14 +88,14 @@ export const addNotification = (notification) => {
 export const markNotificationAsRead = (notificationId) => {
   try {
     const notifications = getNotifications();
-    const updated = notifications.map(n => 
+    const updated = notifications.map(n =>
       n.id === notificationId ? { ...n, read: true } : n
     );
     localStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(updated));
-    
+
     // 알림 카운트 업데이트 이벤트 발생
     window.dispatchEvent(new Event('notificationCountChanged'));
-    
+
     return true;
   } catch (error) {
     logger.error('알림 읽음 처리 실패:', error);
@@ -109,10 +109,10 @@ export const markAllNotificationsAsRead = () => {
     const notifications = getNotifications();
     const updated = notifications.map(n => ({ ...n, read: true }));
     localStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(updated));
-    
+
     // 알림 카운트 업데이트 이벤트 발생
     window.dispatchEvent(new Event('notificationCountChanged'));
-    
+
     logger.log('✅ 모든 알림 읽음 처리');
     return true;
   } catch (error) {
@@ -127,10 +127,10 @@ export const deleteNotification = (notificationId) => {
     const notifications = getNotifications();
     const filtered = notifications.filter(n => n.id !== notificationId);
     localStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(filtered));
-    
+
     // 알림 카운트 업데이트 이벤트 발생
     window.dispatchEvent(new Event('notificationCountChanged'));
-    
+
     return true;
   } catch (error) {
     logger.error('알림 삭제 실패:', error);
@@ -153,11 +153,11 @@ export const getUnreadCount = () => {
 export const clearAllNotifications = () => {
   try {
     localStorage.removeItem(NOTIFICATIONS_KEY);
-    
+
     // 알림 업데이트 이벤트 발생
     window.dispatchEvent(new Event('notificationUpdate'));
     window.dispatchEvent(new Event('notificationCountChanged'));
-    
+
     logger.log('✅ 모든 알림 삭제');
     return true;
   } catch (error) {
@@ -174,7 +174,7 @@ const getTimeAgo = (date) => {
   const minutes = Math.floor(seconds / 60);
   const hours = Math.floor(minutes / 60);
   const days = Math.floor(hours / 24);
-  
+
   if (seconds < 60) return '방금';
   if (minutes < 60) return `${minutes}분 전`;
   if (hours < 24) return `${hours}시간 전`;
@@ -187,7 +187,7 @@ const getTimeAgo = (date) => {
 // 뱃지 획득 알림
 export const notifyBadge = (badgeName, difficulty = '중') => {
   const difficultyEmoji = difficulty === '상' ? '🔥' : difficulty === '중' ? '⭐' : '🌟';
-  
+
   addNotification({
     type: 'badge',
     title: `🏆 새로운 뱃지 획득! ${difficultyEmoji}`,
@@ -241,18 +241,6 @@ export const notifySystem = (title, message, link = null) => {
   });
 };
 
-// 레벨업 알림
-export const notifyLevelUp = (newLevel, title) => {
-  addNotification({
-    type: 'system',
-    title: `🎉 레벨 업!`,
-    message: `축하합니다! Lv.${newLevel} ${title}이(가) 되었습니다!`,
-    icon: 'celebration',
-    iconBg: 'bg-primary/10',
-    iconColor: 'text-primary',
-    link: '/profile'
-  });
-};
 
 export default {
   getNotifications,
@@ -266,6 +254,5 @@ export default {
   notifyLike,
   notifyComment,
   notifyFollow,
-  notifySystem,
-  notifyLevelUp
+  notifySystem
 };

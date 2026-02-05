@@ -2,6 +2,8 @@
  * localStorage 관리 유틸리티
  */
 
+import { logger } from './logger';
+
 // localStorage 사용 용량 확인 (bytes)
 export const getLocalStorageSize = () => {
   let total = 0;
@@ -15,7 +17,7 @@ export const getLocalStorageSize = () => {
       }
     }
   } catch (error) {
-    console.error('localStorage 크기 계산 오류:', error);
+    logger.error('localStorage 크기 계산 오류:', error);
   }
   return total;
 };
@@ -23,33 +25,6 @@ export const getLocalStorageSize = () => {
 // localStorage 사용 용량 확인 (MB)
 export const getLocalStorageSizeMB = () => {
   return (getLocalStorageSize() / (1024 * 1024)).toFixed(2);
-};
-
-// 오래된 Mock 데이터 정리
-export const cleanOldMockData = () => {
-  try {
-    const posts = JSON.parse(localStorage.getItem('uploadedPosts') || '[]');
-    
-    // local-로 시작하는 mock 데이터만 필터링 (실제 사용자 업로드는 유지)
-    const mockPosts = posts.filter(p => p.id && p.id.toString().startsWith('mock-'));
-    const userPosts = posts.filter(p => !p.id || !p.id.toString().startsWith('mock-'));
-    
-    console.log(`📊 Mock 데이터: ${mockPosts.length}개, 사용자 데이터: ${userPosts.length}개`);
-    
-    if (mockPosts.length > 50) {
-      // Mock 데이터가 50개 이상이면 최근 30개만 유지 (더 적극적으로 정리)
-      const recentMockPosts = mockPosts.slice(0, 30);
-      const newPosts = [...userPosts, ...recentMockPosts];
-      localStorage.setItem('uploadedPosts', JSON.stringify(newPosts));
-      console.log(`✅ Mock 데이터 정리 완료: ${mockPosts.length}개 → ${recentMockPosts.length}개`);
-      return true;
-    }
-    
-    return false;
-  } catch (error) {
-    console.error('Mock 데이터 정리 실패:', error);
-    return false;
-  }
 };
 
 // 오래된 사용자 게시물 정리 (30일 이상 지난 게시물)
@@ -73,7 +48,7 @@ export const cleanOldUserPosts = (daysToKeep = 30) => {
     
     return false;
   } catch (error) {
-    console.error('오래된 게시물 정리 실패:', error);
+    logger.error('오래된 게시물 정리 실패:', error);
     return false;
   }
 };
@@ -93,32 +68,13 @@ export const limitPostsCount = (maxCount = 100) => {
       
       const limitedPosts = sortedPosts.slice(0, maxCount);
       localStorage.setItem('uploadedPosts', JSON.stringify(limitedPosts));
-      console.log(`✅ 게시물 수 제한 적용: ${posts.length}개 → ${limitedPosts.length}개`);
+      logger.log(`✅ 게시물 수 제한 적용: ${posts.length}개 → ${limitedPosts.length}개`);
       return true;
     }
     
     return false;
   } catch (error) {
     console.error('게시물 수 제한 실패:', error);
-    return false;
-  }
-};
-
-// 모든 Mock 데이터 삭제 (비상용)
-export const clearAllMockData = () => {
-  try {
-    const posts = JSON.parse(localStorage.getItem('uploadedPosts') || '[]');
-    const userPosts = posts.filter(p => {
-      // id가 mock-로 시작하거나 userId가 mock_user_로 시작하는 데이터는 모두 제거
-      if (p.id && p.id.toString().startsWith('mock-')) return false;
-      if (p.userId && p.userId.toString().startsWith('mock_user_')) return false;
-      return true;
-    });
-    localStorage.setItem('uploadedPosts', JSON.stringify(userPosts));
-    console.log(`🗑️ 모든 Mock 데이터 삭제 완료`);
-    return true;
-  } catch (error) {
-    console.error('Mock 데이터 삭제 실패:', error);
     return false;
   }
 };
@@ -200,6 +156,68 @@ export const safeSetItem = (key, value) => {
   }
 };
 
+// 모든 게시물 데이터 완전 삭제 (목업 데이터 포함)
+export const clearAllPostsData = () => {
+  try {
+    localStorage.removeItem('uploadedPosts');
+    logger.log('🗑️ 모든 게시물 데이터 삭제 완료 (목업 데이터 포함)');
+    return { success: true };
+  } catch (error) {
+    logger.error('게시물 데이터 삭제 실패:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+// 모든 사진 데이터 완전 삭제 (이미지 URL, base64 등 모든 이미지 데이터 제거)
+export const removeAllImageData = () => {
+  try {
+    const posts = JSON.parse(localStorage.getItem('uploadedPosts') || '[]');
+    let removedCount = 0;
+    let totalImagesRemoved = 0;
+    
+    const cleanedPosts = posts.map(post => {
+      const hasImages = (post.images && post.images.length > 0) || 
+                       (post.videos && post.videos.length > 0) ||
+                       (post.image && post.image) ||
+                       (post.thumbnail && post.thumbnail);
+      
+      if (hasImages) {
+        removedCount++;
+        const imageCount = (post.images?.length || 0) + (post.videos?.length || 0);
+        totalImagesRemoved += imageCount;
+      }
+      
+      // 모든 이미지 관련 데이터 제거
+      const cleaned = {
+        ...post,
+        images: [],
+        videos: [],
+        image: null,
+        thumbnail: null,
+        imageCount: 0,
+        videoCount: 0
+      };
+      
+      // imageFiles, videoFiles 같은 파일 참조도 제거
+      delete cleaned.imageFiles;
+      delete cleaned.videoFiles;
+      
+      return cleaned;
+    });
+    
+    localStorage.setItem('uploadedPosts', JSON.stringify(cleanedPosts));
+    logger.log(`🗑️ 모든 사진 데이터 삭제 완료: ${removedCount}개 게시물에서 ${totalImagesRemoved}개의 이미지/동영상 제거`);
+    return { 
+      success: true, 
+      postsCleaned: removedCount, 
+      imagesRemoved: totalImagesRemoved 
+    };
+  } catch (error) {
+    logger.error('사진 데이터 삭제 실패:', error);
+    return { success: false, error: error.message };
+  }
+};
+
 // localStorage 상태 로깅
 export const logLocalStorageStatus = () => {
   try {
@@ -207,14 +225,10 @@ export const logLocalStorageStatus = () => {
     const postsString = localStorage.getItem('uploadedPosts') || '[]';
     const postsSizeMB = (postsString.length / (1024 * 1024)).toFixed(2);
     const posts = JSON.parse(postsString);
-    const mockCount = posts.filter(p => p.id && p.id.toString().startsWith('mock-')).length;
-    const userCount = posts.filter(p => !p.id || !p.id.toString().startsWith('mock-')).length;
-    
+
     console.log('📊 localStorage 상태:');
     console.log(`   - 전체 사용 용량: ${sizeMB} MB`);
     console.log(`   - uploadedPosts 용량: ${postsSizeMB} MB`);
-    console.log(`   - Mock 데이터: ${mockCount}개`);
-    console.log(`   - 사용자 데이터: ${userCount}개`);
     console.log(`   - 전체 게시물: ${posts.length}개`);
     
     // 가장 큰 항목 찾기

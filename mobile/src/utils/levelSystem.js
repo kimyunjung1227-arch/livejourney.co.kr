@@ -146,7 +146,7 @@ export const EXP_REWARDS = {
 // 현재 레벨 계산
 export const calculateLevel = (totalExp) => {
   let level = 1;
-  
+
   for (let lv = 1; lv <= 100; lv++) {
     if (totalExp >= LEVEL_EXP[lv]) {
       level = lv;
@@ -154,21 +154,21 @@ export const calculateLevel = (totalExp) => {
       break;
     }
   }
-  
+
   return level;
 };
 
 // 현재 레벨 타이틀
 export const getLevelTitle = (level) => {
   let title = LEVEL_TITLES[1];
-  
+
   for (let lv = 100; lv >= 1; lv--) {
     if (LEVEL_TITLES[lv] && level >= lv) {
       title = LEVEL_TITLES[lv];
       break;
     }
   }
-  
+
   return title;
 };
 
@@ -181,15 +181,15 @@ export const getExpToNextLevel = (currentLevel) => {
 // 현재 레벨 진행률 (%)
 export const getLevelProgress = (totalExp, currentLevel) => {
   if (currentLevel >= 100) return 100;
-  
+
   const currentLevelExp = LEVEL_EXP[currentLevel];
   const nextLevelExp = LEVEL_EXP[currentLevel + 1];
-  
+
   if (!nextLevelExp) return 100;
-  
+
   const expInCurrentLevel = totalExp - currentLevelExp;
   const expNeededForLevel = nextLevelExp - currentLevelExp;
-  
+
   return Math.min(100, Math.round((expInCurrentLevel / expNeededForLevel) * 100));
 };
 
@@ -200,57 +200,55 @@ export const calculateTotalExp = async () => {
     const posts = postsJson ? JSON.parse(postsJson) : [];
     const earnedBadgesJson = await AsyncStorage.getItem('earnedBadges');
     const earnedBadges = earnedBadgesJson ? JSON.parse(earnedBadgesJson) : [];
-    
+
     // 현재 사용자 정보 가져오기
     const userJson = await AsyncStorage.getItem('user');
     const currentUser = userJson ? JSON.parse(userJson) : {};
-    const currentUserId = currentUser?.id;
-    
+    const currentUserId = currentUser?.id ? String(currentUser.id) : null;
+
     // 목업 데이터 필터링 (실제 사용자가 업로드한 게시물만)
     const userPosts = posts.filter(post => {
-      // 목업 데이터 제외 (id가 mock-로 시작하거나 userId가 mock_user_로 시작하는 경우)
-      if (post.id && post.id.toString().startsWith('mock-')) {
-        return false;
-      }
-      if (post.userId && post.userId.toString().startsWith('mock_user_')) {
-        return false;
-      }
-      
+      const postIdStr = post.id ? String(post.id) : '';
+      const postUserIdStr = post.userId ? String(post.userId) : '';
+
+      // 목업 데이터 제외
+      if (postIdStr.startsWith('mock-')) return false;
+      if (postUserIdStr.startsWith('mock-user-')) return false;
+
       // 현재 사용자의 게시물만 포함
       if (currentUserId) {
-        const postUserId = post.userId || 
-                          (typeof post.user === 'string' ? post.user : post.user?.id) ||
-                          post.user;
-        return postUserId === currentUserId;
+        const postUserId = post.userId ||
+          (typeof post.user === 'object' ? post.user?.id : post.user);
+        return postUserId && String(postUserId) === currentUserId;
       }
-      
+
       // 사용자 정보가 없으면 local-로 시작하는 게시물만 포함 (실제 업로드)
-      return post.id && post.id.toString().startsWith('local-');
+      return postIdStr.startsWith('local-');
     });
-    
+
     let totalExp = 0;
-    
+
     // 사진 업로드 경험치 (실제 사용자 게시물만)
     totalExp += userPosts.length * EXP_REWARDS['사진 업로드'];
-    
+
     // 좋아요 받기 경험치 (실제 사용자 게시물만)
     const totalLikes = userPosts.reduce((sum, post) => sum + (post.likes || 0), 0);
     totalExp += totalLikes * EXP_REWARDS['좋아요 받기'];
-    
+
     // 댓글 받기 경험치 (실제 사용자 게시물만)
     const totalComments = userPosts.reduce((sum, post) => sum + (post.qnaList?.length || 0), 0);
     totalExp += totalComments * EXP_REWARDS['댓글 받기'];
-    
+
     // 뱃지 경험치
     earnedBadges.forEach(badge => {
       const expReward = EXP_REWARDS[`뱃지 획득 (${badge.difficulty})`] || 100;
       totalExp += expReward;
     });
-    
+
     // 방문한 지역 경험치 (실제 사용자 게시물만)
     const visitedRegions = [...new Set(userPosts.map(p => p.location?.split(' ')[0]).filter(Boolean))];
     totalExp += visitedRegions.length * EXP_REWARDS['지역 방문'];
-    
+
     return totalExp;
   } catch (error) {
     console.error('경험치 계산 실패:', error);
@@ -268,7 +266,7 @@ export const getUserLevel = async () => {
   const currentLevelExp = LEVEL_EXP[level];
   const expInCurrentLevel = totalExp - currentLevelExp;
   const expNeededForNextLevel = nextLevelExp - currentLevelExp;
-  
+
   return {
     level,
     title,
@@ -286,18 +284,18 @@ export const gainExp = async (action) => {
   try {
     const expReward = EXP_REWARDS[action] || 0;
     if (expReward === 0) return { levelUp: false, newLevel: null };
-    
+
     const currentLevelInfo = await getUserLevel();
     const newTotalExp = currentLevelInfo.totalExp + expReward;
     const newLevel = calculateLevel(newTotalExp);
     const levelUp = newLevel > currentLevelInfo.level;
-    
+
     // 경험치 저장 (총 경험치는 calculateTotalExp로 계산하므로 별도 저장 불필요)
-    
+
     if (levelUp) {
       console.log(`🎉 레벨 업! Lv.${currentLevelInfo.level} → Lv.${newLevel}`);
     }
-    
+
     return {
       levelUp,
       newLevel: levelUp ? newLevel : null,

@@ -16,16 +16,122 @@ import {
   Share,
   StatusBar,
   Platform,
+  LayoutAnimation,
+  UIManager,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+
+// Android에서 LayoutAnimation 활성화
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { COLORS, SPACING, TYPOGRAPHY } from '../constants/styles';
+import { getCoordinatesByLocation } from '../utils/regionLocationMapping';
 // import { BlurView } from 'expo-blur'; // 필요시 설치 후 사용
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const BOTTOM_TAB_HEIGHT = 68;
+
+// 현재 위치 마커 컴포넌트 (파동 효과)
+const CurrentLocationMarker = () => {
+  const pulse1 = useRef(new Animated.Value(1)).current;
+  const pulse2 = useRef(new Animated.Value(1)).current;
+  const pulse3 = useRef(new Animated.Value(1)).current;
+  const pulse4 = useRef(new Animated.Value(1)).current;
+  const opacity1 = useRef(new Animated.Value(0.4)).current;
+  const opacity2 = useRef(new Animated.Value(0.3)).current;
+  const opacity3 = useRef(new Animated.Value(0.2)).current;
+  const opacity4 = useRef(new Animated.Value(0.15)).current;
+
+  useEffect(() => {
+    // 파동 1 애니메이션
+    const anim1 = Animated.loop(
+      Animated.parallel([
+        Animated.timing(pulse1, {
+          toValue: 4,
+          duration: 2000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacity1, {
+          toValue: 0,
+          duration: 2000,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    // 파동 2 애니메이션 (약간 지연)
+    const anim2 = Animated.loop(
+      Animated.parallel([
+        Animated.timing(pulse2, {
+          toValue: 4.5,
+          duration: 2000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacity2, {
+          toValue: 0,
+          duration: 2000,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    // 파동 3 애니메이션 (더 지연)
+    const anim3 = Animated.loop(
+      Animated.parallel([
+        Animated.timing(pulse3, {
+          toValue: 5,
+          duration: 2000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacity3, {
+          toValue: 0,
+          duration: 2000,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    // 파동 4 애니메이션 (가장 지연)
+    const anim4 = Animated.loop(
+      Animated.parallel([
+        Animated.timing(pulse4, {
+          toValue: 5.5,
+          duration: 2000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacity4, {
+          toValue: 0,
+          duration: 2000,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    anim1.start();
+    anim2.start();
+    anim3.start();
+    anim4.start();
+
+    return () => {
+      anim1.stop();
+      anim2.stop();
+      anim3.stop();
+      anim4.stop();
+    };
+  }, []);
+
+  return (
+    <View style={styles.currentLocationMarkerContainer}>
+      {/* 중심 원점만 표시 (파동 효과 제거) */}
+      <View style={styles.currentLocationDot} />
+    </View>
+  );
+};
 
 const MapScreen = () => {
   const navigation = useNavigation();
@@ -34,6 +140,13 @@ const MapScreen = () => {
   const [posts, setPosts] = useState([]);
   const [visiblePins, setVisiblePins] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedFilters, setSelectedFilters] = useState([]); // 필터: ['bloom', 'food', 'scenic'] 중복 선택 가능
+  const [searchResults, setSearchResults] = useState([]); // 검색 결과 게시물
+  const [isSearching, setIsSearching] = useState(false); // 검색 중인지 여부
+  const [showSearchSheet, setShowSearchSheet] = useState(false); // 검색 시트 표시 여부
+  const [filteredRegions, setFilteredRegions] = useState([]); // 자동완성 필터링된 지역
+  const [searchSuggestions, setSearchSuggestions] = useState([]); // 검색 제안 (지역 + 게시물)
+  const [recentSearches, setRecentSearches] = useState([]); // 최근 검색 지역
   const [isDragging, setIsDragging] = useState(false);
   const [sheetOffset, setSheetOffset] = useState(0);
   const [isSheetHidden, setIsSheetHidden] = useState(false);
@@ -50,6 +163,7 @@ const MapScreen = () => {
   const dragHandleRef = useRef(null);
   const sheetOffsetAnim = useRef(new Animated.Value(0)).current;
   const startY = useRef(0);
+  const mapRef = useRef(null);
 
   // 네비게이션 바 숨기기
   useLayoutEffect(() => {
@@ -58,10 +172,192 @@ const MapScreen = () => {
     });
   }, [navigation]);
 
+  // GPS 위치 가져오기 (완전히 새로 작성)
   useEffect(() => {
-    loadLocation();
+    setLoading(false);
     loadPosts();
+    
+    // 최근 검색 지역 로드
+    const loadRecentSearches = async () => {
+      try {
+        const savedRecentSearches = await AsyncStorage.getItem('recentSearches');
+        if (savedRecentSearches) {
+          setRecentSearches(JSON.parse(savedRecentSearches));
+        }
+      } catch (e) {
+        console.error('최근 검색 지역 로드 실패:', e);
+      }
+    };
+    loadRecentSearches();
+
+    let locationSubscription = null;
+
+    // GPS 위치 가져오기
+    const getGPSLocation = async () => {
+      try {
+        // 먼저 현재 권한 상태 확인
+        const { status: currentStatus } = await Location.getForegroundPermissionsAsync();
+        
+        // 권한이 없으면 사용자에게 알림 표시
+        if (currentStatus !== 'granted') {
+          Alert.alert(
+            '위치 권한 필요',
+            '지도에서 현재 위치를 표시하려면 위치 권한이 필요합니다.\n\n설정에서 위치 권한을 허용해주세요.',
+            [
+              {
+                text: '취소',
+                style: 'cancel',
+                onPress: () => {
+                  setCurrentLocation({ latitude: 37.5665, longitude: 126.9780 });
+                }
+              },
+              {
+                text: '설정 열기',
+                onPress: async () => {
+                  const { status } = await Location.requestForegroundPermissionsAsync();
+                  if (status === 'granted') {
+                    // 권한 허용 후 위치 가져오기
+                    try {
+                      const location = await Location.getCurrentPositionAsync({
+                        accuracy: Location.Accuracy.Best,
+                      });
+                      setCurrentLocation({
+                        latitude: location.coords.latitude,
+                        longitude: location.coords.longitude,
+                      });
+                      console.log('📍 GPS 위치:', {
+                        위도: location.coords.latitude,
+                        경도: location.coords.longitude,
+                      });
+                      
+                      // 위치 추적 시작
+                      locationSubscription = await Location.watchPositionAsync(
+                        {
+                          accuracy: Location.Accuracy.Best,
+                          timeInterval: 5000,
+                          distanceInterval: 10,
+                        },
+                        (newLocation) => {
+                          const newLat = newLocation.coords.latitude;
+                          const newLng = newLocation.coords.longitude;
+                          setCurrentLocation({ latitude: newLat, longitude: newLng });
+                          console.log('📍 위치 업데이트:', { 위도: newLat, 경도: newLng });
+                        }
+                      );
+                    } catch (error) {
+                      console.error('📍 위치 가져오기 실패:', error);
+                      setCurrentLocation({ latitude: 37.5665, longitude: 126.9780 });
+                    }
+                  } else {
+                    Alert.alert(
+                      '위치 권한 거부됨',
+                      '위치 권한이 거부되었습니다. 지도 기능을 사용하려면 설정에서 위치 권한을 허용해주세요.',
+                      [{ text: '확인' }]
+                    );
+                    setCurrentLocation({ latitude: 37.5665, longitude: 126.9780 });
+                  }
+                }
+              }
+            ]
+          );
+          return;
+        }
+
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert(
+            '위치 권한 거부됨',
+            '위치 권한이 거부되었습니다. 지도에서 현재 위치를 표시하려면 설정에서 위치 권한을 허용해주세요.',
+            [{ text: '확인' }]
+          );
+          setCurrentLocation({ latitude: 37.5665, longitude: 126.9780 });
+          return;
+        }
+
+        // 현재 위치 가져오기
+        const location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Best,
+        });
+
+        const lat = location.coords.latitude;
+        const lng = location.coords.longitude;
+
+        setCurrentLocation({ latitude: lat, longitude: lng });
+
+        console.log('📍 GPS 위치:', { 위도: lat, 경도: lng });
+
+        // 위치 추적 시작
+        locationSubscription = await Location.watchPositionAsync(
+          {
+            accuracy: Location.Accuracy.Best,
+            timeInterval: 5000,
+            distanceInterval: 10,
+          },
+          (newLocation) => {
+            const newLat = newLocation.coords.latitude;
+            const newLng = newLocation.coords.longitude;
+            setCurrentLocation({ latitude: newLat, longitude: newLng });
+            console.log('📍 위치 업데이트:', { 위도: newLat, 경도: newLng });
+          }
+        );
+      } catch (error) {
+        console.error('📍 위치 가져오기 실패:', error);
+        setCurrentLocation({ latitude: 37.5665, longitude: 126.9780 });
+      }
+    };
+
+    getGPSLocation();
+
+    return () => {
+      if (locationSubscription) {
+        locationSubscription.remove();
+      }
+    };
   }, []);
+
+  // 지도가 준비되었는지 추적
+  const [mapReady, setMapReady] = useState(false);
+
+  // 화면이 포커스될 때마다 내 위치로 이동
+  useFocusEffect(
+    React.useCallback(() => {
+      // 지도가 준비되고 현재 위치가 있으면 내 위치로 이동
+      if (mapReady && mapRef.current && currentLocation && currentLocation.latitude && currentLocation.longitude) {
+        // 지도가 완전히 로드된 후 이동
+        const timer = setTimeout(() => {
+          mapRef.current?.animateToRegion({
+            latitude: currentLocation.latitude,
+            longitude: currentLocation.longitude,
+            latitudeDelta: 0.01,
+            longitudeDelta: 0.01,
+          }, 500);
+        }, 100);
+        
+        return () => clearTimeout(timer);
+      }
+    }, [mapReady, currentLocation])
+  );
+
+  // currentLocation이 변경되고 지도가 준비되면 내 위치로 이동
+  useEffect(() => {
+    if (mapReady && mapRef.current && currentLocation && currentLocation.latitude && currentLocation.longitude) {
+      const timer = setTimeout(() => {
+        mapRef.current?.animateToRegion({
+          latitude: currentLocation.latitude,
+          longitude: currentLocation.longitude,
+          latitudeDelta: 0.01,
+          longitudeDelta: 0.01,
+        }, 500);
+      }, 100);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [mapReady, currentLocation]);
+
+  // 필터 변경 시 게시물 다시 로드
+  useEffect(() => {
+    loadPosts();
+  }, [selectedFilters, isSearching, searchResults]);
 
   useEffect(() => {
     // visiblePins 업데이트 (현재는 posts를 그대로 사용)
@@ -75,39 +371,273 @@ const MapScreen = () => {
     })));
   }, [posts]);
 
-  const loadLocation = async () => {
+
+  // 장소 타입 키워드 매핑
+  const placeTypeKeywords = {
+    '카페': { tags: ['카페', 'coffee', 'cafe'], category: null },
+    '맛집': { tags: ['맛집', 'restaurant', 'food'], category: 'food' },
+    '관광지': { tags: ['관광', 'tourist', 'landmark'], category: 'landmark' },
+    '공원': { tags: ['공원', 'park', 'park'], category: 'scenic' },
+    '가게': { tags: ['가게', 'shop', 'store'], category: null },
+    '음식점': { tags: ['음식', 'restaurant', 'food'], category: 'food' },
+    '식당': { tags: ['식당', 'restaurant', 'food'], category: 'food' },
+    '레스토랑': { tags: ['restaurant', 'food'], category: 'food' }
+  };
+
+  // 게시물에서 장소명 검색
+  const searchInPosts = async (query) => {
+    const queryLower = query.toLowerCase().trim();
+    
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        console.log('위치 권한이 거부되었습니다.');
-        setLoading(false);
-        return;
+      // 모든 게시물 가져오기
+      const postsJson = await AsyncStorage.getItem('uploadedPosts');
+      const allPosts = postsJson ? JSON.parse(postsJson) : [];
+      
+      const validPosts = allPosts.filter(post => 
+        post.coordinates || post.location || post.detailedLocation
+      );
+
+      // 장소 타입 키워드 확인
+      for (const [type, config] of Object.entries(placeTypeKeywords)) {
+        if (query.includes(type)) {
+          return validPosts.filter(post => {
+            // 카테고리 매칭
+            if (config.category && post.category === config.category) {
+              return true;
+            }
+            // 태그 매칭
+            const tags = post.tags || [];
+            const aiLabels = post.aiLabels || [];
+            const allLabels = [
+              ...tags.map(t => typeof t === 'string' ? t.toLowerCase() : String(t).toLowerCase()),
+              ...aiLabels.map(l => l.name?.toLowerCase() || '').filter(Boolean)
+            ];
+            
+            return config.tags.some(tag => 
+              allLabels.some(label => label.includes(tag.toLowerCase()))
+            );
+          });
+        }
       }
 
-      const location = await Location.getCurrentPositionAsync({});
-      setCurrentLocation({
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
+      // 해시태그 검색 (#로 시작하거나 해시태그 형식인 경우)
+      const queryWithoutHash = queryLower.replace(/^#+/, ''); // # 제거
+      const isHashtagSearch = query.includes('#') || queryWithoutHash.length > 0;
+      
+      if (isHashtagSearch) {
+        const hashtagResults = validPosts.filter(post => {
+          const tags = post.tags || [];
+          const aiLabels = post.aiLabels || [];
+          
+          // 태그와 AI 라벨에서 검색
+          const allTags = [
+            ...tags.map(t => typeof t === 'string' ? t.toLowerCase().replace(/^#+/, '') : String(t).toLowerCase().replace(/^#+/, '')),
+            ...aiLabels.map(l => l.name?.toLowerCase() || '').filter(Boolean)
+          ];
+          
+          // 정확한 태그 매칭 또는 포함 매칭
+          return allTags.some(tag => 
+            tag === queryWithoutHash || tag.includes(queryWithoutHash)
+          );
+        });
+        
+        if (hashtagResults.length > 0) {
+          return hashtagResults;
+        }
+      }
+
+      // 구체적인 장소명 검색 - 모든 필드에서 검색 (예: "경주 불국사")
+      const matchingPosts = validPosts.filter(post => {
+        const location = (post.location || '').toLowerCase();
+        const detailedLocation = (post.detailedLocation || '').toLowerCase();
+        const placeName = (post.placeName || '').toLowerCase();
+        const address = (post.address || '').toLowerCase();
+        const note = (post.note || '').toLowerCase();
+        
+        // 태그와 AI 라벨도 검색 대상에 포함
+        const tags = post.tags || [];
+        const aiLabels = post.aiLabels || [];
+        const allTags = [
+          ...tags.map(t => typeof t === 'string' ? t.toLowerCase().replace(/^#+/, '') : String(t).toLowerCase().replace(/^#+/, '')),
+          ...aiLabels.map(l => l.name?.toLowerCase() || '').filter(Boolean)
+        ];
+        const tagsText = allTags.join(' ');
+        
+        // 검색어 조합 검색 (예: "경주 불국사" -> "경주"와 "불국사" 모두 포함 또는 연속 검색)
+        const searchTerms = queryLower.split(/\s+/).filter(term => term.length > 0);
+        
+        // 모든 검색어가 포함되어 있는지 확인
+        const allTermsMatch = searchTerms.every(term => {
+          const termWithoutHash = term.replace(/^#+/, '');
+          return location.includes(termWithoutHash) ||
+                 detailedLocation.includes(termWithoutHash) ||
+                 placeName.includes(termWithoutHash) ||
+                 address.includes(termWithoutHash) ||
+                 note.includes(termWithoutHash) ||
+                 tagsText.includes(termWithoutHash) ||
+                 `${location} ${detailedLocation} ${placeName}`.includes(termWithoutHash);
+        });
+        
+        // 또는 단일 검색어가 포함되어 있는지 확인
+        const singleTermMatch = location.includes(queryLower) ||
+               detailedLocation.includes(queryLower) ||
+               placeName.includes(queryLower) ||
+               address.includes(queryLower) ||
+               note.includes(queryLower) ||
+               tagsText.includes(queryWithoutHash) ||
+               `${location} ${detailedLocation} ${placeName}`.includes(queryLower);
+        
+        return allTermsMatch || singleTermMatch;
       });
+
+      return matchingPosts;
     } catch (error) {
-      console.error('위치 가져오기 실패:', error);
-    } finally {
-      setLoading(false);
+      console.error('검색 중 오류:', error);
+      return [];
     }
   };
 
   const loadPosts = async () => {
     try {
+      // 검색 중이면 검색 결과만 사용
+      if (isSearching && searchResults.length > 0) {
+        let filteredResults = [...searchResults];
+        
+        // 필터 적용 (중복 선택 가능)
+        if (selectedFilters.length > 0) {
+          filteredResults = filteredResults.filter(post => {
+            const category = post.category || 'general';
+            // 활성화된 필터 중 하나라도 매칭되면 표시
+            return selectedFilters.some(filter => {
+              if (filter === 'bloom') return category === 'bloom';
+              if (filter === 'food') return category === 'food';
+              if (filter === 'scenic') return category === 'scenic' || category === 'landmark';
+              return false;
+            });
+          });
+        }
+        
+        setPosts(filteredResults);
+        return;
+      }
+
       const postsJson = await AsyncStorage.getItem('uploadedPosts');
       const allPosts = postsJson ? JSON.parse(postsJson) : [];
       
-      const postsWithLocation = allPosts.filter(
+      let postsWithLocation = allPosts.filter(
         post => post.coordinates && post.coordinates.lat && post.coordinates.lng
       );
+
+      // 필터 적용 (중복 선택 가능)
+      if (selectedFilters.length > 0) {
+        postsWithLocation = postsWithLocation.filter(post => {
+          const category = post.category || 'general';
+          // 활성화된 필터 중 하나라도 매칭되면 표시
+          return selectedFilters.some(filter => {
+            if (filter === 'bloom') return category === 'bloom';
+            if (filter === 'food') return category === 'food';
+            if (filter === 'scenic') return category === 'scenic' || category === 'landmark';
+            return false;
+          });
+        });
+      }
       
       setPosts(postsWithLocation);
     } catch (error) {
       console.error('게시물 로드 실패:', error);
+    }
+  };
+
+  // Kakao Local API를 사용한 장소 검색 (HTTP 요청)
+  const searchPlaceWithKakaoAPI = async (query) => {
+    try {
+      // Kakao Local API 호출 (REST API)
+      // 주의: 실제 프로덕션에서는 서버를 통해 API 키를 숨겨야 합니다
+      const apiKey = 'cc3234f026f2f64c40c0edcff5b96306'; // 임시 API 키 (환경변수로 관리 권장)
+      const url = `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(query)}`;
+      
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `KakaoAK ${apiKey}`
+        }
+      });
+
+      if (!response.ok) {
+        return null;
+      }
+
+      const data = await response.json();
+      
+      if (data.documents && data.documents.length > 0) {
+        const firstResult = data.documents[0];
+        return {
+          name: firstResult.place_name,
+          address: firstResult.address_name,
+          roadAddress: firstResult.road_address_name,
+          lat: parseFloat(firstResult.y),
+          lng: parseFloat(firstResult.x),
+          placeUrl: firstResult.place_url
+        };
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Kakao API 검색 오류:', error);
+      return null;
+    }
+  };
+
+  // 검색 핸들러
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) {
+      // 검색어가 비어있으면 검색 결과 초기화
+      setSearchResults([]);
+      setIsSearching(false);
+      await loadPosts();
+      return;
+    }
+
+    const query = searchQuery.trim();
+    
+    // 게시물에서 먼저 검색
+    const matchingPosts = await searchInPosts(query);
+    
+    if (matchingPosts.length > 0) {
+      // 검색 결과가 있으면 해당 게시물만 표시
+      setSearchResults(matchingPosts);
+      setIsSearching(true);
+      await loadPosts();
+      
+      // 첫 번째 게시물의 위치 정보 표시
+      const firstPost = matchingPosts[0];
+      const coords = firstPost.coordinates || getCoordinatesByLocation(firstPost.detailedLocation || firstPost.location);
+      if (coords) {
+        Alert.alert('검색 완료', `${firstPost.placeName || firstPost.location} 위치로 이동했습니다.`);
+      }
+    } else {
+      // 게시물에서 찾지 못하면 Kakao Local API로 검색
+      const place = await searchPlaceWithKakaoAPI(query);
+      
+      if (place) {
+        // 검색 결과 저장 (나중에 지도 구현 시 사용)
+        setSearchResults([]);
+        setIsSearching(false);
+        await loadPosts();
+        Alert.alert('검색 완료', `${place.name}\n${place.address}\n\n위치 정보를 찾았습니다. (지도 이동 기능은 준비 중입니다.)`);
+      } else {
+        // Kakao 검색도 실패하면 기본 지역명 검색 시도
+        const coords = getCoordinatesByLocation(query);
+        if (coords) {
+          setSearchResults([]);
+          setIsSearching(false);
+          await loadPosts();
+          Alert.alert('검색 완료', `"${query}" 지역으로 이동했습니다.`);
+        } else {
+          Alert.alert('검색 실패', '검색 결과를 찾을 수 없습니다. 다른 검색어를 입력해주세요.');
+          setSearchResults([]);
+          setIsSearching(false);
+        }
+      }
     }
   };
 
@@ -134,8 +664,14 @@ const MapScreen = () => {
   };
 
   const handleCenterLocation = () => {
-    // 실제 지도 구현 시 사용
-    console.log('현재 위치로 이동');
+    if (currentLocation && mapRef.current) {
+      mapRef.current.animateToRegion({
+        latitude: currentLocation.latitude,
+        longitude: currentLocation.longitude,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+      }, 1000);
+    }
   };
 
   // 핀을 경로에 추가하는 핸들러
@@ -370,35 +906,119 @@ const MapScreen = () => {
       <StatusBar barStyle="dark-content" />
       {/* 지도 컨테이너 - 전체 화면에 지도가 보이도록 */}
       <View style={styles.mapContainer}>
-        {loading ? (
+        {!currentLocation ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={COLORS.primary} />
             <Text style={styles.loadingText}>지도를 불러오는 중...</Text>
           </View>
         ) : (
-          <View style={styles.mapPlaceholder}>
-            <Ionicons name="map-outline" size={64} color={COLORS.textSubtle} />
-            <Text style={styles.placeholderText}>지도 기능 준비 중</Text>
-            <Text style={styles.placeholderSubtext}>
-              {posts.length}개의 게시물이 지도에 표시됩니다
-            </Text>
-          </View>
+          <MapView
+            ref={mapRef}
+            style={styles.map}
+            provider={PROVIDER_GOOGLE}
+            initialRegion={{
+              latitude: currentLocation.latitude,
+              longitude: currentLocation.longitude,
+              latitudeDelta: 0.01,
+              longitudeDelta: 0.01,
+            }}
+            showsUserLocation={false}
+            showsMyLocationButton={false}
+            followsUserLocation={false}
+            onMapReady={() => {
+              setMapReady(true);
+              // 지도가 준비되고 현재 위치가 있으면 내 위치로 이동
+              if (currentLocation && currentLocation.latitude && currentLocation.longitude) {
+                setTimeout(() => {
+                  mapRef.current?.animateToRegion({
+                    latitude: currentLocation.latitude,
+                    longitude: currentLocation.longitude,
+                    latitudeDelta: 0.01,
+                    longitudeDelta: 0.01,
+                  }, 500);
+                }, 100);
+              }
+            }}
+          >
+            {/* 현재 위치 마커 - GPS 좌표에 정확히 표시 */}
+            {currentLocation && currentLocation.latitude && currentLocation.longitude && (
+              <Marker
+                coordinate={{
+                  latitude: currentLocation.latitude,
+                  longitude: currentLocation.longitude,
+                }}
+                title="현재 위치"
+                anchor={{ x: 0.5, y: 0.5 }}
+                tracksViewChanges={true}
+                zIndex={1000}
+                identifier="currentLocation"
+              >
+                <CurrentLocationMarker />
+              </Marker>
+            )}
+
+            {/* 게시물 마커들 */}
+            {visiblePins
+              .filter(pin => pin.lat && pin.lng)
+              .map((pin, index) => (
+                <Marker
+                  key={pin.id || index}
+                  coordinate={{
+                    latitude: pin.lat,
+                    longitude: pin.lng,
+                  }}
+                  title={pin.title}
+                  onPress={() => {
+                    // 핀 클릭 시 게시물 상세 보기
+                    const postData = {
+                      post: pin.post,
+                      allPosts: posts,
+                      currentPostIndex: posts.findIndex(p => p.id === pin.post.id),
+                    };
+                    setSelectedPost(postData);
+                  }}
+                >
+                  {pin.image ? (
+                    <View style={styles.customMarker}>
+                      <Image
+                        source={{ uri: pin.image }}
+                        style={styles.markerImage}
+                        resizeMode="cover"
+                      />
+                    </View>
+                  ) : (
+                    <View style={styles.defaultMarker}>
+                      <Ionicons name="location" size={24} color={COLORS.primary} />
+                    </View>
+                  )}
+                </Marker>
+              ))}
+          </MapView>
         )}
       </View>
 
       {/* 검색바 - 투명 배경으로 지도가 보이도록 */}
       <View style={styles.searchBarContainer}>
-        <View style={styles.searchBar}>
-          <Ionicons name="search" size={24} color="#666" />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="지역 검색"
-            placeholderTextColor="#666"
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            onFocus={() => navigation.navigate('Search')}
+        <TouchableOpacity 
+          onPress={() => setShowSearchSheet(true)}
+          style={styles.searchBar}
+          activeOpacity={0.8}
+        >
+          <Ionicons 
+            name="search" 
+            size={24} 
+            color="#666" 
           />
-        </View>
+          <Text style={{
+            flex: 1,
+            fontSize: 16,
+            color: '#999',
+            fontWeight: '400',
+            marginLeft: 12
+          }}>
+            {searchQuery || "지역 검색"}
+          </Text>
+        </TouchableOpacity>
         <TouchableOpacity
           style={styles.refreshButton}
           onPress={updateVisiblePins}
@@ -409,17 +1029,89 @@ const MapScreen = () => {
         </TouchableOpacity>
       </View>
 
-      {/* 도움 요청 버튼 - 검색창과 분리, 투명 배경, 지도 위에 오버레이 (웹과 동일) */}
-      <View style={styles.sosButtonContainer}>
-        <TouchableOpacity
-          style={styles.sosButton}
-          onPress={handleSOSRequest}
-          activeOpacity={0.8}
+      {/* 상황 물어보기 버튼과 필터 버튼들 - 같은 위치에 배치, 좌우 스크롤 가능 */}
+      <View style={styles.filterContainer}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterScrollContent}
         >
-          <View style={styles.sosButtonBlur}>
-            <Text style={styles.sosButtonText}>지금 상황 알아보기</Text>
-          </View>
-        </TouchableOpacity>
+          {/* 상황 물어보기 버튼 - 가장 앞에 배치 */}
+          <TouchableOpacity
+            style={styles.sosButtonInFilter}
+            onPress={handleSOSRequest}
+            activeOpacity={0.8}
+          >
+            <View style={styles.sosButtonBlur}>
+              <Text style={styles.sosButtonText}>지금 상황 알아보기</Text>
+            </View>
+          </TouchableOpacity>
+          
+          {/* 필터 버튼들 - 중복 선택 가능 */}
+          <TouchableOpacity
+            style={[
+              styles.filterButton,
+              selectedFilters.includes('bloom') && styles.filterButtonActive
+            ]}
+            onPress={() => {
+              setSelectedFilters(prev => 
+                prev.includes('bloom') 
+                  ? prev.filter(f => f !== 'bloom')
+                  : [...prev, 'bloom']
+              );
+            }}
+            activeOpacity={0.7}
+          >
+            <Text style={[
+              styles.filterButtonText,
+              selectedFilters.includes('bloom') && styles.filterButtonTextActive
+            ]}>
+              🌸 개화정보
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.filterButton,
+              selectedFilters.includes('food') && styles.filterButtonActive
+            ]}
+            onPress={() => {
+              setSelectedFilters(prev => 
+                prev.includes('food') 
+                  ? prev.filter(f => f !== 'food')
+                  : [...prev, 'food']
+              );
+            }}
+            activeOpacity={0.7}
+          >
+            <Text style={[
+              styles.filterButtonText,
+              selectedFilters.includes('food') && styles.filterButtonTextActive
+            ]}>
+              🍜 맛집정보
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.filterButton,
+              selectedFilters.includes('scenic') && styles.filterButtonActive
+            ]}
+            onPress={() => {
+              setSelectedFilters(prev => 
+                prev.includes('scenic') 
+                  ? prev.filter(f => f !== 'scenic')
+                  : [...prev, 'scenic']
+              );
+            }}
+            activeOpacity={0.7}
+          >
+            <Text style={[
+              styles.filterButtonText,
+              selectedFilters.includes('scenic') && styles.filterButtonTextActive
+            ]}>
+              🏞️ 가볼만한 곳
+            </Text>
+          </TouchableOpacity>
+        </ScrollView>
       </View>
 
       {/* 경로 모드 토글 버튼 */}
@@ -716,6 +1408,329 @@ const MapScreen = () => {
         </Modal>
       )}
 
+      {/* 검색 시트 모달 */}
+      <Modal
+        visible={showSearchSheet}
+        transparent
+        animationType="none"
+        onRequestClose={() => setShowSearchSheet(false)}
+      >
+        <View style={{
+          flex: 1,
+          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+          justifyContent: 'flex-start'
+        }}>
+          <View style={{
+            backgroundColor: 'white',
+            width: '100%',
+            height: '100%',
+            paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 50
+          }}>
+            {/* 헤더 */}
+            <View style={{
+              padding: 20,
+              borderBottomWidth: 1,
+              borderBottomColor: '#f0f0f0',
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 12
+            }}>
+              <View style={{
+                flex: 1,
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor: '#f5f5f5',
+                borderRadius: 24,
+                paddingHorizontal: 20,
+                paddingVertical: 12,
+                gap: 12
+              }}>
+                <Ionicons name="search" size={24} color="#666" />
+                <TextInput
+                  placeholder="지역 또는 장소명 검색 (예: 서울 올림픽 공원, 카페, 맛집)"
+                  placeholderTextColor="#666"
+                  value={searchQuery}
+                  onChangeText={async (text) => {
+                    setSearchQuery(text);
+                    
+                    if (!text.trim()) {
+                      setFilteredRegions([]);
+                      setSearchSuggestions([]);
+                      return;
+                    }
+
+                    const query = text.trim().toLowerCase();
+                    const queryWithoutHash = query.replace(/^#+/, '');
+                    const suggestions = [];
+
+                    // 1. 해시태그 검색 (#로 시작하거나 해시태그 형식인 경우)
+                    const isHashtagQuery = text.startsWith('#') || queryWithoutHash.length > 0;
+                    if (isHashtagQuery) {
+                      try {
+                        // 모든 게시물에서 해시태그 수집
+                        const postsJson = await AsyncStorage.getItem('uploadedPosts');
+                        const allPosts = postsJson ? JSON.parse(postsJson) : [];
+                        const allTagsSet = new Set();
+                        
+                        allPosts.forEach(post => {
+                          const tags = post.tags || [];
+                          const aiLabels = post.aiLabels || [];
+                          
+                          tags.forEach(tag => {
+                            const tagText = typeof tag === 'string' ? tag.replace(/^#+/, '').toLowerCase() : String(tag).replace(/^#+/, '').toLowerCase();
+                            if (tagText && tagText.includes(queryWithoutHash)) {
+                              allTagsSet.add(tagText);
+                            }
+                          });
+                          
+                          aiLabels.forEach(label => {
+                            const labelText = label.name?.toLowerCase() || String(label).toLowerCase();
+                            if (labelText && labelText.includes(queryWithoutHash)) {
+                              allTagsSet.add(labelText);
+                            }
+                          });
+                        });
+                        
+                        // 해시태그 제안 추가
+                        Array.from(allTagsSet).slice(0, 8).forEach(tag => {
+                          suggestions.push({
+                            type: 'hashtag',
+                            name: `#${tag}`,
+                            display: `#${tag}`,
+                            tag: tag
+                          });
+                        });
+                      } catch (e) {
+                        console.error('해시태그 자동완성 오류:', e);
+                      }
+                    }
+
+                    // 2. 지역명 검색 (초성 검색 포함은 나중에 구현)
+                    // 3. 게시물에서 장소명 검색
+                    const matchingPosts = await searchInPosts(text);
+                    const uniquePlaces = new Set();
+                    
+                    // 검색어와 정확히 매칭되는 것을 우선순위로 정렬
+                    const sortedPosts = matchingPosts.sort((a, b) => {
+                      const aPlaceName = (a.placeName || a.detailedLocation || a.location || '').toLowerCase();
+                      const bPlaceName = (b.placeName || b.detailedLocation || b.location || '').toLowerCase();
+                      const queryLower = text.toLowerCase().trim();
+                      
+                      // 정확히 시작하는 것을 우선
+                      const aStartsWith = aPlaceName.startsWith(queryLower);
+                      const bStartsWith = bPlaceName.startsWith(queryLower);
+                      if (aStartsWith && !bStartsWith) return -1;
+                      if (!aStartsWith && bStartsWith) return 1;
+                      
+                      // 더 짧은 이름을 우선 (더 정확한 매칭일 가능성)
+                      return aPlaceName.length - bPlaceName.length;
+                    });
+                    
+                    sortedPosts.slice(0, 8).forEach(post => {
+                      const placeName = post.placeName || post.detailedLocation || post.location;
+                      if (placeName && !uniquePlaces.has(placeName)) {
+                        uniquePlaces.add(placeName);
+                        suggestions.push({
+                          type: 'place',
+                          name: placeName,
+                          display: `${placeName}${post.location && placeName !== post.location ? ` (${post.location})` : ''}`,
+                          post: post
+                        });
+                      }
+                    });
+
+                    // 최대 10개로 제한
+                    const limitedSuggestions = suggestions.slice(0, 10);
+                    setFilteredRegions([]);
+                    setSearchSuggestions(limitedSuggestions);
+                  }}
+                  onSubmitEditing={handleSearch}
+                  autoFocus
+                  style={{
+                    flex: 1,
+                    fontSize: 16,
+                    color: '#333',
+                    fontWeight: '400',
+                    padding: 0
+                  }}
+                />
+                {searchQuery ? (
+                  <TouchableOpacity
+                    onPress={() => {
+                      setSearchQuery('');
+                      setFilteredRegions([]);
+                      setSearchSuggestions([]);
+                    }}
+                    style={{ padding: 4 }}
+                  >
+                    <Ionicons name="close-circle" size={20} color="#666" />
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+              <TouchableOpacity
+                onPress={() => setShowSearchSheet(false)}
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 20,
+                  backgroundColor: '#f5f5f5',
+                  justifyContent: 'center',
+                  alignItems: 'center'
+                }}
+              >
+                <Ionicons name="close" size={24} color="#666" />
+              </TouchableOpacity>
+            </View>
+
+            {/* 검색 결과 또는 최근 검색 지역 */}
+            <ScrollView style={{ flex: 1, padding: 20 }}>
+              {searchQuery.trim() ? (
+                // 검색어가 있을 때 자동완성 결과
+                (searchSuggestions.length > 0 ? (
+                  <View>
+                    {searchSuggestions.map((suggestion, index) => (
+                      <TouchableOpacity
+                        key={index}
+                        onPress={async () => {
+                          setSearchQuery(suggestion.name);
+                          setShowSearchSheet(false);
+                          
+                          // 검색 실행
+                          setTimeout(() => {
+                            handleSearch();
+                          }, 100);
+                        }}
+                        style={{
+                          padding: 12,
+                          borderRadius: 12,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 12,
+                          marginBottom: 8,
+                          backgroundColor: '#fafafa'
+                        }}
+                      >
+                        <Ionicons 
+                          name={suggestion.type === 'region' ? 'location' : suggestion.type === 'hashtag' ? 'pricetag' : 'place'} 
+                          size={24} 
+                          color={suggestion.type === 'region' ? COLORS.primary : suggestion.type === 'hashtag' ? '#9C27B0' : '#FF9800'} 
+                        />
+                        <Text style={{
+                          fontSize: 16,
+                          fontWeight: '500',
+                          color: '#333',
+                          flex: 1
+                        }}>
+                          {suggestion.display}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                ) : (
+                  <View style={{
+                    padding: 40,
+                    alignItems: 'center'
+                  }}>
+                    <Text style={{
+                      color: '#999',
+                      fontSize: 14
+                    }}>
+                      검색 결과가 없습니다
+                    </Text>
+                  </View>
+                ))
+              ) : (
+                // 검색어가 없을 때 최근 검색 지역
+                <View>
+                  {recentSearches.length > 0 ? (
+                    <View>
+                      <View style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        marginBottom: 16
+                      }}>
+                        <Text style={{
+                          fontSize: 18,
+                          fontWeight: 'bold',
+                          color: '#333'
+                        }}>
+                          최근 검색한 지역
+                        </Text>
+                        <TouchableOpacity
+                          onPress={() => {
+                            setRecentSearches([]);
+                            AsyncStorage.removeItem('recentSearches');
+                          }}
+                          style={{
+                            padding: 4
+                          }}
+                        >
+                          <Text style={{
+                            fontSize: 14,
+                            color: '#666'
+                          }}>
+                            지우기
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                      <View style={{
+                        flexDirection: 'row',
+                        flexWrap: 'wrap',
+                        gap: 8
+                      }}>
+                        {recentSearches.map((search, index) => (
+                          <TouchableOpacity
+                            key={index}
+                            onPress={() => {
+                              setSearchQuery(search);
+                              setTimeout(() => {
+                                handleSearch();
+                                setShowSearchSheet(false);
+                              }, 100);
+                            }}
+                            style={{
+                              paddingHorizontal: 16,
+                              paddingVertical: 10,
+                              borderRadius: 20,
+                              backgroundColor: index === 0 ? COLORS.primary : '#f5f5f5',
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              gap: 8
+                            }}
+                          >
+                            <Ionicons name="time-outline" size={18} color={index === 0 ? 'white' : '#333'} />
+                            <Text style={{
+                              fontSize: 14,
+                              fontWeight: '500',
+                              color: index === 0 ? 'white' : '#333'
+                            }}>
+                              {search}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </View>
+                  ) : (
+                    <View style={{
+                      padding: 40,
+                      alignItems: 'center'
+                    }}>
+                      <Text style={{
+                        color: '#999',
+                        fontSize: 14
+                      }}>
+                        최근 검색한 지역이 없습니다
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
       {/* SOS 요청 모달 (웹과 동일) */}
       {showSOSModal && (
         <Modal
@@ -795,6 +1810,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: COLORS.textSecondary,
   },
+  map: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+  },
   mapPlaceholder: {
     flex: 1,
     justifyContent: 'center',
@@ -811,6 +1831,66 @@ const styles = StyleSheet.create({
   placeholderSubtext: {
     fontSize: 14,
     color: COLORS.textSecondary,
+  },
+  customMarker: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    overflow: 'hidden',
+    borderWidth: 3,
+    borderColor: 'white',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  markerImage: {
+    width: '100%',
+    height: '100%',
+  },
+  defaultMarker: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'white',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: COLORS.primary,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  currentLocationMarkerContainer: {
+    width: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  pulseRing: {
+    position: 'absolute',
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(135, 206, 250, 0.4)',
+  },
+  currentLocationDot: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#87CEEB',
+    borderWidth: 3,
+    borderColor: 'white',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+    zIndex: 1001,
   },
   // 검색바 (투명 배경, blur)
   searchBarContainer: {
@@ -851,15 +1931,44 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderRadius: 26,
   },
-  // SOS 버튼
-  sosButtonContainer: {
+  // 필터 버튼들
+  filterContainer: {
     position: 'absolute',
-    top: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 70 : 110,
-    left: 16,
+    top: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 114 : 154,
+    left: 0,
+    right: 0,
     zIndex: 10,
   },
-  sosButton: {
+  filterScrollContent: {
+    paddingHorizontal: 16,
+    gap: 8,
+  },
+  filterButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
     borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  filterButtonActive: {
+    backgroundColor: COLORS.primary,
+  },
+  filterButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#666',
+  },
+  filterButtonTextActive: {
+    color: COLORS.textWhite,
+  },
+  // SOS 버튼 (필터와 같은 줄에 배치)
+  sosButtonInFilter: {
+    borderRadius: 20,
+    marginLeft: 8,
   },
   sosButtonBlur: {
     paddingHorizontal: 12,

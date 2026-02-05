@@ -1,4 +1,5 @@
 import api from './axios';
+import { logger } from '../utils/logger';
 
 // 내 정보 조회
 export const getMe = async () => {
@@ -6,7 +7,7 @@ export const getMe = async () => {
     const response = await api.get('/users/me');
     return response.data;
   } catch (error) {
-    console.error('사용자 정보 조회 실패:', error);
+    logger.error('사용자 정보 조회 실패:', error);
     throw error;
   }
 };
@@ -17,7 +18,7 @@ export const updateProfile = async (profileData) => {
     const response = await api.put('/users/me', profileData);
     return response.data;
   } catch (error) {
-    console.error('프로필 수정 실패:', error);
+    logger.error('프로필 수정 실패:', error);
     throw error;
   }
 };
@@ -31,7 +32,7 @@ export const changePassword = async (currentPassword, newPassword) => {
     });
     return response.data;
   } catch (error) {
-    console.error('비밀번호 변경 실패:', error);
+    logger.error('비밀번호 변경 실패:', error);
     throw error;
   }
 };
@@ -42,7 +43,7 @@ export const deleteAccount = async () => {
     const response = await api.delete('/users/me');
     return response.data;
   } catch (error) {
-    console.error('계정 삭제 실패:', error);
+    logger.error('계정 삭제 실패:', error);
     throw error;
   }
 };
@@ -53,7 +54,7 @@ export const getMyBadges = async () => {
     const response = await api.get('/users/me/badges');
     return response.data;
   } catch (error) {
-    console.error('뱃지 조회 실패:', error);
+    logger.error('뱃지 조회 실패:', error);
     throw error;
   }
 };
@@ -64,7 +65,7 @@ export const updateNotificationSettings = async (settings) => {
     const response = await api.put('/users/me/settings/notifications', settings);
     return response.data;
   } catch (error) {
-    console.error('알림 설정 변경 실패:', error);
+    logger.error('알림 설정 변경 실패:', error);
     throw error;
   }
 };

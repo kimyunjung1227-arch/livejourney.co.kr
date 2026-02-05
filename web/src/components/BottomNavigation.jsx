@@ -12,14 +12,14 @@ const BottomNavigation = React.memo(() => {
   useEffect(() => {
     const handleScroll = () => {
       // 스크롤 컨테이너 찾기 (screen-content 또는 page-wrapper)
-      const scrollContainer = document.querySelector('.screen-content') || 
-                              document.querySelector('.page-wrapper') ||
-                              document.documentElement ||
-                              document.body;
-      
+      const scrollContainer = document.querySelector('.screen-content') ||
+        document.querySelector('.page-wrapper') ||
+        document.documentElement ||
+        document.body;
+
       const currentScrollTop = scrollContainer.scrollTop || window.pageYOffset || document.documentElement.scrollTop;
       const scrollDifference = Math.abs(currentScrollTop - lastScrollTop.current);
-      
+
       // 최소 스크롤 거리 (너무 작은 움직임은 무시)
       if (scrollDifference < 5) {
         return;
@@ -28,12 +28,12 @@ const BottomNavigation = React.memo(() => {
       // 아래로 스크롤 (scrollTop 증가) = 숨기기
       if (currentScrollTop > lastScrollTop.current && currentScrollTop > 50) {
         setIsVisible(false);
-      } 
+      }
       // 위로 스크롤 (scrollTop 감소) = 보이기
       else if (currentScrollTop < lastScrollTop.current) {
         setIsVisible(true);
       }
-      
+
       // 맨 위에 있을 때는 항상 보이기
       if (currentScrollTop <= 10) {
         setIsVisible(true);
@@ -95,12 +95,13 @@ const BottomNavigation = React.memo(() => {
   // 현재 활성화된 탭 확인 (useCallback)
   const isActive = useCallback((path) => {
     if (path === '/main') {
-      return location.pathname === '/main' || 
-             location.pathname === '/' ||
-             location.pathname.startsWith('/magazine');
+      return location.pathname === '/main' ||
+        location.pathname === '/' ||
+        location.pathname.startsWith('/magazine');
     }
+    // 검색 탭: /search 이하 경로
     if (path === '/search') {
-      return location.pathname.startsWith('/search') || location.pathname.startsWith('/region');
+      return location.pathname.startsWith('/search');
     }
     if (path === '/upload') {
       return location.pathname === '/upload';
@@ -109,27 +110,27 @@ const BottomNavigation = React.memo(() => {
       return location.pathname === '/map';
     }
     if (path === '/profile') {
-      return location.pathname.startsWith('/profile') || 
-             location.pathname.startsWith('/settings') ||
-             location.pathname.startsWith('/personal-info') ||
-             location.pathname.startsWith('/password-change') ||
-             location.pathname.startsWith('/account-') ||
-             location.pathname.startsWith('/feed-update') ||
-             location.pathname.startsWith('/notices') ||
-             location.pathname.startsWith('/faq') ||
-             location.pathname.startsWith('/inquiry') ||
-             location.pathname.startsWith('/terms') ||
-             location.pathname.startsWith('/coupons') ||
-             location.pathname.startsWith('/points') ||
-             location.pathname.startsWith('/exchange-success') ||
-             location.pathname.startsWith('/badges');
+      return location.pathname.startsWith('/profile') ||
+        location.pathname.startsWith('/settings') ||
+        location.pathname.startsWith('/personal-info') ||
+        location.pathname.startsWith('/password-change') ||
+        location.pathname.startsWith('/account-') ||
+        location.pathname.startsWith('/feed-update') ||
+        location.pathname.startsWith('/notices') ||
+        location.pathname.startsWith('/faq') ||
+        location.pathname.startsWith('/inquiry') ||
+        location.pathname.startsWith('/terms') ||
+        location.pathname.startsWith('/coupons') ||
+        location.pathname.startsWith('/points') ||
+        location.pathname.startsWith('/exchange-success') ||
+        location.pathname.startsWith('/badges');
     }
     return false;
   }, [location.pathname]);
 
   return (
-    <nav 
-      className="flex-shrink-0 flex h-20 items-center justify-around border-t border-border-light dark:border-border-dark bg-background-light dark:bg-background-dark"
+    <nav
+      className="flex-shrink-0 flex h-20 items-center justify-around"
       style={{
         position: 'fixed',
         bottom: 0,
@@ -138,30 +139,31 @@ const BottomNavigation = React.memo(() => {
         width: '100%',
         maxWidth: '414px',
         paddingBottom: 'env(safe-area-inset-bottom, 0px)',
-        boxShadow: '0 -2px 10px rgba(0, 0, 0, 0.05)',
+        boxShadow: 'none',
+        borderTop: '1px solid rgba(242, 244, 247, 0.8)',
         zIndex: 50,
         transition: 'transform 0.3s ease-in-out',
+        background: '#ffffff',
       }}
     >
-      <button 
+      <button
         onClick={() => navigate('/main')}
-        className={`flex flex-col items-center gap-1 ${
-          isActive('/main') ? 'text-primary' : 'text-text-subtle-light dark:text-text-subtle-dark hover:text-primary transition-colors'
-        }`}
+        className={`flex flex-col items-center justify-center gap-1.5 py-2 ${isActive('/main') ? 'text-[#00BCD4]' : 'text-text-subtle-light dark:text-text-subtle-dark hover:text-[#00BCD4] transition-colors'
+          }`}
       >
-        <span className="material-symbols-outlined">home</span>
-        <span className="text-xs font-bold">홈</span>
+        <span className="material-symbols-outlined" style={{ fontSize: 26 }}>home</span>
+        <span className="text-sm font-bold">홈</span>
       </button>
-      <button 
+      {/* 검색 탭 */}
+      <button
         onClick={() => navigate('/search')}
-        className={`flex flex-col items-center gap-1 ${
-          isActive('/search') ? 'text-primary' : 'text-text-subtle-light dark:text-text-subtle-dark hover:text-primary transition-colors'
-        }`}
+        className={`flex flex-col items-center justify-center gap-1.5 py-2 ${isActive('/search') ? 'text-[#00BCD4]' : 'text-text-subtle-light dark:text-text-subtle-dark hover:text-[#00BCD4] transition-colors'
+          }`}
       >
-        <span className="material-symbols-outlined">search</span>
-        <span className="text-xs font-bold">검색</span>
+        <span className="material-symbols-outlined" style={{ fontSize: 26 }}>search</span>
+        <span className="text-sm font-bold">검색</span>
       </button>
-      <button 
+      <button
         onClick={() => navigate('/upload')}
         className="flex flex-col items-center gap-1 relative"
         style={{
@@ -177,23 +179,21 @@ const BottomNavigation = React.memo(() => {
       >
         <span className="material-symbols-outlined" style={{ color: 'white', fontSize: '28px' }}>add</span>
       </button>
-      <button 
+      <button
         onClick={() => navigate('/map')}
-        className={`flex flex-col items-center gap-1 ${
-          isActive('/map') ? 'text-primary' : 'text-text-subtle-light dark:text-text-subtle-dark hover:text-primary transition-colors'
-        }`}
+        className={`flex flex-col items-center justify-center gap-1.5 py-2 ${isActive('/map') ? 'text-[#00BCD4]' : 'text-text-subtle-light dark:text-text-subtle-dark hover:text-[#00BCD4] transition-colors'
+          }`}
       >
-        <span className="material-symbols-outlined">map</span>
-        <span className="text-xs font-bold">지도</span>
+        <span className="material-symbols-outlined" style={{ fontSize: 26 }}>map</span>
+        <span className="text-sm font-bold">지도</span>
       </button>
-      <button 
+      <button
         onClick={() => navigate('/profile')}
-        className={`flex flex-col items-center gap-1 ${
-          isActive('/profile') ? 'text-primary' : 'text-text-subtle-light dark:text-text-subtle-dark hover:text-primary transition-colors'
-        }`}
+        className={`flex flex-col items-center justify-center gap-1.5 py-2 ${isActive('/profile') ? 'text-[#00BCD4]' : 'text-text-subtle-light dark:text-text-subtle-dark hover:text-[#00BCD4] transition-colors'
+          }`}
       >
-        <span className="material-symbols-outlined">person</span>
-        <span className="text-xs font-bold">프로필</span>
+        <span className="material-symbols-outlined" style={{ fontSize: 26 }}>person</span>
+        <span className="text-sm font-bold">프로필</span>
       </button>
     </nav>
   );

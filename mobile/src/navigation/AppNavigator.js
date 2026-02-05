@@ -25,6 +25,8 @@ import MagazineDetailScreen from '../screens/MagazineDetailScreen';
 import RegionCategoryScreen from '../screens/RegionCategoryScreen';
 import BadgeListScreen from '../screens/BadgeListScreen';
 import InterestPlacesScreen from '../screens/InterestPlacesScreen';
+import RealtimeFeedScreen from '../screens/RealtimeFeedScreen';
+import CrowdedPlaceScreen from '../screens/CrowdedPlaceScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -55,24 +57,29 @@ function MainTabs() {
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: COLORS.primary,
-        tabBarInactiveTintColor: '#8a7560', // text-subtle-light
+        tabBarActiveTintColor: '#00BCD4', // 웹과 동일
+        tabBarInactiveTintColor: '#9CA3AF', // 웹: text-subtle-light = #9CA3AF
         tabBarStyle: {
           borderTopWidth: 1,
-          borderTopColor: '#E0E0E0', // border-light
-          backgroundColor: '#FFFFFF', // background-light
+          borderTopColor: '#E5E7EB', // 웹: border-light = #E5E7EB
+          backgroundColor: '#FFFFFF', // 웹: background-light = #ffffff
           paddingBottom: 8,
           paddingTop: 8,
-          height: tabBarHeight, // h-20 (웹과 동일)
+          height: tabBarHeight, // 웹: h-20 (80px)
           position: 'absolute',
           bottom: 0,
           opacity: opacity,
           transform: [{ translateY: translateY }],
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: 0.05,
+          shadowRadius: 10,
+          elevation: 5,
         },
         tabBarLabelStyle: {
           fontSize: 12,
           fontWeight: 'bold',
-          marginTop: 4, // gap-1
+          marginTop: 4, // 웹: gap-1
         },
         tabBarIconStyle: {
           marginBottom: 0,
@@ -85,10 +92,10 @@ function MainTabs() {
         options={{
           tabBarLabel: '홈',
           tabBarIcon: ({ color, focused, size }) => (
-            <Ionicons 
-              name="home" 
-              size={24} 
-              color={focused ? COLORS.primary : '#8a7560'} 
+            <Ionicons
+              name="home"
+              size={24}
+              color={focused ? COLORS.primary : '#8a7560'}
             />
           ),
         }}
@@ -99,10 +106,10 @@ function MainTabs() {
         options={{
           tabBarLabel: '검색',
           tabBarIcon: ({ color, focused, size }) => (
-            <Ionicons 
-              name="search" 
-              size={24} 
-              color={focused ? COLORS.primary : '#8a7560'} 
+            <Ionicons
+              name="search"
+              size={24}
+              color={focused ? COLORS.primary : '#8a7560'}
             />
           ),
         }}
@@ -127,11 +134,11 @@ function MainTabs() {
               shadowRadius: 8,
               elevation: 8,
             }}>
-            <Ionicons 
-              name="add" 
-                size={28} 
+              <Ionicons
+                name="add"
+                size={28}
                 color="white"
-            />
+              />
             </View>
           ),
         }}
@@ -142,10 +149,10 @@ function MainTabs() {
         options={{
           tabBarLabel: '지도',
           tabBarIcon: ({ color, focused, size }) => (
-            <Ionicons 
-              name="map" 
-              size={24} 
-              color={focused ? COLORS.primary : '#8a7560'} 
+            <Ionicons
+              name="map"
+              size={24}
+              color={focused ? COLORS.primary : '#8a7560'}
             />
           ),
         }}
@@ -156,10 +163,10 @@ function MainTabs() {
         options={{
           tabBarLabel: '프로필',
           tabBarIcon: ({ color, focused, size }) => (
-            <Ionicons 
-              name="person" 
-              size={24} 
-              color={focused ? COLORS.primary : '#8a7560'} 
+            <Ionicons
+              name="person"
+              size={24}
+              color={focused ? COLORS.primary : '#8a7560'}
             />
           ),
         }}
@@ -194,50 +201,58 @@ export default function AppNavigator() {
           // 인증된 사용자
           <>
             <Stack.Screen name="MainTabs" component={MainTabs} />
-            <Stack.Screen 
-              name="PostDetail" 
+            <Stack.Screen
+              name="PostDetail"
               component={PostDetailScreen}
               options={{ presentation: 'modal' }}
             />
-            <Stack.Screen 
-              name="RegionDetail" 
+            <Stack.Screen
+              name="RegionDetail"
               component={RegionDetailScreen}
             />
-            <Stack.Screen 
-              name="Settings" 
+            <Stack.Screen
+              name="Settings"
               component={SettingsScreen}
             />
-            <Stack.Screen 
-              name="UserProfile" 
+            <Stack.Screen
+              name="UserProfile"
               component={UserProfileScreen}
             />
-            <Stack.Screen 
-              name="Detail" 
+            <Stack.Screen
+              name="Detail"
               component={DetailScreen}
             />
-            <Stack.Screen 
-              name="MagazineDetail" 
+            <Stack.Screen
+              name="MagazineDetail"
               component={MagazineDetailScreen}
             />
-            <Stack.Screen 
-              name="RegionCategory" 
+            <Stack.Screen
+              name="RegionCategory"
               component={RegionCategoryScreen}
             />
-            <Stack.Screen 
-              name="Search" 
+            <Stack.Screen
+              name="Search"
               component={SearchScreen}
             />
-            <Stack.Screen 
-              name="Upload" 
+            <Stack.Screen
+              name="Upload"
               component={UploadScreen}
             />
-            <Stack.Screen 
-              name="BadgeList" 
+            <Stack.Screen
+              name="BadgeList"
               component={BadgeListScreen}
             />
-            <Stack.Screen 
-              name="InterestPlaces" 
+            <Stack.Screen
+              name="InterestPlaces"
               component={InterestPlacesScreen}
+            />
+            <Stack.Screen
+              name="RealtimeFeed"
+              component={RealtimeFeedScreen}
+            />
+            <Stack.Screen
+              name="CrowdedPlace"
+              component={CrowdedPlaceScreen}
             />
           </>
         )}

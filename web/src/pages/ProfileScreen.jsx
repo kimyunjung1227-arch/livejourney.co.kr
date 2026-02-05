@@ -1,34 +1,150 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import BottomNavigation from '../components/BottomNavigation';
 import { getUnreadCount } from '../utils/notifications';
 import { getEarnedBadges, getBadgeDisplayName } from '../utils/badgeSystem';
-import { getUserLevel } from '../utils/levelSystem';
 import { getCoordinatesByLocation } from '../utils/regionLocationMapping';
 import { follow, unfollow, isFollowing, getFollowerCount, getFollowingCount, getFollowerIds, getFollowingIds } from '../utils/followSystem';
 import { logger } from '../utils/logger';
+import { getDisplayImageUrl } from '../api/upload';
+
+// HTML 문자열(template literal)로 src/alt를 주입할 때 속성 안전 처리
+const escapeHtmlAttr = (value) => {
+  if (value == null) return '';
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+};
+
+/** 게시물에서 지도 핀/썸네일에 쓸 이미지 URL 하나 반환 */
+const getPostPinImageUrl = (post) => {
+  if (!post) return '';
+  const raw =
+    (post.images && Array.isArray(post.images) && post.images.length > 0)
+      ? post.images[0]
+      : (post.thumbnail ?? post.image ?? post.imageUrl ?? '');
+  const str = typeof raw === 'string' ? raw : (raw?.url ?? raw?.src ?? '');
+  return getDisplayImageUrl(str);
+};
+
+/** 게시물에서 지도용 좌표 추출 { lat, lng }. coordinates / location 객체 / 지역명 순으로 시도 */
+const getPostCoordinates = (post) => {
+  if (!post) return null;
+  const c = post.coordinates;
+  if (c && (c.lat != null || c.latitude != null) && (c.lng != null || c.longitude != null)) {
+    return { lat: Number(c.lat ?? c.latitude), lng: Number(c.lng ?? c.longitude) };
+  }
+  const loc = post.location;
+  if (loc && typeof loc === 'object' && (loc.lat != null || loc.lon != null)) {
+    const lat = loc.lat ?? loc.latitude;
+    const lng = loc.lng ?? loc.lon ?? loc.longitude;
+    if (lat != null && lng != null) return { lat: Number(lat), lng: Number(lng) };
+  }
+  const name = post.detailedLocation || (typeof post.location === 'string' ? post.location : null) || post.placeName;
+  if (name) return getCoordinatesByLocation(name);
+  return null;
+};
+
+/** 게시물에서 날짜(YYYY-MM-DD) 키 추출 (photoDate 우선) */
+const getPostDateKey = (post) => {
+  if (!post) return null;
+  const raw = post.photoDate || post.createdAt || post.timestamp;
+  if (!raw) return null;
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return null;
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+};
+
+/** YYYY-MM-DD 문자열을 로컬 기준 Date로 파싱 */
+const parseDateKeyLocal = (key) => {
+  if (!key) return null;
+  const [y, m, d] = String(key).split('-').map(Number);
+  if (!y || !m || !d) return null;
+  return new Date(y, m - 1, d);
+};
 
 const ProfileScreen = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user: authUser, logout, isAuthenticated } = useAuth();
   const [user, setUser] = useState(null);
   const [myPosts, setMyPosts] = useState([]);
   const [earnedBadges, setEarnedBadges] = useState([]);
   const [representativeBadge, setRepresentativeBadge] = useState(null);
   const [showBadgeSelector, setShowBadgeSelector] = useState(false);
-  const [levelInfo, setLevelInfo] = useState(null);
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const [isEditMode, setIsEditMode] = useState(false);
   const [selectedPhotos, setSelectedPhotos] = useState([]);
-  const [activeTab, setActiveTab] = useState('my'); // 'my' | 'map'
-  
+  const [activeTab, setActiveTab] = useState('my'); // 'my' | 'map' | 'savedRoutes'
+  const [savedRoutes, setSavedRoutes] = useState([]);
+  const [selectedSavedRoute, setSelectedSavedRoute] = useState(null);
+
+  useEffect(() => {
+    const tab = location.state?.tab;
+    if (tab === 'savedRoutes' || tab === 'map') setActiveTab(tab);
+  }, [location.state?.tab]);
+
+  useEffect(() => {
+    if (activeTab === 'savedRoutes') {
+      try {
+        const routes = JSON.parse(localStorage.getItem('savedRoutes') || '[]');
+        setSavedRoutes(routes);
+        if (routes.length > 0) {
+          setSelectedSavedRoute((prev) =>
+            prev && routes.some((r) => r.id === prev.id) ? prev : routes[0]
+          );
+        } else {
+          setSelectedSavedRoute(null);
+        }
+      } catch {
+        setSavedRoutes([]);
+        setSelectedSavedRoute(null);
+      }
+    }
+  }, [activeTab]);
+
+  const handleStorageUpdate = useCallback(() => {
+    if (activeTab === 'savedRoutes') {
+      try {
+        const routes = JSON.parse(localStorage.getItem('savedRoutes') || '[]');
+        setSavedRoutes(routes);
+        if (routes.length > 0) {
+          setSelectedSavedRoute((prev) =>
+            prev && routes.some((r) => r.id === prev.id) ? prev : routes[0]
+          );
+        } else {
+          setSelectedSavedRoute(null);
+        }
+      } catch {
+        setSavedRoutes([]);
+        setSelectedSavedRoute(null);
+      }
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
+    window.addEventListener('storage', handleStorageUpdate);
+    return () => window.removeEventListener('storage', handleStorageUpdate);
+  }, [handleStorageUpdate]);
+
   // 지도 관련
   const mapRef = useRef(null);
   const mapInstance = useRef(null);
   const markersRef = useRef([]);
+  const mapInitialBoundsDoneRef = useRef(false); // true면 더 이상 자동 이동 안 함 (사용자가 직접 화면 이동)
   const [mapLoading, setMapLoading] = useState(true);
-  
+  // 저장된 경로 미리보기용 지도
+  const savedRoutesMapRef = useRef(null);
+  const savedRoutesMapInstance = useRef(null);
+  const savedRoutesPolylineRef = useRef(null);
+  const savedRoutesMarkersRef = useRef([]);
+
   // 날짜 필터
   const [selectedDate, setSelectedDate] = useState('');
   const [filteredPosts, setFilteredPosts] = useState([]);
@@ -59,7 +175,7 @@ const ProfileScreen = () => {
 
     // 대표 뱃지 로드 (반드시 획득한 뱃지 중에서 선택)
     const userId = userData?.id;
-    let savedRepBadgeJson = userId 
+    let savedRepBadgeJson = userId
       ? localStorage.getItem(`representativeBadge_${userId}`) || localStorage.getItem('representativeBadge')
       : localStorage.getItem('representativeBadge');
 
@@ -92,32 +208,25 @@ const ProfileScreen = () => {
       setRepresentativeBadge(repBadge);
     }
 
-    // 레벨 정보 로드
-    const userLevelInfo = getUserLevel();
-    setLevelInfo(userLevelInfo);
-    logger.debug('📊 레벨 정보:', userLevelInfo);
-
     // 내가 업로드한 게시물 로드 (영구 보관 - 필터링 없음!)
     const uploadedPosts = JSON.parse(localStorage.getItem('uploadedPosts') || '[]');
     const userPosts = uploadedPosts.filter(post => post.userId === userId);
-    
+    const userPostsWithCoords = userPosts.filter(p => getPostCoordinates(p));
+
     logger.log('📊 프로필 화면 - 내 게시물 로드 (영구 보관)');
     logger.debug('  전체 게시물:', uploadedPosts.length);
     logger.debug('  내 게시물 (모두):', userPosts.length);
     logger.debug('  사용자 ID:', userId);
-    
-    setMyPosts(userPosts);
-    setFilteredPosts(userPosts);
-    
+
+    setMyPosts(userPostsWithCoords);
+    setFilteredPosts(userPostsWithCoords);
+
     // 사용 가능한 날짜 목록 추출
     const dates = [...new Set(
-      userPosts
-        .map(post => {
-          const date = new Date(post.createdAt || post.timestamp || Date.now());
-          return date.toISOString().split('T')[0]; // YYYY-MM-DD 형식
-        })
+      userPostsWithCoords
+        .map(post => getPostDateKey(post))
         .filter(Boolean)
-    )].sort((a, b) => new Date(b) - new Date(a));
+    )].sort((a, b) => (parseDateKeyLocal(b)?.getTime() || 0) - (parseDateKeyLocal(a)?.getTime() || 0));
     setAvailableDates(dates);
 
     // 알림 개수 업데이트
@@ -135,46 +244,40 @@ const ProfileScreen = () => {
         const updatedPosts = JSON.parse(localStorage.getItem('uploadedPosts') || '[]');
         // 프로필에서는 필터링 없이 모든 내 게시물 표시
         const updatedUserPosts = updatedPosts.filter(post => {
-          const postUserId = post.userId || 
-                            (typeof post.user === 'string' ? post.user : post.user?.id) ||
-                            post.user;
+          const postUserId = post.userId ||
+            (typeof post.user === 'string' ? post.user : post.user?.id) ||
+            post.user;
           return postUserId === userId;
         });
+        const updatedUserPostsWithCoords = updatedUserPosts.filter(p => getPostCoordinates(p));
         logger.debug('🔄 게시물 업데이트 (영구 보관):', {
           전체게시물: updatedPosts.length,
           내게시물: updatedUserPosts.length,
           사용자ID: userId
         });
-        
+
         const previousPostsCount = myPosts.length;
-        setMyPosts(updatedUserPosts);
-        
+        setMyPosts(updatedUserPostsWithCoords);
+
         // 사용 가능한 날짜 목록 업데이트
         const dates = [...new Set(
-          updatedUserPosts
-            .map(post => {
-              const date = new Date(post.createdAt || post.timestamp || Date.now());
-              return date.toISOString().split('T')[0]; // YYYY-MM-DD 형식
-            })
+          updatedUserPostsWithCoords
+            .map(post => getPostDateKey(post))
             .filter(Boolean)
-        )].sort((a, b) => new Date(b) - new Date(a));
+        )].sort((a, b) => (parseDateKeyLocal(b)?.getTime() || 0) - (parseDateKeyLocal(a)?.getTime() || 0));
         setAvailableDates(dates);
-        
+
         // 새 게시물이 추가되면 해당 날짜로 자동 선택 (선택된 날짜가 없을 때만)
-        if (updatedUserPosts.length > previousPostsCount && !selectedDate && activeTab === 'map') {
-          const newPost = updatedUserPosts.find(p => !myPosts.find(op => op.id === p.id));
+        if (updatedUserPostsWithCoords.length > previousPostsCount && !selectedDate && activeTab === 'map') {
+          const newPost = updatedUserPostsWithCoords.find(p => !myPosts.find(op => op.id === p.id));
           if (newPost) {
-            const newPostDate = new Date(newPost.createdAt || newPost.timestamp || Date.now());
-            const dateStr = newPostDate.toISOString().split('T')[0];
+            const dateStr = getPostDateKey(newPost);
             if (dates.includes(dateStr)) {
               setSelectedDate(dateStr);
             }
           }
         }
-        
-        // 레벨 정보도 업데이트
-        const updatedLevelInfo = getUserLevel();
-        setLevelInfo(updatedLevelInfo);
+
       }, 100);
     };
 
@@ -183,13 +286,6 @@ const ProfileScreen = () => {
       const updatedBadges = getEarnedBadges();
       setEarnedBadges(updatedBadges);
       logger.log('🏆 뱃지 업데이트:', updatedBadges.length);
-    };
-
-    // 레벨 업데이트 이벤트 리스너
-    const handleLevelUpdate = () => {
-      const updatedLevelInfo = getUserLevel();
-      setLevelInfo(updatedLevelInfo);
-      logger.debug('📊 레벨 업데이트:', updatedLevelInfo);
     };
 
     // 사용자 정보 업데이트 이벤트 리스너
@@ -205,15 +301,13 @@ const ProfileScreen = () => {
     window.addEventListener('newPostsAdded', handlePostsUpdate);
     window.addEventListener('storage', handlePostsUpdate);
     window.addEventListener('badgeEarned', handleBadgeUpdate);
-    window.addEventListener('levelUp', handleLevelUpdate);
     window.addEventListener('userUpdated', handleUserUpdate);
-    
+
     return () => {
       window.removeEventListener('notificationUpdate', handleNotificationUpdate);
       window.removeEventListener('newPostsAdded', handlePostsUpdate);
       window.removeEventListener('storage', handlePostsUpdate);
       window.removeEventListener('badgeEarned', handleBadgeUpdate);
-      window.removeEventListener('levelUp', handleLevelUpdate);
       window.removeEventListener('userUpdated', handleUserUpdate);
     };
   }, [isAuthenticated, authUser]);
@@ -236,35 +330,41 @@ const ProfileScreen = () => {
   useEffect(() => {
     if (activeTab === 'map') {
       let filtered = [...myPosts];
-      
+
       if (selectedDate) {
-        const filterDate = new Date(selectedDate);
+        const filterDate = parseDateKeyLocal(selectedDate);
+        if (!filterDate) {
+          setFilteredPosts(filtered);
+          return;
+        }
         filterDate.setHours(0, 0, 0, 0);
         const nextDay = new Date(filterDate);
         nextDay.setDate(nextDay.getDate() + 1);
-        
+
         filtered = filtered.filter(post => {
-          const postDate = new Date(post.createdAt || post.timestamp || Date.now());
+          const key = getPostDateKey(post);
+          if (!key) return false;
+          const postDate = parseDateKeyLocal(key);
+          if (!postDate) return false;
           postDate.setHours(0, 0, 0, 0);
           return postDate >= filterDate && postDate < nextDay;
         });
       }
-      
+
       setFilteredPosts(filtered);
     } else {
       setFilteredPosts(myPosts);
     }
   }, [myPosts, selectedDate, activeTab]);
-  
+
   // 새 게시물 추가 시 해당 날짜로 자동 선택
   useEffect(() => {
     if (myPosts.length > 0 && !selectedDate && activeTab === 'map') {
       const latestPost = myPosts[0];
       if (latestPost) {
-        const latestPostDate = new Date(latestPost.createdAt || latestPost.timestamp || Date.now());
-        const dateStr = latestPostDate.toISOString().split('T')[0];
+        const dateStr = getPostDateKey(latestPost);
         // availableDates에 해당 날짜가 있으면 자동 선택
-        if (availableDates.includes(dateStr)) {
+        if (dateStr && availableDates.includes(dateStr)) {
           setSelectedDate(dateStr);
         }
       }
@@ -274,10 +374,10 @@ const ProfileScreen = () => {
   // 지도 초기화 및 마커 표시
   const initMap = useCallback(() => {
     logger.log('🗺️ 지도 초기화 시작', {
-      kakaoLoaded: !!window.kakao, 
-      mapRefExists: !!mapRef.current, 
-      activeTab, 
-      postsCount: filteredPosts.length 
+      kakaoLoaded: !!window.kakao,
+      mapRefExists: !!mapRef.current,
+      activeTab,
+      postsCount: filteredPosts.length
     });
 
     if (!window.kakao || !window.kakao.maps) {
@@ -324,8 +424,7 @@ const ProfileScreen = () => {
       let level = 6;
 
       if (filteredPosts.length > 0) {
-        const firstPost = filteredPosts[0];
-        const coords = firstPost.coordinates || getCoordinatesByLocation(firstPost.detailedLocation || firstPost.location);
+        const coords = getPostCoordinates(filteredPosts[0]) || getPostCoordinates(filteredPosts.find(p => getPostCoordinates(p)));
         if (coords) {
           centerLat = coords.lat;
           centerLng = coords.lng;
@@ -345,22 +444,21 @@ const ProfileScreen = () => {
 
       // 기존 지도 인스턴스가 있으면 재사용, 없으면 새로 생성
       let map = mapInstance.current;
-      
+
       if (!map) {
-        // 지도 생성
         map = new window.kakao.maps.Map(container, {
           center: new window.kakao.maps.LatLng(centerLat, centerLng),
           level: level
         });
         mapInstance.current = map;
       } else {
-        // 기존 지도 재사용 - 중심점과 레벨만 업데이트
+        // 재사용 시에도 이번 날짜/전체 기록에 맞게 중심 이동 (한눈에 보이도록)
         map.setCenter(new window.kakao.maps.LatLng(centerLat, centerLng));
         map.setLevel(level);
       }
-      
-        logger.log('✅ 지도 인스턴스 생성 완료');
-      
+
+      logger.log('✅ 지도 인스턴스 생성/갱신 완료');
+
       // 지도가 완전히 로드될 때까지 대기
       const tilesLoadedHandler = () => {
         logger.debug('✅ 지도 타일 로드 완료');
@@ -368,9 +466,9 @@ const ProfileScreen = () => {
         // 지도 로드 후 마커 생성
         createMarkersAfterMapLoad(map);
       };
-      
+
       window.kakao.maps.event.addListener(map, 'tilesloaded', tilesLoadedHandler);
-      
+
       // 타임아웃 설정 (지도가 로드되지 않아도 진행)
       setTimeout(() => {
         logger.warn('⏰ 지도 로드 타임아웃, 마커 생성 진행');
@@ -380,7 +478,7 @@ const ProfileScreen = () => {
           createMarkersAfterMapLoad(map);
         }
       }, 2000);
-      
+
       // 즉시 마커 생성 시도 (지도가 이미 로드된 경우)
       setTimeout(() => {
         if (markersRef.current.length === 0) {
@@ -391,7 +489,7 @@ const ProfileScreen = () => {
       // 마커 생성 함수 (지도 로드 후 호출)
       const createMarkersAfterMapLoad = (map) => {
         logger.log('📍 마커 생성 시작:', filteredPosts.length);
-        
+
         // 기존 마커 및 선 제거
         markersRef.current.forEach(markerData => {
           if (markerData.overlay) {
@@ -405,7 +503,7 @@ const ProfileScreen = () => {
           }
         });
         markersRef.current = [];
-        
+
         const bounds = new window.kakao.maps.LatLngBounds();
         let hasValidMarker = false;
 
@@ -450,16 +548,17 @@ const ProfileScreen = () => {
         };
 
         // 마커 생성 함수 (MapScreen과 동일한 스타일)
+        const PLACEHOLDER_SVG = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDgiIGhlaWdodD0iNDgiIHZpZXdCb3g9IjAgMCA0OCA0OCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQ4IiBoZWlnaHQ9IjQ4IiByeD0iNCIgZmlsbD0iI0YzRjRGNiIvPgo8cGF0aCBkPSJNMjQgMTZDMjAgMTYgMTcgMTkgMTcgMjNDMTcgMjcgMjAgMzAgMjQgMzBDMjggMzAgMzEgMjcgMzEgMjNDMzEgMTkgMjggMTYgMjQgMTZaIiBmaWxsPSIjOUI5Q0E1Ii8+CjxwYXRoIGQ9Ik0yNCAzMkMyMCAzMiAxNyAyOSAxNyAyNUMxNyAyMSAyMCAxOCAyNCAxOEMyOCAxOCAzMSAyMSAzMSAyNUMzMSAyOSAyOCAzMiAyNCAzMloiIGZpbGw9IiM5QjlDQTUiLz4KPC9zdmc+';
         const createMarker = (post, index, map, bounds) => {
-          const coords = post.coordinates || getCoordinatesByLocation(post.detailedLocation || post.location);
-          if (!coords) return;
+          const coords = getPostCoordinates(post);
+          if (!coords || (Number.isNaN(coords.lat) || Number.isNaN(coords.lng))) return;
 
           const position = new window.kakao.maps.LatLng(coords.lat, coords.lng);
           bounds.extend(position);
 
-          // 모든 경우에 이미지 마커 사용 (blob URL 포함) - MapScreen과 동일
-          const imageUrl = post.images?.[0] || post.imageUrl || post.image;
-          
+          // 올린 사진을 핀 썸네일로 사용 (getPostPinImageUrl로 풀 URL 보장)
+          const imageUrl = getPostPinImageUrl(post);
+
           const el = document.createElement('div');
           el.innerHTML = `
             <button 
@@ -470,12 +569,19 @@ const ProfileScreen = () => {
             >
               <img 
                 class="w-full h-full object-cover" 
-                src="${imageUrl || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDgiIGhlaWdodD0iNDgiIHZpZXdCb3g9IjAgMCA0OCA0OCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQ4IiBoZWlnaHQ9IjQ4IiByeD0iNCIgZmlsbD0iI0YzRjRGNiIvPgo8cGF0aCBkPSJNMjQgMTZDMjAgMTYgMTcgMTkgMTcgMjNDMTcgMjcgMjAgMzAgMjQgMzBDMjggMzAgMzEgMjcgMzEgMjNDMzEgMTkgMjggMTYgMjQgMTZaIiBmaWxsPSIjOUI5Q0E1Ii8+CjxwYXRoIGQ9Ik0yNCAzMkMyMCAzMiAxNyAyOSAxNyAyNUMxNyAyMSAyMCAxOCAyNCAxOEMyOCAxOCAzMSAyMSAzMSAyNUMzMSAyOSAyOCAzMiAyNCAzMloiIGZpbGw9IiM5QjlDQTUiLz4KPC9zdmc+'} 
-                alt="${post.location || '여행지'}"
-                onerror="this.onerror=null; this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDgiIGhlaWdodD0iNDgiIHZpZXdCb3g9IjAgMCA0OCA0OCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQ4IiBoZWlnaHQ9IjQ4IiByeD0iNCIgZmlsbD0iI0YzRjRGNiIvPgo8cGF0aCBkPSJNMjQgMTZDMjAgMTYgMTcgMTkgMTcgMjNDMTcgMjcgMjAgMzAgMjQgMzBDMjggMzAgMzEgMjcgMzEgMjNDMzEgMTkgMjggMTYgMjQgMTZaIiBmaWxsPSIjOUI5Q0E1Ii8+CjxwYXRoIGQ9Ik0yNCAzMkMyMCAzMiAxNyAyOSAxNyAyNUMxNyAyMSAyMCAxOCAyNCAxOEMyOCAxOCAzMSAyMSAzMSAyNUMzMSAyOSAyOCAzMiAyNCAzMloiIGZpbGw9IiM5QjlDQTUiLz4KPC9zdmc+';"
+                width="48"
+                height="48"
+                loading="eager"
+                alt="${escapeHtmlAttr(post.location || '여행지')}"
               />
             </button>
           `;
+          // img src는 JS로 설정 (URL 깨짐 방지, 실제 사진 표시)
+          const img = el.querySelector('img');
+          if (img) {
+            img.src = imageUrl || PLACEHOLDER_SVG;
+            img.onerror = function () { this.onerror = null; this.src = PLACEHOLDER_SVG; };
+          }
 
           // 클릭 이벤트 핸들러
           const button = el.querySelector('button');
@@ -510,27 +616,28 @@ const ProfileScreen = () => {
 
           overlay.setMap(map);
 
-          // 인포윈도우 생성
+          // 인포윈도우 생성 (썸네일 이미지도 실제 사진으로)
+          const infoImgUrl = getPostPinImageUrl(post);
           const infoWindow = new window.kakao.maps.InfoWindow({
             content: `
               <div style="padding: 12px; min-width: 200px; max-width: 300px;">
-                ${imageUrl ? `
+                ${infoImgUrl ? `
                   <img 
-                    src="${imageUrl}" 
-                    alt="${post.location || '여행지'}"
+                    src="${escapeHtmlAttr(infoImgUrl)}" 
+                    alt="${escapeHtmlAttr(post.location || '여행지')}"
                     style="width: 100%; height: 150px; object-fit: cover; border-radius: 8px; margin-bottom: 8px;"
                     onerror="this.style.display='none'"
                   />
                 ` : ''}
-                <div style="font-weight: bold; margin-bottom: 4px; font-size: 14px;">${post.location || '여행지'}</div>
-                ${post.note ? `<div style="font-size: 12px; color: #666; margin-top: 4px;">${post.note}</div>` : ''}
+                <div style="font-weight: bold; margin-bottom: 4px; font-size: 14px;">${(post.location || '여행지').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
+                ${post.note ? `<div style="font-size: 12px; color: #666; margin-top: 4px;">${String(post.note).replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>` : ''}
               </div>
             `,
             removable: true
           });
 
           // 임시 마커 (인포윈도우 표시용)
-          const tempMarker = new window.kakao.maps.Marker({ 
+          const tempMarker = new window.kakao.maps.Marker({
             position: position
           });
 
@@ -545,12 +652,12 @@ const ProfileScreen = () => {
             });
           }
 
-          markersRef.current.push({ 
-            id: post.id, 
-            marker: null, 
-            overlay: overlay, 
-            post: post, 
-            element: el.firstChild 
+          markersRef.current.push({
+            id: post.id,
+            marker: null,
+            overlay: overlay,
+            post: post,
+            element: el.firstChild
           });
           hasValidMarker = true;
         };
@@ -561,14 +668,14 @@ const ProfileScreen = () => {
           const dateB = new Date(b.createdAt || b.timestamp || 0);
           return dateA - dateB;
         });
-        
+
         const pathCoordinates = [];
         sortedPosts.forEach((post, index) => {
-          createMarker(post, index, map, bounds);
-          const coords = post.coordinates || getCoordinatesByLocation(post.detailedLocation || post.location);
-          if (coords && coords.lat && coords.lng) {
+          const coords = getPostCoordinates(post);
+          if (coords && !Number.isNaN(coords.lat) && !Number.isNaN(coords.lng)) {
             pathCoordinates.push(new window.kakao.maps.LatLng(coords.lat, coords.lng));
           }
+          createMarker(post, index, map, bounds);
         });
 
         // 경로 선 그리기 (2개 이상의 좌표가 있을 때)
@@ -584,37 +691,37 @@ const ProfileScreen = () => {
           markersRef.current.push({ polyline: polyline });
         }
 
-        // 마커 생성 완료 후 지도 범위 조정
-        setTimeout(() => {
-          if (markersRef.current.length > 0) {
+        // 날짜/탭 진입 시 항상 핀 위치로 지도 이동 (한눈에 보이도록)
+        const overlayMarkers = markersRef.current.filter(m => m.overlay || m.marker);
+        if (overlayMarkers.length > 0) {
+          const moveToPins = () => {
+            // 이미 한 번 자동으로 이동했다면 더 이상 지도를 강제로 움직이지 않음
+            if (mapInitialBoundsDoneRef.current) {
+              logger.debug('🔒 지도 자동 이동 생략 (사용자 제어 모드)');
+              return;
+            }
             const validBounds = new window.kakao.maps.LatLngBounds();
-            markersRef.current.forEach(markerData => {
+            overlayMarkers.forEach(markerData => {
               if (markerData.overlay) {
-                const position = markerData.overlay.getPosition();
-                validBounds.extend(position);
+                try { validBounds.extend(markerData.overlay.getPosition()); } catch (_) {}
               } else if (markerData.marker) {
-                const position = markerData.marker.getPosition();
-                validBounds.extend(position);
+                try { validBounds.extend(markerData.marker.getPosition()); } catch (_) {}
               }
             });
-            
-            if (markersRef.current.length > 1) {
-              map.setBounds(validBounds);
-              logger.debug('✅ 지도 범위 조정 완료 (여러 마커)');
-            } else if (markersRef.current.length === 1) {
-              // 마커가 하나일 때는 해당 위치로 이동
-              const firstMarker = markersRef.current[0];
-              if (firstMarker.overlay) {
-                map.setCenter(firstMarker.overlay.getPosition());
-                map.setLevel(5);
-              } else if (firstMarker.marker) {
-                map.setCenter(firstMarker.marker.getPosition());
-                map.setLevel(5);
-              }
-              logger.debug('✅ 지도 중심 이동 완료 (단일 마커)');
+            if (overlayMarkers.length >= 2) {
+              map.setBounds(validBounds, 50, 50, 50, 50); // 패딩
+              logger.debug('✅ 지도 범위 조정 완료 (핀 전체)');
+            } else {
+              const first = overlayMarkers[0];
+              const pos = first.overlay ? first.overlay.getPosition() : first.marker.getPosition();
+              map.setCenter(pos);
+              map.setLevel(5);
+              logger.debug('✅ 지도 중심 이동 완료 (단일 핀)');
             }
-          }
-        }, 500);
+            mapInitialBoundsDoneRef.current = true;
+          };
+          setTimeout(moveToPins, 350);
+        }
       };
     } catch (error) {
       logger.error('지도 초기화 오류:', error);
@@ -627,7 +734,7 @@ const ProfileScreen = () => {
     if (activeTab === 'map') {
       logger.log('🗺️ 나의 기록 지도 탭 활성화 또는 날짜 변경');
       setMapLoading(true);
-      
+
       // 기존 마커 및 선 제거
       markersRef.current.forEach(markerData => {
         try {
@@ -645,32 +752,22 @@ const ProfileScreen = () => {
         }
       });
       markersRef.current = [];
-      
-      // DOM이 완전히 렌더링된 후 지도 초기화
+
+      let retryTimerId = null;
       const initTimer = setTimeout(() => {
-        console.log('⏰ 지도 초기화 타이머 실행');
         if (mapRef.current) {
-          logger.debug('✅ mapRef 준비됨, 지도 초기화 시작');
           initMap();
         } else {
-          logger.warn('⚠️ mapRef 아직 준비 안됨, 재시도...');
-          // mapRef가 아직 준비되지 않았으면 다시 시도
-          const retryTimer = setTimeout(() => {
-            if (mapRef.current) {
-              logger.log('✅ mapRef 재시도 성공, 지도 초기화');
-              initMap();
-            } else {
-              logger.error('❌ mapRef를 찾을 수 없습니다');
-              setMapLoading(false);
-            }
-          }, 500);
-          
-          return () => clearTimeout(retryTimer);
+          retryTimerId = setTimeout(() => {
+            if (mapRef.current) initMap();
+            else setMapLoading(false);
+          }, 400);
         }
-      }, 500);
-      
+      }, 300);
+
       return () => {
         clearTimeout(initTimer);
+        if (retryTimerId) clearTimeout(retryTimerId);
       };
     } else {
       // 다른 탭으로 전환 시 지도 정리
@@ -703,10 +800,10 @@ const ProfileScreen = () => {
   const handleLogout = () => {
     // 로그아웃 플래그 설정
     sessionStorage.setItem('justLoggedOut', 'true');
-    
+
     // 로그아웃 처리
     logout();
-    
+
     // 시작 화면으로 이동
     navigate('/', { replace: true });
   };
@@ -746,13 +843,162 @@ const ProfileScreen = () => {
     const userId = user?.id || authUser?.id;
     const updatedMyPosts = filteredPosts.filter(post => post.userId === userId);
     setMyPosts(updatedMyPosts);
+    setFilteredPosts(updatedMyPosts);
 
-    // 편집 모드 종료
+    // 사용 가능한 날짜 목록 업데이트
+    const dates = [...new Set(
+      updatedMyPosts
+        .map(post => {
+          const date = new Date(post.createdAt || post.timestamp || Date.now());
+          return date.toISOString().split('T')[0]; // YYYY-MM-DD 형식
+        })
+        .filter(Boolean)
+    )].sort((a, b) => new Date(b) - new Date(a));
+    setAvailableDates(dates);
+
+    // 삭제된 게시물의 날짜가 선택되어 있고, 그 날짜에 더 이상 게시물이 없으면 날짜 선택 해제
+    if (selectedDate && !dates.includes(selectedDate)) {
+      setSelectedDate('');
+    }
+
     setSelectedPhotos([]);
     setIsEditMode(false);
 
+    // 다른 화면에서도 목록 갱신되도록 이벤트 발생
+    window.dispatchEvent(new Event('storage'));
+    window.dispatchEvent(new Event('postsUpdated'));
+    window.dispatchEvent(new CustomEvent('newPostsAdded'));
+
     alert(`${selectedPhotos.length}개의 사진이 삭제되었습니다.`);
   };
+
+  // 저장된 경로 미리보기 지도 렌더링
+  useEffect(() => {
+    if (activeTab !== 'savedRoutes') return;
+
+    const route = selectedSavedRoute;
+
+    // 이전 마커 및 경로 정리
+    try {
+      savedRoutesMarkersRef.current.forEach((m) => m.setMap && m.setMap(null));
+      savedRoutesMarkersRef.current = [];
+      if (savedRoutesPolylineRef.current) {
+        savedRoutesPolylineRef.current.setMap(null);
+        savedRoutesPolylineRef.current = null;
+      }
+    } catch {
+      // 무시
+    }
+
+    if (!route || !route.pins || route.pins.length === 0) return;
+    if (!savedRoutesMapRef.current) return;
+
+    const ensureMap = () => {
+      if (!window.kakao || !window.kakao.maps) {
+        setTimeout(ensureMap, 150);
+        return;
+      }
+
+      const container = savedRoutesMapRef.current;
+      if (!container) return;
+
+      const firstPin = route.pins[0];
+      const centerLat = firstPin.lat ?? 37.5665;
+      const centerLng = firstPin.lng ?? 126.9780;
+
+      let map = savedRoutesMapInstance.current;
+      if (!map) {
+        map = new window.kakao.maps.Map(container, {
+          center: new window.kakao.maps.LatLng(centerLat, centerLng),
+          level: 6,
+        });
+        savedRoutesMapInstance.current = map;
+      } else {
+        map.setCenter(new window.kakao.maps.LatLng(centerLat, centerLng));
+      }
+
+      const path = [];
+      const bounds = new window.kakao.maps.LatLngBounds();
+
+      route.pins.forEach((pin, index) => {
+        if (pin.lat == null || pin.lng == null) return;
+        const pos = new window.kakao.maps.LatLng(pin.lat, pin.lng);
+        bounds.extend(pos);
+        path.push(pos);
+
+        // MapScreen에서 사용하는 것과 비슷한 스타일의 사진 핀 (상대 경로 → 풀 URL)
+        const imageUrl = getDisplayImageUrl(pin.image);
+        const el = document.createElement('div');
+        el.innerHTML = `
+          <button
+            class="saved-route-pin"
+            style="
+              z-index: ${index};
+              width: 44px;
+              height: 44px;
+              border: 3px solid white;
+              border-radius: 6px;
+              box-shadow: 0 3px 10px rgba(0,0,0,0.35);
+              overflow: hidden;
+              cursor: default;
+              padding: 0;
+              margin: 0;
+              background: #f5f5f5;
+              position: relative;
+            "
+          >
+            <img
+              style="
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+                display: block;
+              "
+              src="${escapeHtmlAttr(imageUrl) || ''}"
+              alt="${escapeHtmlAttr(pin.location || '경로 지점')}"
+              onerror="this.style.display='none';"
+            />
+          </button>
+        `;
+
+        const overlay = new window.kakao.maps.CustomOverlay({
+          position: pos,
+          content: el,
+          yAnchor: 1,
+          xAnchor: 0.5,
+          zIndex: index,
+        });
+
+        overlay.setMap(map);
+        savedRoutesMarkersRef.current.push(overlay);
+      });
+
+      if (path.length >= 2) {
+        const polyline = new window.kakao.maps.Polyline({
+          path,
+          strokeWeight: 3,
+          strokeColor: '#00BCD4',
+          strokeOpacity: 0.8,
+          strokeStyle: 'solid',
+        });
+        polyline.setMap(map);
+        savedRoutesPolylineRef.current = polyline;
+      }
+
+      if (path.length >= 1) {
+        // 여유 패딩을 주어 전체 경로가 보이도록
+        const sw = bounds.getSouthWest();
+        const ne = bounds.getNorthEast();
+        const latSpan = Math.max((ne.getLat() - sw.getLat()) * 0.25, 0.01);
+        const lngSpan = Math.max((ne.getLng() - sw.getLng()) * 0.25, 0.01);
+        bounds.extend(new window.kakao.maps.LatLng(sw.getLat() - latSpan, sw.getLng() - lngSpan));
+        bounds.extend(new window.kakao.maps.LatLng(ne.getLat() + latSpan, ne.getLng() + lngSpan));
+        map.setBounds(bounds);
+      }
+    };
+
+    ensureMap();
+  }, [activeTab, selectedSavedRoute]);
 
   // 대표 뱃지 선택
   const selectRepresentativeBadge = (badge) => {
@@ -764,14 +1010,14 @@ const ProfileScreen = () => {
     localStorage.setItem('representativeBadge', JSON.stringify(badge)); // 호환성 유지
     setRepresentativeBadge(badge);
     setShowBadgeSelector(false);
-    
+
     // user 정보 업데이트
     if (currentUser) {
       const updatedUser = { ...currentUser, representativeBadge: badge };
       localStorage.setItem('user', JSON.stringify(updatedUser));
       setUser(updatedUser);
     }
-    
+
     logger.log('✅ 대표 뱃지 선택:', badge.name);
   };
 
@@ -784,13 +1030,13 @@ const ProfileScreen = () => {
     }
     localStorage.removeItem('representativeBadge'); // 호환성 유지
     setRepresentativeBadge(null);
-    
+
     if (currentUser) {
       const updatedUser = { ...currentUser, representativeBadge: null };
       localStorage.setItem('user', JSON.stringify(updatedUser));
       setUser(updatedUser);
     }
-    
+
     logger.log('❌ 대표 뱃지 제거');
   };
 
@@ -819,7 +1065,7 @@ const ProfileScreen = () => {
 
       window.location.href = authEndpoint;
     } catch (error) {
-      console.error('소셜 로그인 실패:', error);
+      logger.error('소셜 로그인 실패:', error);
       setLoginError(`${provider} 로그인에 실패했습니다.`);
       setLoginLoading(false);
     }
@@ -856,7 +1102,7 @@ const ProfileScreen = () => {
               {/* 소셜 로그인 버튼들 */}
               <div className="flex flex-col items-center gap-3 mb-3">
                 {/* 카카오 로그인 */}
-                <button 
+                <button
                   onClick={() => handleSocialLogin('Kakao')}
                   disabled={loginLoading}
                   className="flex cursor-pointer items-center justify-center gap-3 rounded-full h-12 px-6 bg-[#FEE500] text-[#000000] text-sm font-bold tracking-tight hover:bg-[#fdd835] active:bg-[#fbc02d] transition-all shadow-md disabled:opacity-50 w-full max-w-sm"
@@ -869,17 +1115,17 @@ const ProfileScreen = () => {
                 </button>
 
                 {/* 구글 로그인 */}
-                <button 
+                <button
                   onClick={() => handleSocialLogin('Google')}
                   disabled={loginLoading}
                   className="flex cursor-pointer items-center justify-center gap-3 rounded-full h-12 px-6 bg-white dark:bg-gray-900 text-[#1F1F1F] dark:text-white text-sm font-semibold tracking-tight border border-zinc-300 dark:border-zinc-600 hover:bg-zinc-50 dark:hover:bg-gray-800 active:bg-zinc-100 transition-all shadow-sm disabled:opacity-50 w-full max-w-sm"
                   style={{ touchAction: 'manipulation' }}
                 >
                   <svg className="w-5 h-5" viewBox="0 0 24 24">
-                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
                   </svg>
                   <span className="truncate">구글로 시작하기</span>
                 </button>
@@ -933,14 +1179,14 @@ const ProfileScreen = () => {
       <div className="screen-content">
         {/* 헤더 */}
         <header className="screen-header bg-white dark:bg-gray-900 flex items-center p-4 justify-between">
-          <button 
+          <button
             onClick={() => navigate('/main')}
             className="flex size-12 shrink-0 items-center justify-center text-text-primary-light dark:text-text-primary-dark hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
           >
             <span className="material-symbols-outlined text-2xl">arrow_back</span>
           </button>
           <h1 className="text-text-primary-light dark:text-text-primary-dark text-base font-semibold">프로필</h1>
-          <button 
+          <button
             onClick={() => navigate('/settings')}
             className="flex size-12 shrink-0 items-center justify-center text-text-primary-light dark:text-text-primary-dark hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
           >
@@ -952,582 +1198,680 @@ const ProfileScreen = () => {
         <div className="screen-body">
           {/* 프로필 정보 */}
           <div className="bg-white dark:bg-gray-900 px-6 py-6">
-          <div className="flex items-center gap-4 mb-4">
-            {/* 프로필 사진 */}
-            <div className="flex-shrink-0">
-              {currentUser?.profileImage && currentUser.profileImage !== 'default' ? (
-                <img 
-                  src={currentUser.profileImage} 
-                  alt="Profile" 
-                  className="w-16 h-16 rounded-full object-cover border-2 border-gray-200 dark:border-gray-700"
-                />
-              ) : (
-                <div className="w-16 h-16 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
-                  <span className="material-symbols-outlined text-gray-500 dark:text-gray-400 text-4xl">person</span>
-                </div>
-              )}
-            </div>
-
-            {/* 사용자 정보 */}
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-1 flex-wrap">
-                <h2 className="text-text-primary-light dark:text-text-primary-dark text-lg font-bold">
-                  {currentUser?.username || '모사모'}
-                </h2>
-                {/* 대표 뱃지 - 클릭 가능 */}
-                <button
-                  onClick={() => {
-                    if (earnedBadges.length > 0) {
-                      setShowBadgeSelector(true);
-                    } else {
-                      alert('아직 획득한 뱃지가 없습니다.');
-                    }
-                  }}
-                  disabled={earnedBadges.length === 0}
-                  className="flex items-center gap-1 px-2 py-1 bg-gradient-to-r from-primary-soft to-accent-soft rounded-full border-2 border-primary/30 hover:border-primary/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {representativeBadge ? (
-                    <>
-                      <span className="text-base leading-none" role="img" aria-label={representativeBadge.name}>
-                        {representativeBadge.icon || '🏆'}
-                      </span>
-                      <span className="text-xs font-bold text-primary">{representativeBadge.name}</span>
-                    </>
-                  ) : (
-                    <span className="text-xs font-medium text-text-secondary-light dark:text-text-secondary-dark">뱃지 없음</span>
-                  )}
-                </button>
-                {/* 뱃지 모아보기 버튼 - 플러스 아이콘 */}
-                <button
-                  onClick={() => navigate('/badges')}
-                  className="flex items-center justify-center w-7 h-7 bg-primary/10 hover:bg-primary/20 rounded-full transition-colors"
-                  title="뱃지 모아보기"
-                >
-                  <span className="material-symbols-outlined text-primary text-base">add</span>
-                </button>
-              </div>
-              <p className="text-text-secondary-light dark:text-text-secondary-dark text-sm">
-                {levelInfo ? `Lv. ${levelInfo.level} ${levelInfo.title}` : 'Lv. 1 여행 입문자'}
-              </p>
-              {/* 경험치 바 */}
-              {levelInfo && levelInfo.level < 100 && (
-                <div className="mt-2">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs text-text-secondary-light dark:text-text-secondary-dark">
-                      EXP {levelInfo.expInCurrentLevel.toLocaleString()} / {levelInfo.expNeededForNextLevel.toLocaleString()}
-                    </span>
-                    <span className="text-xs font-bold text-primary">
-                      {levelInfo.progress}%
-                    </span>
+            <div className="flex items-center gap-4 mb-4">
+              {/* 프로필 사진 */}
+              <div className="flex-shrink-0">
+                {currentUser?.profileImage && currentUser.profileImage !== 'default' ? (
+                  <img
+                    src={currentUser.profileImage}
+                    alt="Profile"
+                    className="w-16 h-16 rounded-full object-cover border-2 border-gray-200 dark:border-gray-700"
+                  />
+                ) : (
+                  <div className="w-16 h-16 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
+                    <span className="material-symbols-outlined text-gray-500 dark:text-gray-400 text-4xl">person</span>
                   </div>
-                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                    <div 
-                      className="bg-gradient-to-r from-primary to-accent h-2 rounded-full transition-all duration-500"
-                      style={{ width: `${levelInfo.progress}%` }}
-                    ></div>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* 게시물 / 팔로워 / 팔로잉 - 게시물이 맨 앞 */}
-          <div className="flex items-center justify-around py-4 border-t border-gray-100 dark:border-gray-800">
-            <div className="text-center min-w-[52px]">
-              <div className="text-xl font-bold text-text-primary-light dark:text-text-primary-dark">{myPosts.length}</div>
-              <div className="text-[10px] text-gray-600 dark:text-gray-400 mt-0.5">게시물</div>
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                const uid = (authUser || user)?.id;
-                if (uid) { setFollowListIds(getFollowerIds(uid)); setFollowListType('follower'); setShowFollowListModal(true); }
-              }}
-              className="text-center min-w-[52px] hover:opacity-80 transition-opacity"
-            >
-              <div className="text-xl font-bold text-text-primary-light dark:text-text-primary-dark">{followerCount}</div>
-              <div className="text-[10px] text-gray-600 dark:text-gray-400 mt-0.5">팔로워</div>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                const uid = (authUser || user)?.id;
-                if (uid) { setFollowListIds(getFollowingIds(uid)); setFollowListType('following'); setShowFollowListModal(true); }
-              }}
-              className="text-center min-w-[52px] hover:opacity-80 transition-opacity"
-            >
-              <div className="text-xl font-bold text-text-primary-light dark:text-text-primary-dark">{followingCount}</div>
-              <div className="text-[10px] text-gray-600 dark:text-gray-400 mt-0.5">팔로잉</div>
-            </button>
-          </div>
-
-          {/* 프로필 편집 버튼 */}
-          <button
-            onClick={() => {
-              logger.debug('🔧 프로필 편집 버튼 클릭 → /profile/edit으로 이동');
-              navigate('/profile/edit');
-            }}
-            className="w-full bg-gray-100 dark:bg-gray-800 text-text-primary-light dark:text-text-primary-dark py-2.5 px-4 rounded-lg font-medium hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-          >
-            프로필 편집
-          </button>
-        </div>
-
-        {/* 기록 탭 */}
-        <div className="bg-white dark:bg-gray-900 px-6 py-6 border-t border-gray-100 dark:border-gray-800">
-          {/* 탭 전환 */}
-          <div className="flex gap-2 mb-6">
-            <button
-              onClick={() => setActiveTab('my')}
-              className={`flex-1 py-3 px-2 rounded-xl font-semibold transition-all text-sm whitespace-nowrap ${
-                activeTab === 'my'
-                  ? 'bg-primary text-white shadow-lg'
-                  : 'bg-gray-100 dark:bg-gray-800 text-text-secondary-light dark:text-text-secondary-dark hover:bg-gray-200 dark:hover:bg-gray-700'
-              }`}
-            >
-              📸 내 사진
-            </button>
-            <button
-              onClick={() => setActiveTab('map')}
-              className={`flex-1 py-3 px-2 rounded-xl font-semibold transition-all text-sm whitespace-nowrap ${
-                activeTab === 'map'
-                  ? 'bg-primary text-white shadow-lg'
-                  : 'bg-gray-100 dark:bg-gray-800 text-text-secondary-light dark:text-text-secondary-dark hover:bg-gray-200 dark:hover:bg-gray-700'
-              }`}
-            >
-              🗺️ 나의 기록 지도
-            </button>
-          </div>
-
-          {/* 편집 버튼 (내 사진 탭에서만) */}
-          {activeTab === 'my' && myPosts.length > 0 && (
-            <div className="flex items-center justify-end mb-4">
-                {isEditMode && selectedPhotos.length > 0 && (
-                  <button 
-                    onClick={deleteSelectedPhotos}
-                  className="text-red-500 text-sm font-semibold mr-2"
-                  >
-                    삭제 ({selectedPhotos.length})
-                  </button>
                 )}
-                <button 
-                  onClick={toggleEditMode}
-                  className={`text-sm font-semibold ${isEditMode ? 'text-primary' : 'text-text-secondary-light dark:text-text-secondary-dark'}`}
+              </div>
+
+              {/* 사용자 정보 */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-2 mb-1 flex-wrap">
+                  <div className="flex items-center gap-2 flex-wrap min-w-0 flex-1">
+                    <h2 className="text-text-primary-light dark:text-text-primary-dark text-lg font-bold truncate max-w-[180px] sm:max-w-[240px]" title={currentUser?.username || '모사모'}>
+                      {currentUser?.username || '모사모'}
+                    </h2>
+                    {/* 대표 뱃지 - 클릭 가능 */}
+                    <button
+                      onClick={() => {
+                        if (earnedBadges.length > 0) {
+                          setShowBadgeSelector(true);
+                        } else {
+                          alert('아직 획득한 뱃지가 없습니다.');
+                        }
+                      }}
+                      disabled={earnedBadges.length === 0}
+                      className="flex items-center gap-1 px-2 py-1 bg-gradient-to-r from-primary-soft to-accent-soft rounded-full border-2 border-primary/30 hover:border-primary/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {representativeBadge ? (
+                        <>
+                          <span className="text-base leading-none" role="img" aria-label={representativeBadge.name}>
+                            {representativeBadge.icon || '🏆'}
+                          </span>
+                          <span className="text-xs font-bold text-primary">{representativeBadge.name}</span>
+                        </>
+                      ) : (
+                        <span className="text-xs font-medium text-text-secondary-light dark:text-text-secondary-dark">뱃지 없음</span>
+                      )}
+                    </button>
+                    {/* 뱃지 모아보기 버튼 - 완전 원형, 크기 32px, 폰트에 맞는 배경 */}
+                    <button
+                      onClick={() => navigate('/badges')}
+                      className="flex items-center justify-center rounded-full transition-colors bg-primary/10 hover:bg-primary/20"
+                      style={{ width: 32, height: 32, minWidth: 32, minHeight: 32 }}
+                      title="뱃지 모아보기"
+                    >
+                      <span className="material-symbols-outlined text-primary" style={{ fontSize: 16 }}>add</span>
+                    </button>
+                  </div>
+                  {/* 프로필 편집 버튼 - 완전 원형, 크기 32px, 폰트에 맞는 배경 */}
+                  <button
+                    onClick={() => {
+                      logger.debug('🔧 프로필 편집 버튼 클릭 → /profile/edit으로 이동');
+                      navigate('/profile/edit');
+                    }}
+                    className="flex items-center justify-center rounded-full transition-colors bg-primary/10 hover:bg-primary/20"
+                    style={{ width: 32, height: 32, minWidth: 32, minHeight: 32 }}
+                    title="프로필 편집"
+                  >
+                    <span className="material-symbols-outlined text-primary" style={{ fontSize: 16 }}>edit</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* 게시물 / 팔로워 / 팔로잉 - 가볍게 */}
+            <div className="flex items-center justify-around py-3 border-t border-gray-100 dark:border-gray-800">
+              <div className="text-center min-w-[44px]">
+                <div className="text-base font-semibold text-text-primary-light dark:text-text-primary-dark">{myPosts.length}</div>
+                <div className="text-[10px] text-gray-500 dark:text-gray-500 mt-0.5">게시물</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const uid = (authUser || user)?.id;
+                  if (uid) { setFollowListIds(getFollowerIds(uid)); setFollowListType('follower'); setShowFollowListModal(true); }
+                }}
+                className="text-center min-w-[44px] hover:opacity-80 transition-opacity"
+              >
+                <div className="text-base font-semibold text-text-primary-light dark:text-text-primary-dark">{followerCount}</div>
+                <div className="text-[10px] text-gray-500 dark:text-gray-500 mt-0.5">팔로워</div>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const uid = (authUser || user)?.id;
+                  if (uid) { setFollowListIds(getFollowingIds(uid)); setFollowListType('following'); setShowFollowListModal(true); }
+                }}
+                className="text-center min-w-[44px] hover:opacity-80 transition-opacity"
+              >
+                <div className="text-base font-semibold text-text-primary-light dark:text-text-primary-dark">{followingCount}</div>
+                <div className="text-[10px] text-gray-500 dark:text-gray-500 mt-0.5">팔로잉</div>
+              </button>
+            </div>
+
+          </div>
+
+          {/* 기록 탭 */}
+          <div className="bg-white dark:bg-gray-900 px-6 py-6 border-t border-gray-100 dark:border-gray-800">
+            {/* 탭 전환 */}
+            <div className="flex gap-2 mb-6">
+              <button
+                onClick={() => setActiveTab('my')}
+                className={`flex-1 py-3 px-2 rounded-xl font-semibold transition-all text-sm whitespace-nowrap ${activeTab === 'my'
+                    ? 'bg-primary text-white shadow-lg'
+                    : 'bg-gray-100 dark:bg-gray-800 text-text-secondary-light dark:text-text-secondary-dark hover:bg-gray-200 dark:hover:bg-gray-700'
+                  }`}
+              >
+                📸 내 사진
+              </button>
+              <button
+                onClick={() => setActiveTab('map')}
+                className={`flex-1 py-3 px-2 rounded-xl font-semibold transition-all text-sm whitespace-nowrap ${activeTab === 'map'
+                    ? 'bg-primary text-white shadow-lg'
+                    : 'bg-gray-100 dark:bg-gray-800 text-text-secondary-light dark:text-text-secondary-dark hover:bg-gray-200 dark:hover:bg-gray-700'
+                  }`}
+              >
+                🗺️ 나의 기록 지도
+              </button>
+              <button
+                onClick={() => setActiveTab('savedRoutes')}
+                className={`flex-1 py-3 px-2 rounded-xl font-semibold transition-all text-sm whitespace-nowrap ${activeTab === 'savedRoutes'
+                    ? 'bg-primary text-white shadow-lg'
+                    : 'bg-gray-100 dark:bg-gray-800 text-text-secondary-light dark:text-text-secondary-dark hover:bg-gray-200 dark:hover:bg-gray-700'
+                  }`}
+              >
+                🛤️ 저장된 경로
+              </button>
+            </div>
+
+            {/* 편집 버튼 (내 사진 탭에서만) */}
+            {/* 내 사진 탭 (타임라인 형식) */}
+            {activeTab === 'my' && myPosts.length === 0 && (
+              <div className="text-center py-8">
+                <span className="material-symbols-outlined text-6xl text-gray-300 dark:text-gray-600 mb-4 block">
+                  add_photo_alternate
+                </span>
+                <p className="text-text-secondary-light dark:text-text-secondary-dark text-base font-medium mb-2">
+                  아직 올린 사진이 없어요
+                </p>
+                <p className="text-gray-400 dark:text-gray-500 text-sm mb-4">
+                  내 지역의 실시간 사진을 올려<br />
+                  나만의 발자취를 만들어보세요!
+                </p>
+                <button
+                  onClick={() => navigate('/upload')}
+                  className="bg-primary text-white py-3 px-6 rounded-full font-semibold hover:bg-primary/90 transition-colors shadow-lg inline-flex items-center gap-2"
                 >
-                  {isEditMode ? '완료' : '편집'}
+                  <span className="material-symbols-outlined">add_a_photo</span>
+                  첫 사진 올리기
                 </button>
               </div>
             )}
 
-          {/* 내 사진 탭 (타임라인 형식) */}
-          {activeTab === 'my' && myPosts.length === 0 && (
-            <div className="text-center py-8">
-              <span className="material-symbols-outlined text-6xl text-gray-300 dark:text-gray-600 mb-4 block">
-                add_photo_alternate
-              </span>
-              <p className="text-text-secondary-light dark:text-text-secondary-dark text-base font-medium mb-2">
-                아직 올린 사진이 없어요
-              </p>
-              <p className="text-gray-400 dark:text-gray-500 text-sm mb-4">
-                내 지역의 실시간 사진을 올려<br />
-                나만의 발자취를 만들어보세요!
-              </p>
-              <button
-                onClick={() => navigate('/upload')}
-                className="bg-primary text-white py-3 px-6 rounded-full font-semibold hover:bg-primary/90 transition-colors shadow-lg inline-flex items-center gap-2"
-              >
-                <span className="material-symbols-outlined">add_a_photo</span>
-                첫 사진 올리기
-              </button>
-            </div>
-          )}
-
-          {activeTab === 'my' && myPosts.length > 0 && (
-            <div className="space-y-6">
-              {Object.entries(
-                myPosts.reduce((acc, post) => {
-                  const date = new Date(post.createdAt || Date.now());
-                  const dateKey = date.toLocaleDateString('ko-KR', {
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric',
-                  });
-                  if (!acc[dateKey]) acc[dateKey] = [];
-                  acc[dateKey].push(post);
-                  return acc;
-                }, {})
-              )
-                .sort((a, b) => new Date(b[1][0].createdAt) - new Date(a[1][0].createdAt))
-                .map(([date, posts]) => (
-                  <div key={date}>
-                    {/* 날짜 헤더 */}
-                    <div className="flex items-center gap-3 mb-3">
-                      <div className="flex items-center gap-2">
-                        <span className="material-symbols-outlined text-primary text-xl">calendar_today</span>
-                        <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300">{date}</h3>
-                      </div>
-                      <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700"></div>
-                      <span className="text-xs text-gray-500 dark:text-gray-400">{posts.length}장</span>
-                    </div>
-
-                    {/* 사진 그리드 */}
-                    <div className="grid grid-cols-2 gap-4">
-                      {posts.map((post, index) => {
-                        const likedPosts = JSON.parse(localStorage.getItem('likedPosts') || '{}');
-                        const isLiked = likedPosts[post.id] || false;
-                        const likeCount = post.likes || post.likeCount || 0;
-                        const allPosts = myPosts;
-                        const currentIndex = allPosts.findIndex(p => p.id === post.id);
-                        
-                        return (
-                          <div
-                            key={post.id || index}
-                            onClick={(e) => {
-                              if (isEditMode) {
-                                togglePhotoSelection(post.id);
-                              } else {
-                                navigate(`/post/${post.id}`, {
-                                  state: {
-                                    post: post,
-                                    allPosts: allPosts,
-                                    currentPostIndex: currentIndex >= 0 ? currentIndex : 0
-                                  }
-                                });
-                              }
-                            }}
-                            className="cursor-pointer"
-                          >
-                            {/* 이미지 */}
-                            <div className="aspect-square relative overflow-hidden rounded-lg mb-2">
-                              {post.videos && post.videos.length > 0 ? (
-                                <video
-                                  src={post.videos[0]}
-                                  className="w-full h-full object-cover"
-                                  muted
-                                  loop
-                                  playsInline
-                                />
-                              ) : (
-                                <img
-                                  src={post.imageUrl || post.images?.[0] || post.image}
-                                  alt={post.location}
-                                  className={`w-full h-full object-cover transition-all duration-300 ${
-                                    isEditMode ? 'hover:opacity-70' : 'hover:scale-110'
-                                  }`}
-                                />
-                              )}
-                              
-                              {/* 우측 하단 하트 아이콘 */}
-                              {!isEditMode && (
-                                <div className="absolute bottom-2 right-2 flex items-center gap-1 bg-white/80 backdrop-blur-sm rounded-full px-2 py-1">
-                                  <span className={`material-symbols-outlined text-sm ${isLiked ? 'text-red-500 fill' : 'text-gray-600'}`}>
-                                    favorite
-                                  </span>
-                                  <span className="text-xs font-semibold text-gray-700">{likeCount}</span>
-                                </div>
-                              )}
-                              
-                              {/* 편집 모드 체크박스 */}
-                              {isEditMode && (
-                                <div className="absolute top-2 right-2">
-                                  <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
-                                    selectedPhotos.includes(post.id)
-                                      ? 'bg-primary border-primary'
-                                      : 'bg-white border-gray-300'
-                                  }`}>
-                                    {selectedPhotos.includes(post.id) && (
-                                      <span className="material-symbols-outlined text-white text-sm">check</span>
-                                    )}
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                            
-                            {/* 이미지 밖 하단 텍스트 */}
-                            <div className="space-y-1">
-                              <p className="text-sm font-semibold text-text-primary-light dark:text-text-primary-dark line-clamp-2">
-                                {post.note || post.location || '기록'}
-                              </p>
-                              {post.tags && post.tags.length > 0 && (
-                                <div className="flex flex-wrap gap-1">
-                                  {post.tags.slice(0, 3).map((tag, tagIndex) => (
-                                    <span key={tagIndex} className="text-xs text-text-secondary-light dark:text-text-secondary-dark">
-                                      #{typeof tag === 'string' ? tag.replace('#', '') : tag}
-                                    </span>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+            {activeTab === 'my' && myPosts.length > 0 && (
+              <div className="space-y-6">
+                {/* 편집 버튼 행 - 날짜 헤더와 동일한 위치/스타일 */}
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-primary text-xl">photo_library</span>
+                    <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300">내 사진</h3>
                   </div>
-                ))}
-            </div>
-          )}
-
-          {/* 나의 기록 지도 탭 */}
-          {activeTab === 'map' && (
-            <div>
-              {myPosts.length === 0 ? (
-                <div className="text-center py-12">
-                  <span className="material-symbols-outlined text-6xl text-gray-300 dark:text-gray-600 mb-4 block">
-                    explore
-                  </span>
-                  <p className="text-text-secondary-light dark:text-text-secondary-dark text-base font-medium mb-2">
-                    아직 기록이 없어요
-                  </p>
-                  <p className="text-gray-400 dark:text-gray-500 text-sm mb-4">
-                    내 지역의 실시간 사진을 올리면<br />
-                    여기에 나의 기록으로 표시돼요!
-                  </p>
+                  <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700"></div>
                   <button
-                    onClick={() => navigate('/map')}
-                    className="bg-primary text-white py-3 px-6 rounded-full font-semibold hover:bg-primary/90 transition-colors shadow-lg inline-flex items-center gap-2"
+                    onClick={toggleEditMode}
+                    className={`text-sm font-semibold py-1.5 px-3 rounded-lg transition-colors ${isEditMode
+                      ? 'bg-primary text-white hover:bg-primary/90'
+                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
+                    }`}
                   >
-                    <span className="material-symbols-outlined">explore</span>
-                    지도에서 시작하기
+                    {isEditMode ? '완료' : '편집'}
                   </button>
                 </div>
-              ) : (
-                <div>
-                  {/* 날짜 필터 - 가벼운 디자인 */}
-                  {availableDates.length > 0 && (
-                    <div className="mb-3 flex items-center gap-2 flex-wrap">
-                      <button
-                        onClick={() => setSelectedDate('')}
-                        className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                          !selectedDate
-                            ? 'bg-primary text-white shadow-sm'
-                            : 'bg-white/95 backdrop-blur-md text-gray-700 border border-gray-200 hover:bg-gray-50'
-                        }`}
-                      >
-                        전체
-                      </button>
-                      {availableDates.slice(0, 7).map((date) => {
-                        const dateObj = new Date(date);
-                        const dateStr = dateObj.toLocaleDateString('ko-KR', {
-                          month: 'short',
-                          day: 'numeric',
-                        });
-                        const isSelected = selectedDate === date;
-                        return (
-                          <button
-                            key={date}
-                            onClick={() => setSelectedDate(isSelected ? '' : date)}
-                            className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                              isSelected
-                                ? 'bg-primary text-white shadow-sm'
-                                : 'bg-white/95 backdrop-blur-md text-gray-700 border border-gray-200 hover:bg-gray-50'
-                            }`}
-                          >
-                            {dateStr}
-                          </button>
-                        );
-                      })}
-                      {availableDates.length > 7 && (
-                        <button
-                          onClick={() => {
-                            const input = document.createElement('input');
-                            input.type = 'date';
-                            input.max = new Date().toISOString().split('T')[0];
-                            input.value = selectedDate || '';
-                            input.onchange = (e) => {
-                              if (e.target.value) {
-                                setSelectedDate(e.target.value);
-                              }
-                            };
-                            input.click();
-                          }}
-                          className="px-3 py-1.5 rounded-full text-xs font-semibold bg-white/95 backdrop-blur-md text-gray-700 border border-gray-200 hover:bg-gray-50 transition-all"
-                        >
-                          + 더보기
-                        </button>
-                      )}
-                    </div>
-                  )}
 
-                  {/* 지도 영역 */}
-                  <div 
-                    ref={mapRef}
-                    id="travel-map" 
-                    className="w-full h-96 rounded-xl overflow-hidden mb-4 bg-gray-100 dark:bg-gray-800"
-                    style={{ minHeight: '384px', position: 'relative' }}
+                {/* 편집 모드 + 선택 시: 가로형 휴지통 버튼 (모아서 삭제) */}
+                {isEditMode && selectedPhotos.length > 0 && (
+                  <button
+                    onClick={deleteSelectedPhotos}
+                    className="w-full py-3 px-4 rounded-xl bg-red-500 hover:bg-red-600 active:bg-red-700 text-white font-semibold flex items-center justify-center gap-2 mb-4"
                   >
-                    {mapLoading && (
-                      <div className="absolute inset-0 w-full h-full flex items-center justify-center text-gray-400 bg-gray-100 dark:bg-gray-800 z-10">
-                        <div className="text-center">
-                          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-                          <p className="text-sm">지도를 불러오는 중...</p>
+                    <span className="material-symbols-outlined text-xl">delete</span>
+                    <span>선택한 {selectedPhotos.length}장 삭제</span>
+                  </button>
+                )}
+
+                {Object.entries(
+                  myPosts.reduce((acc, post) => {
+                    const date = new Date(post.createdAt || Date.now());
+                    const dateKey = date.toLocaleDateString('ko-KR', {
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric',
+                    });
+                    if (!acc[dateKey]) acc[dateKey] = [];
+                    acc[dateKey].push(post);
+                    return acc;
+                  }, {})
+                )
+                  .sort((a, b) => new Date(b[1][0].createdAt) - new Date(a[1][0].createdAt))
+                  .map(([date, posts]) => (
+                    <div key={date}>
+                      {/* 날짜 헤더 */}
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="flex items-center gap-2">
+                          <span className="material-symbols-outlined text-primary text-xl">calendar_today</span>
+                          <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300">{date}</h3>
                         </div>
+                        <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700"></div>
+                        <span className="text-xs text-gray-500 dark:text-gray-400">{posts.length}장</span>
+                      </div>
+
+                      {/* 사진 그리드 */}
+                      <div className="grid grid-cols-2 gap-4">
+                        {posts.map((post, index) => {
+                          const likedPosts = JSON.parse(localStorage.getItem('likedPosts') || '{}');
+                          const isLiked = likedPosts[post.id] || false;
+                          const likeCount = post.likes || post.likeCount || 0;
+                          const allPosts = myPosts;
+                          const currentIndex = allPosts.findIndex(p => p.id === post.id);
+
+                          return (
+                            <div
+                              key={post.id || index}
+                              onClick={(e) => {
+                                if (isEditMode) {
+                                  togglePhotoSelection(post.id);
+                                } else {
+                                  navigate(`/post/${post.id}`, {
+                                    state: {
+                                      post: post,
+                                      allPosts: allPosts,
+                                      currentPostIndex: currentIndex >= 0 ? currentIndex : 0
+                                    }
+                                  });
+                                }
+                              }}
+                              className="cursor-pointer"
+                            >
+                              {/* 이미지 */}
+                              <div className="aspect-square relative overflow-hidden rounded-lg mb-2">
+                                {post.videos && post.videos.length > 0 ? (
+                                  <video
+                                    src={post.videos[0]}
+                                    className="w-full h-full object-cover"
+                                    muted
+                                    loop
+                                    playsInline
+                                  />
+                                ) : (
+                                  <img
+                                    src={getDisplayImageUrl(post.imageUrl || post.images?.[0] || post.image || post.thumbnail)}
+                                    alt={post.location}
+                                    className={`w-full h-full object-cover transition-all duration-300 ${isEditMode ? 'hover:opacity-70' : 'hover:scale-110'
+                                      }`}
+                                  />
+                                )}
+
+                                {/* 우측 하단 하트 아이콘 */}
+                                {!isEditMode && (
+                                  <div className="absolute bottom-2 right-2 flex items-center gap-1 bg-white/80 backdrop-blur-sm rounded-full px-2 py-1">
+                                    <span className={`material-symbols-outlined text-sm ${isLiked ? 'text-red-500 fill' : 'text-gray-600'}`}>
+                                      favorite
+                                    </span>
+                                    <span className="text-xs font-semibold text-gray-700">{likeCount}</span>
+                                  </div>
+                                )}
+
+                                {/* 편집 모드: 선택 체크박스만 (선택 후 하단 삭제 버튼으로 삭제) */}
+                                {isEditMode && (
+                                  <div
+                                    className="absolute top-2 right-2 w-7 h-7 rounded-full border-2 flex items-center justify-center transition-all cursor-pointer bg-white/90 dark:bg-gray-800/90 border-gray-300 dark:border-gray-600"
+                                    onClick={(e) => { e.stopPropagation(); togglePhotoSelection(post.id); }}
+                                    role="button"
+                                  >
+                                    {selectedPhotos.includes(post.id) ? (
+                                      <span className="material-symbols-outlined text-primary text-lg">check_circle</span>
+                                    ) : (
+                                      <span className="material-symbols-outlined text-gray-400 text-lg">radio_button_unchecked</span>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* 이미지 밖 하단 텍스트 */}
+                              <div className="space-y-1">
+                                <p className="text-sm font-semibold text-text-primary-light dark:text-text-primary-dark line-clamp-2">
+                                  {post.note || post.location || '기록'}
+                                </p>
+                                {post.tags && post.tags.length > 0 && (
+                                  <div className="flex flex-wrap gap-1">
+                                    {post.tags.slice(0, 3).map((tag, tagIndex) => (
+                                      <span key={tagIndex} className="text-xs text-text-secondary-light dark:text-text-secondary-dark">
+                                        #{typeof tag === 'string' ? tag.replace('#', '') : tag}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            )}
+
+            {/* 나의 기록 지도 탭 */}
+            {activeTab === 'map' && (
+              <div>
+                {myPosts.length === 0 ? (
+                  <div className="text-center py-12">
+                    <span className="material-symbols-outlined text-6xl text-gray-300 dark:text-gray-600 mb-4 block">
+                      add_a_photo
+                    </span>
+                    <p className="text-text-secondary-light dark:text-text-secondary-dark text-base font-medium mb-2">
+                      아직 기록이 없어요
+                    </p>
+                    <p className="text-gray-400 dark:text-gray-500 text-sm mb-4">
+                      첫 사진을 올리면<br />
+                      여기에 나의 기록으로 표시돼요!
+                    </p>
+                    <button
+                      onClick={() => navigate('/upload')}
+                      className="bg-primary text-white py-3 px-6 rounded-full font-semibold hover:bg-primary/90 transition-colors shadow-lg inline-flex items-center gap-2"
+                    >
+                      <span className="material-symbols-outlined">add_a_photo</span>
+                      첫 사진 올리기
+                    </button>
+                  </div>
+                ) : (
+                  <div>
+                    {/* 날짜 필터 - 가벼운 디자인 */}
+                    {availableDates.length > 0 && (
+                      <div className="mb-3 flex items-center gap-2 flex-wrap">
+                        <button
+                          onClick={() => setSelectedDate('')}
+                          className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${!selectedDate
+                              ? 'bg-primary text-white shadow-sm'
+                              : 'bg-white/95 backdrop-blur-md text-gray-700 border border-gray-200 hover:bg-gray-50'
+                            }`}
+                        >
+                          전체
+                        </button>
+                        {availableDates.slice(0, 7).map((date) => {
+                          const dateObj = new Date(date);
+                          const dateStr = dateObj.toLocaleDateString('ko-KR', {
+                            month: 'short',
+                            day: 'numeric',
+                          });
+                          const isSelected = selectedDate === date;
+                          return (
+                            <button
+                              key={date}
+                              onClick={() => setSelectedDate(isSelected ? '' : date)}
+                              className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${isSelected
+                                  ? 'bg-primary text-white shadow-sm'
+                                  : 'bg-white/95 backdrop-blur-md text-gray-700 border border-gray-200 hover:bg-gray-50'
+                                }`}
+                            >
+                              {dateStr}
+                            </button>
+                          );
+                        })}
+                        {availableDates.length > 7 && (
+                          <button
+                            onClick={() => {
+                              const input = document.createElement('input');
+                              input.type = 'date';
+                              input.max = new Date().toISOString().split('T')[0];
+                              input.value = selectedDate || '';
+                              input.onchange = (e) => {
+                                if (e.target.value) {
+                                  setSelectedDate(e.target.value);
+                                }
+                              };
+                              input.click();
+                            }}
+                            className="px-3 py-1.5 rounded-full text-xs font-semibold bg-white/95 backdrop-blur-md text-gray-700 border border-gray-200 hover:bg-gray-50 transition-all"
+                          >
+                            + 더보기
+                          </button>
+                        )}
                       </div>
                     )}
 
-                    {/* 여행 통계 - 지도 하단 오버레이 */}
-                    {filteredPosts.length > 0 && (() => {
-                    // 이동 거리 계산
-                    const getDistanceKm = (lat1, lon1, lat2, lon2) => {
-                      const toRad = (v) => (v * Math.PI) / 180;
-                      const R = 6371;
-                      const dLat = toRad(lat2 - lat1);
-                      const dLon = toRad(lon2 - lon1);
-                      const a =
-                        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-                        Math.cos(toRad(lat1)) *
-                          Math.cos(toRad(lat2)) *
-                          Math.sin(dLon / 2) *
-                          Math.sin(dLon / 2);
-                      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-                      return R * c;
-                    };
-
-                    const sortedPosts = [...filteredPosts].sort((a, b) => {
-                      const dateA = new Date(a.createdAt || a.timestamp || 0);
-                      const dateB = new Date(b.createdAt || b.timestamp || 0);
-                      return dateA - dateB;
-                    });
-
-                    let totalDistance = 0;
-                    for (let i = 0; i < sortedPosts.length - 1; i++) {
-                      const post1 = sortedPosts[i];
-                      const post2 = sortedPosts[i + 1];
-                      const coords1 = post1.coordinates || getCoordinatesByLocation(post1.detailedLocation || post1.location);
-                      const coords2 = post2.coordinates || getCoordinatesByLocation(post2.detailedLocation || post2.location);
-                      
-                      if (coords1 && coords2 && coords1.lat && coords1.lng && coords2.lat && coords2.lng) {
-                        totalDistance += getDistanceKm(coords1.lat, coords1.lng, coords2.lat, coords2.lng);
-                      }
-                    }
-
-                    // 방문한 곳 목록 (중복 제거)
-                    const visitedPlaces = [...new Set(
-                      filteredPosts
-                        .filter(post => post.location || post.detailedLocation)
-                        .map(post => post.location || post.detailedLocation)
-                    )];
-
-                      return (
-                        <div className="absolute bottom-3 left-3 right-3 z-20 flex items-center justify-center gap-3">
-                          <div className="px-3 py-1.5 bg-white/95 backdrop-blur-md rounded-full border border-white/50 shadow-sm flex items-center gap-1.5">
-                            <span className="material-symbols-outlined text-primary text-sm">straighten</span>
-                            <span className="text-xs font-semibold text-gray-700">
-                              {totalDistance.toFixed(1)}km
-                            </span>
-                          </div>
-                          <div className="px-3 py-1.5 bg-white/95 backdrop-blur-md rounded-full border border-white/50 shadow-sm flex items-center gap-1.5">
-                            <span className="material-symbols-outlined text-primary text-sm">place</span>
-                            <span className="text-xs font-semibold text-gray-700">
-                              {visitedPlaces.length}곳
-                            </span>
+                    {/* 지도 영역 */}
+                    <div
+                      ref={mapRef}
+                      id="travel-map"
+                      className="w-full h-96 rounded-xl overflow-hidden mb-4 bg-gray-100 dark:bg-gray-800"
+                      style={{ minHeight: '384px', position: 'relative' }}
+                    >
+                      {mapLoading && (
+                        <div className="absolute inset-0 w-full h-full flex items-center justify-center text-gray-400 bg-gray-100 dark:bg-gray-800 z-10">
+                          <div className="text-center">
+                            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+                            <p className="text-sm">지도를 불러오는 중...</p>
                           </div>
                         </div>
-                      );
-                    })()}
-                  </div>
+                      )}
 
-                  {/* 지역별 사진 수 */}
-                  <div className="space-y-2">
-                    <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">📍 지역</h3>
-                    {Object.entries(
-                      filteredPosts.reduce((acc, post) => {
-                        const location = post.location || '기타';
-                        acc[location] = (acc[location] || 0) + 1;
-                        return acc;
-                      }, {})
-                    )
-                      .sort((a, b) => b[1] - a[1])
-                      .map(([location, count]) => (
+                      {/* 여행 통계 - 지도 하단 오버레이 */}
+                      {filteredPosts.length > 0 && (() => {
+                        // 이동 거리 계산
+                        const getDistanceKm = (lat1, lon1, lat2, lon2) => {
+                          const toRad = (v) => (v * Math.PI) / 180;
+                          const R = 6371;
+                          const dLat = toRad(lat2 - lat1);
+                          const dLon = toRad(lon2 - lon1);
+                          const a =
+                            Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                            Math.cos(toRad(lat1)) *
+                            Math.cos(toRad(lat2)) *
+                            Math.sin(dLon / 2) *
+                            Math.sin(dLon / 2);
+                          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+                          return R * c;
+                        };
+
+                        const sortedPosts = [...filteredPosts].sort((a, b) => {
+                          const dateA = new Date(a.createdAt || a.timestamp || 0);
+                          const dateB = new Date(b.createdAt || b.timestamp || 0);
+                          return dateA - dateB;
+                        });
+
+                        let totalDistance = 0;
+                        for (let i = 0; i < sortedPosts.length - 1; i++) {
+                          const coords1 = getPostCoordinates(sortedPosts[i]);
+                          const coords2 = getPostCoordinates(sortedPosts[i + 1]);
+                          if (coords1 && coords2) {
+                            totalDistance += getDistanceKm(coords1.lat, coords1.lng, coords2.lat, coords2.lng);
+                          }
+                        }
+
+                        // 방문한 곳 목록 (중복 제거)
+                        const visitedPlaces = [...new Set(
+                          filteredPosts
+                            .filter(post => post.location || post.detailedLocation)
+                            .map(post => post.location || post.detailedLocation)
+                        )];
+
+                        return (
+                          <div className="absolute bottom-3 left-3 right-3 z-20 flex items-center justify-center gap-3">
+                            <div className="px-3 py-1.5 bg-white/95 backdrop-blur-md rounded-full border border-white/50 shadow-sm flex items-center gap-1.5">
+                              <span className="material-symbols-outlined text-primary text-sm">straighten</span>
+                              <span className="text-xs font-semibold text-gray-700">
+                                {totalDistance.toFixed(1)}km
+                              </span>
+                            </div>
+                            <div className="px-3 py-1.5 bg-white/95 backdrop-blur-md rounded-full border border-white/50 shadow-sm flex items-center gap-1.5">
+                              <span className="material-symbols-outlined text-primary text-sm">place</span>
+                              <span className="text-xs font-semibold text-gray-700">
+                                {visitedPlaces.length}곳
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+
+                    {/* 지역별 사진 수 */}
+                    <div className="space-y-2">
+                      <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">📍 지역</h3>
+                      {Object.entries(
+                        filteredPosts.reduce((acc, post) => {
+                          const location = post.location || '기타';
+                          acc[location] = (acc[location] || 0) + 1;
+                          return acc;
+                        }, {})
+                      )
+                        .sort((a, b) => b[1] - a[1])
+                        .map(([location, count]) => (
+                          <div
+                            key={location}
+                            className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer"
+                            onClick={() => {
+                              setActiveTab('my');
+                            }}
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="material-symbols-outlined text-primary text-xl">location_on</span>
+                              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{location}</span>
+                            </div>
+                            <span className="text-xs font-semibold text-primary bg-primary/10 px-2 py-1 rounded-full">
+                              {count}장
+                            </span>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 저장된 경로 탭 */}
+            {activeTab === 'savedRoutes' && (() => {
+              const deleteRoute = (routeId) => {
+                if (!confirm('이 경로를 삭제하시겠습니까?')) return;
+                const updated = savedRoutes.filter((r) => r.id !== routeId);
+                localStorage.setItem('savedRoutes', JSON.stringify(updated));
+                setSavedRoutes(updated);
+                if (updated.length === 0) {
+                  setSelectedSavedRoute(null);
+                } else if (!updated.some((r) => r.id === selectedSavedRoute?.id)) {
+                  setSelectedSavedRoute(updated[0]);
+                }
+              };
+              return (
+                <div className="space-y-4">
+                  {savedRoutes.length === 0 ? (
+                    <div className="text-center py-12">
+                      <span className="material-symbols-outlined text-6xl text-gray-300 dark:text-gray-600 mb-4 block">route</span>
+                      <p className="text-text-secondary-light dark:text-text-secondary-dark text-base font-medium mb-2">저장된 경로가 없어요</p>
+                      <p className="text-gray-400 dark:text-gray-500 text-sm mb-4">지도에서 경로를 만들고 저장해보세요!</p>
+                      <button
+                        onClick={() => navigate('/map')}
+                        className="bg-primary text-white py-3 px-6 rounded-full font-semibold hover:bg-primary/90 transition-colors shadow-lg inline-flex items-center gap-2"
+                      >
+                        <span className="material-symbols-outlined">map</span>
+                        지도에서 경로 만들기
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      {/* 상단 경로 미리보기 지도 */}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                            🛤️ 저장된 경로 미리보기
+                          </h3>
+                          {selectedSavedRoute && (
+                            <span className="text-xs text-gray-500 dark:text-gray-400">
+                              {selectedSavedRoute.pins?.length || 0}개 장소
+                            </span>
+                          )}
+                        </div>
                         <div
-                          key={location}
-                          className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer"
-                          onClick={() => {
-                            setActiveTab('my');
-                          }}
-                        >
-                          <div className="flex items-center gap-2">
-                            <span className="material-symbols-outlined text-primary text-xl">location_on</span>
-                            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{location}</span>
-                          </div>
-                          <span className="text-xs font-semibold text-primary bg-primary/10 px-2 py-1 rounded-full">
-                            {count}장
-                          </span>
-                        </div>
-                      ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
+                          ref={savedRoutesMapRef}
+                          className="w-full h-64 rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-800"
+                        />
+                      </div>
 
-        </div>
+                      {/* 경로 리스트 */}
+                      {savedRoutes.map((route) => {
+                        const isSelected = selectedSavedRoute?.id === route.id;
+                        return (
+                          <button
+                            key={route.id}
+                            type="button"
+                            onClick={() => setSelectedSavedRoute(route)}
+                            className={`w-full flex items-center gap-4 p-4 rounded-xl text-left transition-colors ${
+                              isSelected
+                                ? 'bg-primary/10 border border-primary/60'
+                                : 'bg-gray-50 dark:bg-gray-800 border border-transparent hover:bg-gray-100 dark:hover:bg-gray-700'
+                            }`}
+                          >
+                            {route.pins?.[0]?.image ? (
+                              <img
+                                src={getDisplayImageUrl(route.pins[0].image)}
+                                alt=""
+                                className="w-16 h-16 rounded-lg object-cover flex-shrink-0"
+                              />
+                            ) : (
+                              <div className="w-16 h-16 rounded-lg bg-gray-200 dark:bg-gray-700 flex items-center justify-center flex-shrink-0">
+                                <span className="material-symbols-outlined text-3xl text-gray-400">place</span>
+                              </div>
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">
+                                {route.pins?.length || 0}개 장소 경로
+                              </p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                                {route.pins?.map((p) => p.location).filter(Boolean).join(' → ') || '저장된 경로'}
+                              </p>
+                            </div>
+                            <div className="flex flex-col gap-2 flex-shrink-0">
+                              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-semibold bg-white/80 dark:bg-gray-900/60 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-700">
+                                <span className="material-symbols-outlined text-xs">visibility</span>
+                                이 경로 보기
+                              </span>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  deleteRoute(route.id);
+                                }}
+                                className="px-3 py-1.5 rounded-lg bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-xs font-semibold hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors"
+                              >
+                                삭제
+                              </button>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </>
+                  )}
+                </div>
+              );
+            })()}
+
+          </div>
         </div>
 
         {/* 대표 뱃지 선택 모달 */}
         {showBadgeSelector && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div className="w-full max-w-md bg-white dark:bg-gray-900 rounded-2xl shadow-2xl">
-            {/* 헤더 */}
-            <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-800">
-              <h2 className="text-lg font-bold">🏆 대표 뱃지 선택</h2>
-              <button 
-                onClick={() => setShowBadgeSelector(false)}
-                className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
-              >
-                <span className="material-symbols-outlined">close</span>
-              </button>
-            </div>
-
-            {/* 뱃지 리스트 */}
-            <div className="p-4 max-h-[60vh] overflow-y-auto">
-              {representativeBadge && (
+          <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+            <div className="w-full max-w-md bg-white dark:bg-gray-900 rounded-2xl shadow-2xl">
+              {/* 헤더 */}
+              <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-800">
+                <h2 className="text-lg font-bold">🏆 대표 뱃지 선택</h2>
                 <button
-                  onClick={removeRepresentativeBadge}
-                  className="w-full mb-3 p-3 bg-red-50 dark:bg-red-900/20 border-2 border-red-300 dark:border-red-800 rounded-xl hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+                  onClick={() => setShowBadgeSelector(false)}
+                  className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
                 >
-                  <div className="flex items-center justify-center gap-2">
-                    <span className="material-symbols-outlined text-red-500">close</span>
-                    <span className="text-red-500 font-semibold text-sm">대표 뱃지 제거</span>
-                  </div>
+                  <span className="material-symbols-outlined">close</span>
                 </button>
-              )}
+              </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                {earnedBadges.map((badge, index) => (
+              {/* 뱃지 리스트 */}
+              <div className="p-4 max-h-[60vh] overflow-y-auto">
+                {representativeBadge && (
                   <button
-                    key={index}
-                    onClick={() => selectRepresentativeBadge(badge)}
-                    className={`p-4 rounded-xl border-2 transition-all ${
-                      representativeBadge?.name === badge.name
-                        ? 'bg-gradient-to-br from-primary/20 to-accent/20 border-primary shadow-lg'
-                        : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:border-primary/50'
-                    }`}
+                    onClick={removeRepresentativeBadge}
+                    className="w-full mb-3 p-3 bg-red-50 dark:bg-red-900/20 border-2 border-red-300 dark:border-red-800 rounded-xl hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
                   >
-                    <div className="flex flex-col items-center gap-2">
-                      <span className="text-5xl leading-none" role="img" aria-label={getBadgeDisplayName(badge)}>
-                        {badge.icon || '🏆'}
-                      </span>
-                      <p className="text-sm font-bold text-center">{getBadgeDisplayName(badge)}</p>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                        badge.difficulty === '상' ? 'bg-primary-dark text-white' :
-                        badge.difficulty === '중' ? 'bg-blue-500 text-white' :
-                        'bg-green-500 text-white'
-                      }`}>
-                        {badge.difficulty}
-                      </span>
+                    <div className="flex items-center justify-center gap-2">
+                      <span className="material-symbols-outlined text-red-500">close</span>
+                      <span className="text-red-500 font-semibold text-sm">대표 뱃지 제거</span>
                     </div>
                   </button>
-                ))}
+                )}
+
+                <div className="grid grid-cols-2 gap-3">
+                  {earnedBadges.map((badge, index) => (
+                    <button
+                      key={index}
+                      onClick={() => selectRepresentativeBadge(badge)}
+                      className={`p-4 rounded-xl border-2 transition-all ${representativeBadge?.name === badge.name
+                          ? 'bg-gradient-to-br from-primary/20 to-accent/20 border-primary shadow-lg'
+                          : 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:border-primary/50'
+                        }`}
+                    >
+                      <div className="flex flex-col items-center gap-2">
+                        <span className="text-5xl leading-none" role="img" aria-label={getBadgeDisplayName(badge)}>
+                          {badge.icon || '🏆'}
+                        </span>
+                        <p className="text-sm font-bold text-center">{getBadgeDisplayName(badge)}</p>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${badge.difficulty === '상' ? 'bg-primary-dark text-white' :
+                            badge.difficulty === '중' ? 'bg-blue-500 text-white' :
+                              'bg-green-500 text-white'
+                          }`}>
+                          {badge.difficulty}
+                        </span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
-        </div>
         )}
 
         {/* 팔로워 / 팔로잉 목록 모달 - 핸드폰 화면사이즈에 맞춤 */}
         {showFollowListModal && (
           <div
-            className="fixed inset-0 z-[100] flex flex-col bg-white dark:bg-gray-900 w-full max-w-[414px] mx-auto min-h-[100dvh] pt-[env(safe-area-inset-top,0px)] pb-[env(safe-area-inset-bottom,0px)]"
+            className="absolute inset-0 z-[100] flex flex-col bg-white dark:bg-gray-900 w-full max-w-[460px] mx-auto min-h-[100dvh] pt-[env(safe-area-inset-top,0px)] pb-[env(safe-area-inset-bottom,0px)]"
             onClick={() => setShowFollowListModal(false)}
           >
             <div
@@ -1636,11 +1980,10 @@ const ProfileScreen = () => {
                                   follow(uid);
                                 }
                               }}
-                              className={`shrink-0 py-2 px-4 rounded-xl text-sm font-semibold transition-colors ${
-                                isFollowing(null, uid)
+                              className={`shrink-0 py-2 px-4 rounded-xl text-sm font-semibold transition-colors ${isFollowing(null, uid)
                                   ? 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700 hover:bg-gray-200 dark:hover:bg-gray-700'
                                   : 'bg-primary text-white hover:bg-primary/90'
-                              }`}
+                                }`}
                             >
                               {isFollowing(null, uid) ? '팔로잉' : '팔로우'}
                             </button>

@@ -8,13 +8,13 @@ const postSchema = new mongoose.Schema({
     required: true,
     index: true
   },
-  
+
   // 이미지
   images: [{
     type: String,
     required: true
   }],
-  
+
   // 위치 정보
   location: {
     type: String,
@@ -44,7 +44,7 @@ const postSchema = new mongoose.Schema({
       index: '2dsphere'
     }
   },
-  
+
   // 태그 & 카테고리
   tags: [{
     type: String,
@@ -60,7 +60,7 @@ const postSchema = new mongoose.Schema({
     type: String,
     default: '일반'
   },
-  
+
   // AI 분류 정보
   aiLabels: [{
     name: String,
@@ -70,14 +70,14 @@ const postSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
-  
+
   // 본문
   note: {
     type: String,
     maxlength: 500,
     default: ''
   },
-  
+
   // 시간 정보
   timeLabel: {
     type: String,
@@ -88,7 +88,7 @@ const postSchema = new mongoose.Schema({
     type: Date,
     default: Date.now
   },
-  
+
   // 상호작용
   likes: {
     type: Number,
@@ -114,7 +114,7 @@ const postSchema = new mongoose.Schema({
       default: Date.now
     }
   }],
-  
+
   // 게시물 상태
   isPublic: {
     type: Boolean,
@@ -128,13 +128,13 @@ const postSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
-  
+
   // 조회수
   views: {
     type: Number,
     default: 0
   },
-  
+
   // 신고/차단
   reports: [{
     user: {
@@ -166,12 +166,12 @@ postSchema.index({ createdAt: -1 }); // 최신순 정렬용
 postSchema.index({ 'coordinates': '2dsphere' }); // 지리적 쿼리용
 
 // 가상 필드: 댓글 수
-postSchema.virtual('commentCount').get(function() {
+postSchema.virtual('commentCount').get(function () {
   return this.comments ? this.comments.length : 0;
 });
 
 // 좋아요 추가 메서드
-postSchema.methods.addLike = async function(userId) {
+postSchema.methods.addLike = async function (userId) {
   if (!this.likedBy.includes(userId)) {
     this.likes += 1;
     this.likedBy.push(userId);
@@ -182,7 +182,7 @@ postSchema.methods.addLike = async function(userId) {
 };
 
 // 좋아요 취소 메서드
-postSchema.methods.removeLike = async function(userId) {
+postSchema.methods.removeLike = async function (userId) {
   const index = this.likedBy.indexOf(userId);
   if (index > -1) {
     this.likes -= 1;
@@ -194,7 +194,7 @@ postSchema.methods.removeLike = async function(userId) {
 };
 
 // 댓글 추가 메서드
-postSchema.methods.addComment = async function(userId, text) {
+postSchema.methods.addComment = async function (userId, text) {
   this.comments.push({
     user: userId,
     text: text
@@ -204,14 +204,14 @@ postSchema.methods.addComment = async function(userId, text) {
 };
 
 // 조회수 증가 메서드
-postSchema.methods.incrementViews = async function() {
+postSchema.methods.incrementViews = async function () {
   this.views += 1;
   await this.save();
   return this.views;
 };
 
 // 게시물 작성 후 사용자 통계 업데이트
-postSchema.post('save', async function(doc) {
+postSchema.post('save', async function (doc) {
   if (doc.isNew) {
     const User = mongoose.model('User');
     await User.findByIdAndUpdate(doc.user, {
@@ -222,7 +222,7 @@ postSchema.post('save', async function(doc) {
 });
 
 // 게시물 삭제 시 사용자 통계 업데이트
-postSchema.pre('remove', async function(next) {
+postSchema.pre('remove', async function (next) {
   const User = mongoose.model('User');
   await User.findByIdAndUpdate(this.user, {
     $inc: { 'stats.totalPosts': -1 }

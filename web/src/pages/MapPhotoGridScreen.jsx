@@ -188,7 +188,7 @@ const MapPhotoGridScreen = () => {
                 }}>
                   <p style={{
                     color: 'white',
-                    fontSize: '11px',
+                    fontSize: '12px',
                     fontWeight: '600',
                     margin: 0,
                     overflow: 'hidden',

@@ -10,340 +10,278 @@ import {
   Image,
   Dimensions,
   Alert,
+  Keyboard,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS, SPACING, TYPOGRAPHY } from '../constants/styles';
-import { getRegionDefaultImage, getRegionDisplayImage } from '../utils/regionDefaultImages';
-import { filterRecentPosts } from '../utils/timeUtils';
+import { getRegionDefaultImage } from '../utils/regionDefaultImages';
+import { filterRecentPosts, getTimeAgo } from '../utils/timeUtils';
+import { getCombinedPosts } from '../utils/mockData';
 import { ScreenLayout, ScreenContent, ScreenHeader, ScreenBody } from '../components/ScreenLayout';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
+// 한글 초성 추출 함수
+const getChosung = (str) => {
+  const CHOSUNG = ['ㄱ', 'ㄲ', 'ㄴ', 'ㄷ', 'ㄸ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅃ', 'ㅅ', 'ㅆ', 'ㅇ', 'ㅈ', 'ㅉ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ'];
+  let result = '';
+  for (let i = 0; i < str.length; i++) {
+    const code = str.charCodeAt(i) - 44032;
+    if (code > -1 && code < 11172) {
+      result += CHOSUNG[Math.floor(code / 588)];
+    } else {
+      result += str.charAt(i);
+    }
+  }
+  return result;
+};
+
+// 초성 매칭 함수
+const matchChosung = (text, search) => {
+  const textChosung = getChosung(text);
+  const searchChosung = getChosung(search);
+  return textChosung.includes(searchChosung) || textChosung.includes(search);
+};
+
+const DEFAULT_HASHTAGS = ['바다', '힐링', '맛집', '자연', '꽃', '일출', '카페', '여행', '휴양', '등산', '야경', '축제', '해변', '산', '전통', '한옥', '감귤', '벚꽃', '단풍', '도시'];
+
 const SearchScreen = () => {
   const navigation = useNavigation();
+  const route = useRoute();
   const [searchQuery, setSearchQuery] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [filteredRegions, setFilteredRegions] = useState([]);
+  const [filteredHashtags, setFilteredHashtags] = useState([]);
   const [recentSearches, setRecentSearches] = useState([]);
-  const [regionRepresentativePhotos, setRegionRepresentativePhotos] = useState({});
+  const [allPosts, setAllPosts] = useState([]);
+  const [selectedHashtag, setSelectedHashtag] = useState(null);
+  const [searchCount, setSearchCount] = useState(0);
+  const [weatherData, setWeatherData] = useState({}); // 지역별 날씨 정보
 
   // 추천 지역 데이터 (메모이제이션)
   const recommendedRegions = useMemo(() => [
-    { id: 1, name: '서울', image: getRegionDefaultImage('서울'), keywords: ['도시', '쇼핑', '명동', '강남', '홍대', '경복궁', '궁궐', '한강', '야경', '카페', '맛집'] },
-    { id: 2, name: '부산', image: getRegionDefaultImage('부산'), keywords: ['바다', '해변', '해운대', '광안리', '야경', '횟집', '수산시장', '자갈치', '항구', '서핑'] },
-    { id: 3, name: '대구', image: getRegionDefaultImage('대구'), keywords: ['도시', '근대', '골목', '김광석길', '동성로', '쇼핑', '약령시', '팔공산', '치맥', '맥주'] },
-    { id: 4, name: '인천', image: getRegionDefaultImage('인천'), keywords: ['차이나타운', '짜장면', '월미도', '야경', '인천공항', '바다', '항구', '송도', '근대'] },
-    { id: 5, name: '광주', image: getRegionDefaultImage('광주'), keywords: ['도시', '무등산', '양동시장', '충장로', '예술', '문화', '민주화', '역사'] },
-    { id: 6, name: '대전', image: getRegionDefaultImage('대전'), keywords: ['도시', '과학', '엑스포', '성심당', '빵', '한밭수목원', '대청호', '계족산'] },
-    { id: 7, name: '울산', image: getRegionDefaultImage('울산'), keywords: ['공업', '항구', '대왕암공원', '간절곶', '일출', '고래', '울산대교', '태화강'] },
-    { id: 8, name: '세종', image: getRegionDefaultImage('세종'), keywords: ['행정', '정부', '신도시', '계획도시', '공원', '호수공원', '도담동'] },
-    { id: 9, name: '수원', image: getRegionDefaultImage('수원'), keywords: ['화성', '성곽', '수원갈비', '행궁', '화성행궁', '전통', '맛집'] },
-    { id: 10, name: '용인', image: getRegionDefaultImage('용인'), keywords: ['에버랜드', '놀이공원', '민속촌', '한국민속촌', '가족'] },
-    { id: 11, name: '성남', image: getRegionDefaultImage('성남'), keywords: ['도시', '판교', 'IT', '테크노', '카페'] },
-    { id: 12, name: '고양', image: getRegionDefaultImage('고양'), keywords: ['일산', '호수공원', '킨텍스', '전시', '꽃축제'] },
-    { id: 13, name: '부천', image: getRegionDefaultImage('부천'), keywords: ['도시', '만화박물관', '애니메이션', '영화'] },
-    { id: 14, name: '안양', image: getRegionDefaultImage('안양'), keywords: ['도시', '안양천', '예술공원'] },
-    { id: 15, name: '파주', image: getRegionDefaultImage('파주'), keywords: ['헤이리', '출판단지', '임진각', 'DMZ', '예술', '북카페'] },
-    { id: 16, name: '평택', image: getRegionDefaultImage('평택'), keywords: ['항구', '미군기지', '송탄'] },
-    { id: 17, name: '화성', image: getRegionDefaultImage('화성'), keywords: ['융건릉', '용주사', '제부도', '바다'] },
-    { id: 18, name: '김포', image: getRegionDefaultImage('김포'), keywords: ['공항', '김포공항', '한강', '애기봉'] },
-    { id: 19, name: '광명', image: getRegionDefaultImage('광명'), keywords: ['동굴', '광명동굴', 'KTX'] },
-    { id: 20, name: '이천', image: getRegionDefaultImage('이천'), keywords: ['도자기', '쌀', '온천', '세라피아'] },
-    { id: 21, name: '양평', image: getRegionDefaultImage('양평'), keywords: ['자연', '두물머리', '세미원', '힐링', '강', '수목원'] },
-    { id: 22, name: '가평', image: getRegionDefaultImage('가평'), keywords: ['남이섬', '쁘띠프랑스', '아침고요수목원', '자연', '힐링', '계곡'] },
-    { id: 23, name: '포천', image: getRegionDefaultImage('포천'), keywords: ['아트밸리', '허브아일랜드', '산정호수', '자연'] },
-    { id: 24, name: '춘천', image: getRegionDefaultImage('춘천'), keywords: ['닭갈비', '호수', '남이섬', '소양강', '스카이워크', '맛집'] },
-    { id: 25, name: '강릉', image: getRegionDefaultImage('강릉'), keywords: ['바다', '커피', '카페', '경포대', '정동진', '일출', '해변', '순두부'] },
-    { id: 26, name: '속초', image: getRegionDefaultImage('속초'), keywords: ['바다', '설악산', '산', '등산', '오징어', '수산시장', '아바이마을', '회'] },
-    { id: 27, name: '원주', image: getRegionDefaultImage('원주'), keywords: ['치악산', '등산', '산', '자연'] },
-    { id: 28, name: '동해', image: getRegionDefaultImage('동해'), keywords: ['바다', '해변', '추암', '촛대바위', '일출'] },
-    { id: 29, name: '태백', image: getRegionDefaultImage('태백'), keywords: ['산', '탄광', '눈꽃축제', '겨울', '스키'] },
-    { id: 30, name: '삼척', image: getRegionDefaultImage('삼척'), keywords: ['바다', '동굴', '환선굴', '대금굴', '해변'] },
-    { id: 31, name: '평창', image: getRegionDefaultImage('평창'), keywords: ['스키', '겨울', '올림픽', '산', '용평'] },
-    { id: 32, name: '양양', image: getRegionDefaultImage('양양'), keywords: ['바다', '서핑', '해변', '낙산사', '하조대'] },
-    { id: 33, name: '청주', image: getRegionDefaultImage('청주'), keywords: ['도시', '직지', '인쇄', '상당산성', '문화'] },
-    { id: 34, name: '충주', image: getRegionDefaultImage('충주'), keywords: ['호수', '충주호', '탄금대', '사과', '자연'] },
-    { id: 35, name: '제천', image: getRegionDefaultImage('제천'), keywords: ['약초', '한방', '청풍호', '의림지', '자연'] },
-    { id: 36, name: '천안', image: getRegionDefaultImage('천안'), keywords: ['호두과자', '독립기념관', '역사', '맛집'] },
-    { id: 37, name: '아산', image: getRegionDefaultImage('아산'), keywords: ['온양온천', '온천', '현충사', '이순신', '역사'] },
-    { id: 38, name: '공주', image: getRegionDefaultImage('공주'), keywords: ['역사', '백제', '공산성', '무령왕릉', '전통', '문화재'] },
-    { id: 39, name: '보령', image: getRegionDefaultImage('보령'), keywords: ['바다', '머드', '축제', '해수욕장', '대천'] },
-    { id: 40, name: '서산', image: getRegionDefaultImage('서산'), keywords: ['바다', '간월암', '마애삼존불', '석불', '역사'] },
-    { id: 41, name: '당진', image: getRegionDefaultImage('당진'), keywords: ['바다', '왜목마을', '일출', '일몰'] },
-    { id: 42, name: '부여', image: getRegionDefaultImage('부여'), keywords: ['역사', '백제', '궁남지', '정림사지', '문화재', '전통'] },
-    { id: 43, name: '전주', image: getRegionDefaultImage('전주'), keywords: ['한옥', '전통', '한옥마을', '비빔밥', '콩나물국밥', '맛집', '한복'] },
-    { id: 44, name: '군산', image: getRegionDefaultImage('군산'), keywords: ['근대', '역사', '이성당', '빵', '항구', '경암동'] },
-    { id: 45, name: '익산', image: getRegionDefaultImage('익산'), keywords: ['역사', '백제', '미륵사지', '보석', '문화재'] },
-    { id: 46, name: '정읍', image: getRegionDefaultImage('정읍'), keywords: ['내장산', '단풍', '산', '등산', '자연'] },
-    { id: 47, name: '남원', image: getRegionDefaultImage('남원'), keywords: ['춘향', '전통', '광한루', '지리산', '산'] },
-    { id: 48, name: '목포', image: getRegionDefaultImage('목포'), keywords: ['바다', '항구', '유달산', '갓바위', '회', '해산물'] },
-    { id: 49, name: '여수', image: getRegionDefaultImage('여수'), keywords: ['바다', '밤바다', '야경', '낭만', '케이블카', '오동도', '향일암'] },
-    { id: 50, name: '순천', image: getRegionDefaultImage('순천'), keywords: ['순천만', '정원', '갈대', '습지', '자연', '생태'] },
-    { id: 51, name: '광양', image: getRegionDefaultImage('광양'), keywords: ['매화', '꽃', '섬진강', '불고기', '맛집'] },
-    { id: 52, name: '담양', image: getRegionDefaultImage('담양'), keywords: ['대나무', '죽녹원', '메타세쿼이아', '자연', '힐링'] },
-    { id: 53, name: '보성', image: getRegionDefaultImage('보성'), keywords: ['녹차', '차밭', '자연', '힐링', '드라이브'] },
-    { id: 54, name: '포항', image: getRegionDefaultImage('포항'), keywords: ['바다', '호미곶', '일출', '과메기', '회', '항구'] },
-    { id: 55, name: '경주', image: getRegionDefaultImage('경주'), keywords: ['역사', '문화재', '불국사', '석굴암', '첨성대', '신라', '전통'] },
-    { id: 56, name: '구미', image: getRegionDefaultImage('구미'), keywords: ['공업', 'IT', '도시'] },
-    { id: 57, name: '안동', image: getRegionDefaultImage('안동'), keywords: ['하회마을', '전통', '한옥', '탈춤', '간고등어', '역사'] },
-    { id: 58, name: '김천', image: getRegionDefaultImage('김천'), keywords: ['직지사', '산', '사찰', '포도'] },
-    { id: 59, name: '영주', image: getRegionDefaultImage('영주'), keywords: ['부석사', '소수서원', '사찰', '역사', '전통'] },
-    { id: 60, name: '창원', image: getRegionDefaultImage('창원'), keywords: ['도시', '공업', '진해', '벚꽃', '축제'] },
-    { id: 61, name: '진주', image: getRegionDefaultImage('진주'), keywords: ['진주성', '역사', '비빔밥', '맛집', '남강'] },
-    { id: 62, name: '통영', image: getRegionDefaultImage('통영'), keywords: ['바다', '케이블카', '한려수도', '회', '해산물', '섬'] },
-    { id: 63, name: '사천', image: getRegionDefaultImage('사천'), keywords: ['바다', '해변', '항공', '공항'] },
-    { id: 64, name: '김해', image: getRegionDefaultImage('김해'), keywords: ['가야', '역사', '공항', '김해공항', '수로왕릉'] },
-    { id: 65, name: '거제', image: getRegionDefaultImage('거제'), keywords: ['바다', '섬', '해금강', '외도', '조선소'] },
-    { id: 66, name: '양산', image: getRegionDefaultImage('양산'), keywords: ['통도사', '사찰', '신불산', '산', '자연'] },
-    { id: 67, name: '제주', image: getRegionDefaultImage('제주'), keywords: ['섬', '바다', '한라산', '오름', '돌하르방', '흑돼지', '감귤', '휴양', '힐링'] },
-    { id: 68, name: '서귀포', image: getRegionDefaultImage('서귀포'), keywords: ['바다', '섬', '폭포', '정방폭포', '천지연', '감귤', '자연'] }
+    { id: 1, name: '서울', keywords: ['도시', '쇼핑', '명동', '강남', '홍대', '경복궁', '궁궐', '한강', '야경', '카페', '맛집'] },
+    { id: 2, name: '부산', keywords: ['바다', '해변', '해운대', '광안리', '야경', '횟집', '수산시장', '자갈치', '항구', '서핑'] },
+    { id: 3, name: '대구', keywords: ['도시', '근대', '골목', '김광석길', '동성로', '쇼핑', '약령시', '팔공산', '치맥', '맥주'] },
+    { id: 4, name: '인천', keywords: ['차이나타운', '짜장면', '월미도', '야경', '인천공항', '바다', '항구', '송도', '근대'] },
+    { id: 5, name: '광주', keywords: ['도시', '무등산', '양동시장', '충장로', '예술', '문화', '민주화', '역사'] },
+    { id: 6, name: '대전', keywords: ['도시', '과학', '엑스포', '성심당', '빵', '한밭수목원', '대청호', '계족산'] },
+    { id: 7, name: '울산', keywords: ['공업', '항구', '대왕암공원', '간절곶', '일출', '고래', '울산대교', '태화강'] },
+    { id: 8, name: '세종', keywords: ['행정', '정부', '신도시', '계획도시', '공원', '호수공원', '도담동'] },
+    { id: 9, name: '수원', keywords: ['화성', '성곽', '수원갈비', '행궁', '화성행궁', '전통', '맛집'] },
+    { id: 10, name: '용인', keywords: ['에버랜드', '놀이공원', '민속촌', '한국민속촌', '가족'] },
+    { id: 11, name: '성남', keywords: ['도시', '판교', 'IT', '테크노', '카페'] },
+    { id: 12, name: '고양', keywords: ['일산', '호수공원', '킨텍스', '전시', '꽃축제'] },
+    { id: 13, name: '부천', keywords: ['도시', '만화박물관', '애니메이션', '영화'] },
+    { id: 14, name: '안양', keywords: ['도시', '안양천', '예술공원'] },
+    { id: 15, name: '파주', keywords: ['헤이리', '출판단지', '임진각', 'DMZ', '예술', '북카페'] },
+    { id: 16, name: '평택', keywords: ['항구', '미군기지', '송탄'] },
+    { id: 17, name: '화성', keywords: ['융건릉', '용주사', '제부도', '바다'] },
+    { id: 18, name: '김포', keywords: ['공항', '김포공항', '한강', '애기봉'] },
+    { id: 19, name: '광명', keywords: ['동굴', '광명동굴', 'KTX'] },
+    { id: 20, name: '이천', keywords: ['도자기', '쌀', '온천', '세라피아'] },
+    { id: 21, name: '양평', keywords: ['자연', '두물머리', '세미원', '힐링', '강', '수목원'] },
+    { id: 22, name: '가평', keywords: ['남이섬', '쁘띠프랑스', '아침고요수목원', '자연', '힐링', '계곡'] },
+    { id: 23, name: '포천', keywords: ['아트밸리', '허브아일랜드', '산정호수', '자연'] },
+    { id: 24, name: '춘천', keywords: ['닭갈비', '호수', '남이섬', '소양강', '스카이워크', '맛집'] },
+    { id: 25, name: '강릉', keywords: ['바다', '커피', '카페', '경포대', '정동진', '일출', '해변', '순두부'] },
+    { id: 26, name: '속초', keywords: ['바다', '설악산', '산', '등산', '오징어', '수산시장', '아바이마을', '회'] },
+    { id: 27, name: '원주', keywords: ['치악산', '등산', '산', '자연'] },
+    { id: 28, name: '동해', keywords: ['바다', '해변', '추암', '촛대바위', '일출'] },
+    { id: 29, name: '태백', keywords: ['산', '탄광', '눈꽃축제', '겨울', '스키'] },
+    { id: 30, name: '삼척', keywords: ['바다', '동굴', '환선굴', '대금굴', '해변'] },
+    { id: 31, name: '평창', keywords: ['스키', '겨울', '올림픽', '산', '용평'] },
+    { id: 32, name: '양양', keywords: ['바다', '서핑', '해변', '낙산사', '하조대'] },
+    { id: 33, name: '제주', keywords: ['섬', '바다', '한라산', '오름', '돌하르방', '흑돼지', '감귤', '휴양', '힐링'] },
+    { id: 34, name: '서귀포', keywords: ['바다', '섬', '폭포', '정방폭포', '천지연', '감귤', '자연'] }
   ], []);
 
-  // 계절별 추천 지역 (사진이 많은 순 + 계절 가중치)
-  const topRegions = useMemo(() => {
-    // 현재 계절 감지
-    const month = new Date().getMonth() + 1;
-    let currentSeason = '';
-    let seasonRegions = [];
-    
-    if (month >= 3 && month <= 5) {
-      // 봄: 벚꽃, 꽃
-      currentSeason = '봄';
-      seasonRegions = ['진해', '여수', '제주', '서울', '부산', '창원', '거제'];
-    } else if (month >= 6 && month <= 8) {
-      // 여름: 바다, 해변
-      currentSeason = '여름';
-      seasonRegions = ['부산', '제주', '강릉', '속초', '여수', '통영', '거제', '포항'];
-    } else if (month >= 9 && month <= 11) {
-      // 가을: 단풍
-      currentSeason = '가을';
-      seasonRegions = ['설악산', '속초', '내장산', '정읍', '오대산', '평창', '가평', '춘천'];
-    } else {
-      // 겨울: 눈, 스키
-      currentSeason = '겨울';
-      seasonRegions = ['평창', '태백', '설악산', '속초', '강릉', '제주', '대관령'];
+  // 추천 카드: 사용자가 올린 정보만 사용, 다양한 카테고리별 짧은 설명
+  const diverseRegionCards = useMemo(() => {
+    const cat = (s) => String(s || '').toLowerCase();
+    const str = (arr) => (Array.isArray(arr) ? arr : []).map((x) => (typeof x === 'string' ? x : (x?.name || x?.label || ''))).join(' ');
+    const groups = new Map();
+    for (const post of allPosts) {
+      const loc = post.location || post.placeName || '';
+      const r = recommendedRegions.find((re) => loc.includes(re.name) || re.name.includes(loc));
+      if (!r) continue;
+      const c = cat(post.categoryName || post.category || '');
+      const t = cat(str(post.tags) + ' ' + str(post.aiLabels));
+      let type = '명소';
+      if (/꽃|개화|bloom|flower|벚꽃|매화/.test(c + t)) type = '개화';
+      else if (/맛집|음식|food|밥|식당/.test(c + t)) type = '맛집';
+      else if (/카페|coffee|cafe|커피/.test(c + t)) type = '카페';
+      else if (/바다|해변|beach|sea/.test(c + t)) type = '해변';
+      else if (/산|등산|mountain/.test(c + t)) type = '등산';
+      else if (/야경|night/.test(c + t)) type = '야경';
+      else if (/일출|일몰|sunrise|sunset/.test(c + t)) type = '일출일몰';
+      const key = `${r.name}|${type}`;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(post);
     }
-    
-    // 사진이 있는 지역들
-    const allRegionsWithPhotos = Object.entries(regionRepresentativePhotos)
-      .filter(([_, photo]) => photo.hasUploadedPhoto && photo.count > 0)
-      .map(([regionName, photo]) => {
-        // 계절 가중치 계산 (계절 추천 지역이면 가중치 추가)
-        const seasonBonus = seasonRegions.includes(regionName) ? photo.count * 0.5 : 0;
-        const weightedScore = photo.count + seasonBonus;
-        
-        return {
-        name: regionName,
-          ...photo,
-          weightedScore
-        };
+    const cards = [];
+    const labels = { 개화: '개화정보', 맛집: '맛집정보', 카페: '카페정보', 해변: '해변정보', 등산: '등산정보', 야경: '야경정보', 일출일몰: '일출일몰', 명소: '가볼만한 곳' };
+    const bloomPcts = [70, 75, 80, 85, 90, 95];
+    for (const [key, posts] of groups) {
+      const [name, type] = key.split('|');
+      const sorted = [...posts].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+      const p = sorted[0];
+      let shortDesc = `${name}의 필수 여행지`;
+      if (type === '개화') shortDesc = `개화상태 ${bloomPcts[(name.length + posts.length) % bloomPcts.length]}% 이상`;
+      else if (type === '맛집') shortDesc = '웨이팅 필수 맛집';
+      else if (type === '카페') shortDesc = '추천 카페';
+      else if (type === '해변') shortDesc = '아름다운 해변';
+      else if (type === '등산') shortDesc = '등산 명소';
+      else if (type === '야경') shortDesc = '야경이 예쁜 곳';
+
+      cards.push({
+        name,
+        category: type,
+        categoryLabel: labels[type] || '가볼만한 곳',
+        image: p.image || (p.images && p.images[0]),
+        shortDesc,
+        count: posts.length,
+        time: getTimeAgo(p.timestamp || p.createdAt),
       });
-    
-    // 가중치 순으로 정렬
-    allRegionsWithPhotos.sort((a, b) => b.weightedScore - a.weightedScore);
-    
-    // 상위 4개 선택
-    const topRegionsWithPhotos = allRegionsWithPhotos.slice(0, 4).map(({ weightedScore, ...region }) => region);
-    
-    // 사진이 있는 지역이 4개 미만이면 계절별 기본 지역으로 채우기
-    if (topRegionsWithPhotos.length < 4) {
-      const usedRegionNames = new Set(topRegionsWithPhotos.map(r => r.name));
-      const defaultRegions = seasonRegions
-        .filter(regionName => !usedRegionNames.has(regionName))
-        .slice(0, 4 - topRegionsWithPhotos.length)
-        .map(regionName => {
-          const region = recommendedRegions.find(r => r.name === regionName);
-          return {
-            name: regionName,
-            image: region?.image || getRegionDefaultImage(regionName),
-            category: '추천 장소',
-            detailedLocation: `${regionName}의 아름다운 풍경`,
-            count: 0,
-            time: null,
-            hasUploadedPhoto: false
-          };
-        });
-      
-      // 기본 지역도 없으면 전체 지역에서 선택
-      if (defaultRegions.length < 4 - topRegionsWithPhotos.length) {
-        const remainingCount = 4 - topRegionsWithPhotos.length - defaultRegions.length;
-        const additionalRegions = recommendedRegions
-          .filter(r => !usedRegionNames.has(r.name) && !defaultRegions.some(d => d.name === r.name))
-          .slice(0, remainingCount)
-          .map(region => ({
-            name: region.name,
-            image: getRegionDefaultImage(region.name),
-            category: '추천 장소',
-            detailedLocation: `${region.name}의 아름다운 풍경`,
-            count: 0,
-            time: null,
-            hasUploadedPhoto: false
-          }));
-        
-        return [...topRegionsWithPhotos, ...defaultRegions, ...additionalRegions].slice(0, 4);
-      }
-      
-      return [...topRegionsWithPhotos, ...defaultRegions].slice(0, 4);
     }
-    
-    return topRegionsWithPhotos;
-  }, [regionRepresentativePhotos, recommendedRegions]);
+    return cards.sort((a, b) => b.count - a.count).slice(0, 12);
+  }, [allPosts, recommendedRegions]);
 
-  // 한글 초성 추출 함수
-  const getChosung = useCallback((str) => {
-    const CHOSUNG = ['ㄱ', 'ㄲ', 'ㄴ', 'ㄷ', 'ㄸ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅃ', 'ㅅ', 'ㅆ', 'ㅇ', 'ㅈ', 'ㅉ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ'];
-    let result = '';
-    
-    for (let i = 0; i < str.length; i++) {
-      const code = str.charCodeAt(i) - 44032;
-      if (code > -1 && code < 11172) {
-        result += CHOSUNG[Math.floor(code / 588)];
-      } else {
-        result += str.charAt(i);
-      }
-    }
-    return result;
-  }, []);
-
-  // 초성 매칭 함수
-  const matchChosung = useCallback((text, search) => {
-    const textChosung = getChosung(text);
-    const searchChosung = getChosung(search);
-    
-    const matches = textChosung.includes(searchChosung) || textChosung.includes(search);
-    return matches;
-  }, [getChosung]);
-
-  // 지역별 대표 사진 로드
-  const loadRegionPhotos = useCallback(async () => {
-    try {
-      const uploadedPostsJson = await AsyncStorage.getItem('uploadedPosts');
-      let uploadedPosts = uploadedPostsJson ? JSON.parse(uploadedPostsJson) : [];
-      
-      // 2일 이상 된 게시물 필터링
-      uploadedPosts = filterRecentPosts(uploadedPosts, 2);
-      
-      const photosByRegion = {};
-
-      recommendedRegions.forEach(region => {
-        const regionName = region.name;
-        
-        const regionPosts = uploadedPosts.filter(post => {
-          const postLocation = post.location || '';
-          return postLocation.includes(regionName) || 
-                 regionName.includes(postLocation) ||
-                 postLocation === regionName;
-        });
-        
-        if (regionPosts.length > 0) {
-          const randomIndex = Math.floor(Math.random() * Math.min(regionPosts.length, 5));
-          const representativePost = regionPosts[randomIndex];
-          
-          photosByRegion[regionName] = {
-            image: representativePost.images?.[0] || representativePost.image,
-            category: representativePost.categoryName,
-            detailedLocation: representativePost.detailedLocation || representativePost.placeName,
-            count: regionPosts.length,
-            time: representativePost.timeLabel || '방금',
-            hasUploadedPhoto: true
-          };
-        } else {
-          photosByRegion[regionName] = {
-            image: getRegionDefaultImage(regionName),
-            category: '추천 장소',
-            detailedLocation: `${regionName}의 아름다운 풍경`,
-            count: 0,
-            time: null,
-            hasUploadedPhoto: false
-          };
-        }
+  // 해시태그 칩: 전체 게시물에서 태그 수집, 빈도순 상위 24개. 없으면 기본 인기 해시태그 사용
+  const hashtagChips = useMemo(() => {
+    const norm = (s) => String(s || '').replace(/^#+/, '').trim().toLowerCase();
+    const getDisplay = (t) => (typeof t === 'string' ? t : (t?.name || t?.label || '')).replace(/^#+/, '').trim();
+    const map = new Map();
+    allPosts.forEach((p) => {
+      const tags = [
+        ...(p.tags || []).map((t) => (typeof t === 'string' ? t : (t?.name || t?.label || ''))),
+        ...(p.aiLabels || []).map((l) => (typeof l === 'string' ? l : (l?.name || l?.label || '')))
+      ].filter(Boolean);
+      tags.forEach((raw) => {
+        const n = norm(raw);
+        if (!n || n.length < 2) return;
+        if (!map.has(n)) map.set(n, { display: getDisplay(raw) || n, count: 0 });
+        map.get(n).count += 1;
       });
+    });
+    const fromPosts = Array.from(map.entries())
+      .map(([n, { display, count }]) => ({ key: n, display, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 24);
+    if (fromPosts.length > 0) return fromPosts;
+    return DEFAULT_HASHTAGS.map((d) => ({ key: d.toLowerCase(), display: d, count: 0 }));
+  }, [allPosts]);
 
-      setRegionRepresentativePhotos(photosByRegion);
-    } catch (error) {
-      console.error('지역별 대표 사진 로드 실패:', error);
-    }
+  // 선택된 해시태그에 해당하는 게시물 (웹과 동일)
+  const hashtagPostResults = useMemo(() => {
+    if (!selectedHashtag) return [];
+    const norm = (s) => String(s || '').replace(/^#+/, '').trim().toLowerCase();
+    const getPostTags = (p) => [
+      ...(p.tags || []).map((t) => (typeof t === 'string' ? t : (t?.name || t?.label || ''))),
+      ...(p.aiLabels || []).map((l) => (typeof l === 'string' ? l : (l?.name || l?.label || '')))
+    ];
+    const target = norm(selectedHashtag);
+    return allPosts.filter((p) => {
+      const pt = getPostTags(p).map(norm).filter(Boolean);
+      return pt.some((pTag) => pTag === target || (pTag.includes(target) && target.length >= 2));
+    });
+  }, [allPosts, selectedHashtag]);
+
+  const incrementSearchCount = useCallback(() => {
+    const nextCount = searchCount + 1;
+    setSearchCount(nextCount);
+    AsyncStorage.setItem('searchCount', String(nextCount));
+  }, [searchCount]);
+
+  // 검색어 기준 지역 매칭·정렬: 완전일치 > 앞글자일치 > 포함 > 초성순
+  const getMatchingRegions = useCallback((searchTerm, raw) => {
+    if (!searchTerm || !raw) return [];
+    return recommendedRegions
+      .map((region) => {
+        const name = region.name.toLowerCase();
+        let rank = 99;
+        if (name === searchTerm) rank = 0;
+        else if (name.startsWith(searchTerm)) rank = 1;
+        else if (name.includes(searchTerm)) rank = 2;
+        else if (matchChosung(region.name, raw)) rank = 3;
+        else return null;
+        return { region, rank };
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.rank - b.rank || a.region.name.length - b.region.name.length)
+      .map((x) => x.region);
   }, [recommendedRegions]);
 
-  // 검색어 입력 핸들러
+  // 검색어 입력 핸들러: 지역 + 해시태그 자동완성
   const handleSearchInput = useCallback((value) => {
     setSearchQuery(value);
-    
     if (value.trim()) {
-      const searchTerm = value.toLowerCase();
-      const filtered = recommendedRegions.filter(region => {
-        const matchesName = region.name.toLowerCase().includes(searchTerm);
-        const matchesChosung = matchChosung(region.name, value);
-        return matchesName || matchesChosung;
-      });
-      
-      setFilteredRegions(filtered);
+      const raw = value.replace(/^#+/, '').trim();
+      const searchTerm = raw.toLowerCase();
+
+      // 지역 매칭 (웹과 동일한 랭킹 시스템)
+      setFilteredRegions(getMatchingRegions(searchTerm, raw));
+
+      // 해시태그 매칭
+      const hMatched = (hashtagChips || []).filter(h =>
+        h.key.includes(searchTerm) || h.display.toLowerCase().includes(searchTerm)
+      );
+      setFilteredHashtags(hMatched);
       setShowSuggestions(true);
     } else {
       setFilteredRegions([]);
+      setFilteredHashtags([]);
       setShowSuggestions(false);
     }
-  }, [recommendedRegions, matchChosung]);
+  }, [getMatchingRegions, hashtagChips]);
+
+  const handleSuggestionClick = useCallback((regionName) => {
+    incrementSearchCount();
+    setSearchQuery(regionName);
+    setShowSuggestions(false);
+    Keyboard.dismiss();
+
+    const updated = recentSearches.includes(regionName) ? recentSearches : [regionName, ...recentSearches.slice(0, 3)];
+    setRecentSearches(updated);
+    AsyncStorage.setItem('recentSearches', JSON.stringify(updated));
+
+    navigation.navigate('RegionDetail', { regionName, region: { name: regionName } });
+  }, [recentSearches, navigation, incrementSearchCount]);
+
+  const handleHashtagSuggestionClick = useCallback((display) => {
+    incrementSearchCount();
+    setSelectedHashtag(display);
+    setSearchQuery('');
+    setShowSuggestions(false);
+    Keyboard.dismiss();
+  }, [incrementSearchCount]);
 
   // 검색 핸들러
   const handleSearch = useCallback(() => {
-    if (searchQuery.trim()) {
-      const searchTerm = searchQuery.trim();
-      
-      const matchedRegions = recommendedRegions.filter(region => {
-        const matchesName = region.name.toLowerCase().includes(searchTerm.toLowerCase());
-        const matchesChosung = matchChosung(region.name, searchTerm);
-        return matchesName || matchesChosung;
-      });
-      
-      if (matchedRegions.length > 0) {
-        const targetRegion = matchedRegions[0];
-        
-        const updatedRecentSearches = recentSearches.includes(targetRegion.name)
-          ? recentSearches
-          : [targetRegion.name, ...recentSearches.slice(0, 3)];
-        setRecentSearches(updatedRecentSearches);
-        AsyncStorage.setItem('recentSearches', JSON.stringify(updatedRecentSearches));
-        
-        navigation.navigate('RegionDetail', {
-          regionName: targetRegion.name,
-          region: { name: targetRegion.name }
-        });
-        
-        setSearchQuery('');
-        setShowSuggestions(false);
-      } else {
-        Alert.alert('알림', '검색 결과가 없습니다. 다른 검색어를 입력해주세요.');
-      }
+    if (!searchQuery.trim()) return;
+    incrementSearchCount();
+    const raw = searchQuery.replace(/^#+/, '').trim();
+    const searchTerm = raw.toLowerCase();
+
+    // 1) 지역 먼저
+    const matched = getMatchingRegions(searchTerm, raw);
+    if (matched.length > 0) {
+      handleSuggestionClick(matched[0].name);
+      return;
     }
-  }, [searchQuery, recommendedRegions, matchChosung, recentSearches, navigation]);
 
-  // 자동완성 항목 클릭
-  const handleSuggestionClick = useCallback((regionName) => {
-    setSearchQuery(regionName);
-    setShowSuggestions(false);
-    
-    const updatedRecentSearches = recentSearches.includes(regionName)
-      ? recentSearches
-      : [regionName, ...recentSearches.slice(0, 3)];
-    setRecentSearches(updatedRecentSearches);
-    AsyncStorage.setItem('recentSearches', JSON.stringify(updatedRecentSearches));
-    
-    navigation.navigate('RegionDetail', {
-      regionName: regionName,
-      region: { name: regionName }
-    });
-  }, [recentSearches, navigation]);
+    // 2) 해시태그 매칭
+    const hFound = (hashtagChips || []).find(h => h.key === searchTerm || h.display.toLowerCase() === searchTerm);
+    if (hFound) {
+      handleHashtagSuggestionClick(hFound.display);
+      return;
+    }
 
-  const handleRecentSearchClick = useCallback((search) => {
-    navigation.navigate('RegionDetail', {
-      regionName: search,
-      region: { name: search }
-    });
-  }, [navigation]);
+    Alert.alert('알림', '검색 결과가 없습니다.');
+  }, [searchQuery, getMatchingRegions, hashtagChips, incrementSearchCount, handleSuggestionClick, handleHashtagSuggestionClick]);
 
   const handleClearRecentSearches = useCallback(() => {
     Alert.alert(
@@ -354,105 +292,120 @@ const SearchScreen = () => {
         {
           text: '삭제',
           style: 'destructive',
-          onPress: () => {
+          onPress: async () => {
             setRecentSearches([]);
-            AsyncStorage.removeItem('recentSearches');
+            await AsyncStorage.removeItem('recentSearches');
           }
-        }
+        },
       ]
     );
   }, []);
 
-  // 개별 최근 검색어 삭제
-  const handleDeleteRecentSearch = useCallback((searchToDelete, event) => {
-    // 이벤트 전파 중지 (버튼 클릭 시 지역 이동 방지)
-    if (event) {
-      event.stopPropagation();
-    }
-    
-    const updatedSearches = recentSearches.filter(search => search !== searchToDelete);
-    setRecentSearches(updatedSearches);
-    AsyncStorage.setItem('recentSearches', JSON.stringify(updatedSearches));
+  const handleDeleteRecentSearch = useCallback(async (searchToDelete) => {
+    const updated = recentSearches.filter(s => s !== searchToDelete);
+    setRecentSearches(updated);
+    await AsyncStorage.setItem('recentSearches', JSON.stringify(updated));
   }, [recentSearches]);
 
-  const handleRegionClick = useCallback((regionName) => {
-    navigation.navigate('RegionDetail', {
-      regionName: regionName,
-      region: { name: regionName }
-    });
-  }, [navigation]);
 
-  // 초기 데이터 로드
+  // 날씨 정보 가져오기 (Mock 데이터)
+  const getWeatherForRegion = useCallback((regionName) => {
+    const mockWeatherData = {
+      '서울': { icon: '☀️', temperature: '23℃' },
+      '부산': { icon: '🌤️', temperature: '25℃' },
+      '제주': { icon: '🌧️', temperature: '20℃' },
+      '인천': { icon: '☁️', temperature: '22℃' },
+      '대전': { icon: '☀️', temperature: '24℃' },
+      '대구': { icon: '☀️', temperature: '26℃' },
+    };
+    return mockWeatherData[regionName] || { icon: '☀️', temperature: '23℃' };
+  }, []);
+
+  // 지역별 날씨 정보 가져오기
   useEffect(() => {
-    loadRegionPhotos();
-    
-    // 최근 검색어 로드
-    AsyncStorage.getItem('recentSearches').then(value => {
-      if (value) {
-        setRecentSearches(JSON.parse(value));
-      }
+    if (!diverseRegionCards || diverseRegionCards.length === 0) return;
+
+    const weatherMap = {};
+    diverseRegionCards.forEach((card) => {
+      weatherMap[card.name] = getWeatherForRegion(card.name);
     });
-    
-    // 게시물 업데이트 이벤트 리스너
-    const handlePostsUpdate = () => {
-      console.log('🔄 검색 화면 - 게시물 업데이트 이벤트 수신');
-      setTimeout(() => {
-        loadRegionPhotos();
-      }, 100);
+    setWeatherData(weatherMap);
+  }, [diverseRegionCards, getWeatherForRegion]);
+
+  // 초기 데이터 로드 (전체 게시물, 최근 검색어, 검색 횟수)
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const localPosts = await AsyncStorage.getItem('uploadedPosts');
+        const parsed = JSON.parse(localPosts || '[]');
+        setAllPosts(getCombinedPosts(Array.isArray(parsed) ? parsed : []));
+
+        const savedRecentData = await AsyncStorage.getItem('recentSearches');
+        if (savedRecentData) setRecentSearches(JSON.parse(savedRecentData));
+
+        const count = await AsyncStorage.getItem('searchCount');
+        if (count) setSearchCount(parseInt(count, 10));
+      } catch (e) {
+        console.error('데이터 로드 실패:', e);
+      }
     };
-    
-    // React Native에서는 DeviceEventEmitter를 사용하거나 AsyncStorage 변경 감지
-    // 간단하게 주기적으로 확인하는 방식 사용
-    const checkInterval = setInterval(() => {
-      // AsyncStorage 변경 감지를 위한 폴링 (1초마다)
-      loadRegionPhotos();
-    }, 1000);
-    
-    return () => {
-      clearInterval(checkInterval);
-    };
-  }, [loadRegionPhotos]);
+
+    loadData();
+
+    // 초기 검색어 처리 (초기화 시 한 번만)
+    if (route.params?.initialQuery) {
+      const q = route.params.initialQuery;
+      setSearchQuery(q);
+      if (q.startsWith('#')) {
+        const tag = q.replace(/^#+/, '').trim();
+        setSelectedHashtag(tag);
+      }
+    }
+
+    // 데이터 변경 감지 (간소화된 방식)
+    const interval = setInterval(async () => {
+      const localPosts = await AsyncStorage.getItem('uploadedPosts');
+      if (localPosts) {
+        setAllPosts(getCombinedPosts(JSON.parse(localPosts)));
+      }
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   return (
-    <ScreenLayout>
-      {/* 헤더 - 웹과 동일한 구조 (ScreenContent 밖) */}
-      <ScreenHeader>
-        <View style={styles.headerContent}>
+    <ScreenLayout style={{ backgroundColor: '#ffffff' }}>
+      <ScreenContent scrollable={false}>
+        {/* 헤더 - 웹과 동일 (최소화) */}
+        <View style={styles.headerMinimal}>
           <TouchableOpacity
             style={styles.backButton}
             onPress={() => navigation.goBack()}
           >
-            <Ionicons name="arrow-back" size={24} color={COLORS.text} />
+            <Ionicons name="arrow-back" size={24} color="#000" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>지역 검색</Text>
-          <View style={styles.headerPlaceholder} />
         </View>
-      </ScreenHeader>
 
-      <ScreenContent scrollable={false}>
+        {/* 검색창 - 웹과 동일한 스타일 (고정) */}
+        <View style={styles.searchContainer} ref={searchContainerRef}>
+          <View style={styles.searchInputWrapper}>
+            <Ionicons name="search" size={22} color={COLORS.primary} style={{ marginRight: 10 }} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="어디로 떠나볼까요?"
+              placeholderTextColor="#9CA3AF"
+              value={searchQuery}
+              onChangeText={handleSearchInput}
+              onSubmitEditing={handleSearch}
+              returnKeyType="search"
+            />
+          </View>
 
-        {/* 검색창 - 헤더 바로 아래 */}
-          <View style={styles.searchContainer}>
-            <View style={styles.searchInputWrapper}>
-              <View style={styles.searchIconContainer}>
-                <Ionicons name="search" size={20} color={COLORS.primary} />
-              </View>
-              <TextInput
-                style={styles.searchInput}
-                placeholder="제주"
-                placeholderTextColor="#9e7147"
-                value={searchQuery}
-                onChangeText={handleSearchInput}
-                onSubmitEditing={handleSearch}
-                returnKeyType="search"
-              />
-            </View>
-
-            {/* 검색 결과 - 추천 지역 위에 오버레이로 표시 (웹과 동일) */}
-            {showSuggestions && (filteredRegions.length > 0 || searchQuery.trim()) && (
-              <View style={styles.suggestionsContainer}>
-              {filteredRegions.length > 0 ? (
-                <View style={styles.suggestionsList}>
+          {/* 검색 결과 - 웹과 동일한 스타일 */}
+          {showSuggestions && (filteredRegions.length > 0 || filteredHashtags.length > 0 || searchQuery.trim()) && (
+            <View style={styles.suggestionsContainer}>
+              {filteredRegions.length > 0 || filteredHashtags.length > 0 ? (
+                <ScrollView style={{ maxHeight: 360 }} bounces={false}>
                   {filteredRegions.map((region) => (
                     <TouchableOpacity
                       key={region.id}
@@ -463,107 +416,229 @@ const SearchScreen = () => {
                       <Text style={styles.suggestionText}>{region.name}</Text>
                     </TouchableOpacity>
                   ))}
-                </View>
+                  {filteredHashtags.length > 0 && (
+                    <View>
+                      {filteredRegions.length > 0 && <View style={styles.suggestionDivider} />}
+                      <View style={styles.suggestionHeader}>
+                        <Text style={styles.suggestionHeaderText}>해시태그</Text>
+                      </View>
+                      {filteredHashtags.map((h) => (
+                        <TouchableOpacity
+                          key={h.key}
+                          style={styles.suggestionItem}
+                          onPress={() => handleHashtagSuggestionClick(h.display)}
+                        >
+                          <Ionicons name="label" size={20} color={COLORS.primary} />
+                          <Text style={styles.suggestionText}>#{h.display}</Text>
+                          {h.count > 0 && <Text style={styles.suggestionCount}>({h.count}장)</Text>}
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  )}
+                </ScrollView>
               ) : (
                 <View style={styles.noResultsContainer}>
-                  <Ionicons name="search-outline" size={48} color={COLORS.textSubtle} />
+                  <Ionicons name="search-outline" size={48} color="#9CA3AF" />
                   <Text style={styles.noResultsText}>검색 결과가 없습니다</Text>
-                  <Text style={styles.noResultsSubtext}>다른 검색어를 입력해주세요</Text>
+                  <Text style={styles.noResultsSubtext}>지역명이나 #해시태그를 입력해보세요</Text>
                 </View>
               )}
             </View>
           )}
         </View>
 
-        {/* 메인 컨텐츠 */}
-        <ScreenBody>
-        {/* 최근 검색한 지역 - 추천 지역 위에 배치 (웹과 동일: showSuggestions일 때 opacity-30) */}
-        {recentSearches.length > 0 && (
-        <View style={[styles.section, showSuggestions && { opacity: 0.3 }]}>
-          <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>최근 검색한 지역</Text>
-              <TouchableOpacity onPress={handleClearRecentSearches}>
-                <Text style={styles.clearButton}>지우기</Text>
-              </TouchableOpacity>
-          </View>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.recentScroll}
-              scrollEnabled={!showSuggestions}
-              pointerEvents={showSuggestions ? 'none' : 'auto'}
-            >
-              {recentSearches.map((search, index) => {
-                // 웹과 동일: 첫 번째는 primary 색상, 나머지는 기본 스타일
-                return (
-                  <TouchableOpacity
-                    key={index}
-                    style={[
-                      styles.recentSearchButton,
-                      index === 0 && styles.recentSearchButtonActive
-                    ]}
-                    onPress={() => handleRecentSearchClick(search)}
-                  >
-                    <Text style={[
-                      styles.recentSearchText,
-                      index === 0 && styles.recentSearchTextActive
-                    ]}>
-                      {search}
-                    </Text>
+        {/* 메인 컨텐츠 - 웹과 동일한 구조 */}
+        <ScreenBody style={{ flex: 1, minHeight: 0 }}>
+          {/* 최근 검색한 지역 - 웹과 동일 */}
+          {recentSearches.length > 0 && (
+            <View style={[styles.recentSection, showSuggestions && { opacity: 0.3 }]}>
+              <View style={styles.recentSectionHeader}>
+                <Text style={styles.recentSectionTitle}>최근 검색한 지역</Text>
+                <TouchableOpacity onPress={handleClearRecentSearches}>
+                  <Text style={styles.recentClearButton}>지우기</Text>
+                </TouchableOpacity>
+              </View>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.recentScroll}
+                scrollEnabled={!showSuggestions}
+                pointerEvents={showSuggestions ? 'none' : 'auto'}
+              >
+                <View style={{ flexDirection: 'row', paddingHorizontal: 16, gap: 8, paddingBottom: 8 }}>
+                  {recentSearches.map((search, index) => (
                     <TouchableOpacity
-                      onPress={(e) => {
-                        e.stopPropagation();
-                        handleDeleteRecentSearch(search);
-                      }}
-                      style={styles.deleteButton}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      key={index}
+                      style={[styles.recentSearchButton, index === 0 && styles.recentSearchButtonActive]}
+                      onPress={() => handleSuggestionClick(search)}
                     >
-                      <Ionicons name="close" size={16} color={index === 0 ? COLORS.primary : COLORS.textSubtle} style={{ opacity: 0.6 }} />
+                      <Text style={[styles.recentSearchText, index === 0 && styles.recentSearchTextActive]}>{search}</Text>
+                      <TouchableOpacity
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          handleDeleteRecentSearch(search);
+                        }}
+                        style={styles.deleteButton}
+                      >
+                        <Ionicons name="close" size={16} color={index === 0 ? COLORS.primary : '#9CA3AF'} />
+                      </TouchableOpacity>
                     </TouchableOpacity>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          </View>
+                  ))}
+                </View>
+              </ScrollView>
+            </View>
           )}
 
-        {/* 추천 지역 - 2x2 그리드로 표시 (웹과 동일: showSuggestions일 때 opacity-30) */}
-        <View style={[styles.section, showSuggestions && { opacity: 0.3 }]}>
-          <Text style={styles.sectionTitle}>추천 지역</Text>
-          
-          <View style={styles.recommendedGrid}>
-            {topRegions.map((region, index) => {
-              const displayImage = region.image;
-              
-              return (
-                <TouchableOpacity
-                  key={`${region.name}-${index}`}
-                  style={styles.regionGridCard}
-                  onPress={() => handleRegionClick(region.name)}
-                  activeOpacity={0.9}
-                >
-                  <Image
-                    source={{ uri: displayImage }}
-                    style={styles.regionGridImage}
-                    resizeMode="cover"
-                  />
-                  {/* 그라데이션 오버레이 - 랜딩 페이지와 동일 */}
-                  <LinearGradient
-                    colors={['transparent', 'rgba(0,0,0,0.7)']}
-                    style={styles.regionGridOverlay}
-                    start={{ x: 0, y: 0.5 }}
-                    end={{ x: 0, y: 1 }}
-                  />
-                  
-                  {/* 하단 지역명 */}
-                  <View style={styles.regionGridInfo}>
-                    <Text style={styles.regionGridName}>{region.name}</Text>
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
+          {/* 지금 가장 핫한 추천 여행지 - 웹과 동일 (w-[20vw] = 20% 너비) */}
+          <View style={[styles.diverseSection, showSuggestions && { opacity: 0.3 }]}>
+            <Text style={styles.diverseSectionTitle}>지금 가장 핫한 추천 여행지</Text>
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false} 
+              contentContainerStyle={styles.diverseScroll}
+              snapToInterval={SCREEN_WIDTH * 0.2 + 16}
+              decelerationRate="fast"
+              snapToAlignment="start"
+            >
+              {diverseRegionCards.length === 0 ? (
+                <View style={styles.emptyDiverseContainer}>
+                  <Ionicons name="camera-outline" size={48} color="#D1D5DB" />
+                  <Text style={styles.emptyDiverseText}>사용자가 올린 여행 정보가 아직 없어요</Text>
+                  <Text style={styles.emptyDiverseSubtext}>첫 사진을 올리면 여기 추천에 반영돼요</Text>
+                </View>
+              ) : (
+                <>
+                  {diverseRegionCards.map((card, index) => {
+                    const categoryColors = {
+                      '개화': '#F97316', '맛집': '#EF4444', '카페': '#8B4513', '해변': '#0EA5E9',
+                      '등산': '#10B981', '야경': '#6366F1', '일출일몰': '#F59E0B', '축제': '#EC4899',
+                      '문화': '#8B5CF6', '액티비티': '#14B8A6', '명소': '#64748B'
+                    };
+                    const tagBg = categoryColors[card.category] || '#8B5CF6';
+                    const displayImage = card.image || getRegionDefaultImage(card.name);
+                    const weather = weatherData[card.name];
+                    return (
+                      <TouchableOpacity
+                        key={`${card.name}-${card.category}-${index}`}
+                        style={styles.diverseCard}
+                        onPress={() => handleSuggestionClick(card.name)}
+                        activeOpacity={0.9}
+                      >
+                        <View style={styles.diverseImageContainer}>
+                          <Image source={{ uri: displayImage }} style={styles.diverseImage} resizeMode="cover" />
+                          <View style={[styles.diverseTag, { backgroundColor: tagBg }]}>
+                            <Text style={styles.diverseTagText}>{card.categoryLabel}</Text>
+                          </View>
+                          {weather && (
+                            <View style={styles.weatherBadge}>
+                              <Text style={styles.weatherIcon}>{weather.icon}</Text>
+                              <Text style={styles.weatherTemp}>{weather.temperature}</Text>
+                            </View>
+                          )}
+                        </View>
+                        <View style={styles.diverseInfo}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                            <Text style={styles.diverseName}>{card.name}</Text>
+                            {card.time && (
+                              <Text style={styles.diverseTime}>🕐 {card.time}</Text>
+                            )}
+                          </View>
+                          <Text style={styles.diverseCategory}>{card.categoryLabel}</Text>
+                          <Text style={styles.diverseDesc} numberOfLines={1}>{card.shortDesc}</Text>
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                  <View style={{ width: SCREEN_WIDTH * 0.2 }} />
+                </>
+              )}
+            </ScrollView>
           </View>
-        </View>
+
+          {/* 해시태그 - 웹과 동일 (가로 스크롤) */}
+          {hashtagChips.length > 0 && (
+            <View style={[styles.hashtagSection, showSuggestions && { opacity: 0.3 }]}>
+              <View style={styles.hashtagSectionHeader}>
+                <Text style={styles.hashtagSectionTitle}>해시태그</Text>
+                <TouchableOpacity onPress={() => navigation.navigate('Hashtags')}>
+                  <Text style={styles.hashtagMoreButton}>태그 전체보기</Text>
+                </TouchableOpacity>
+              </View>
+              <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={false} 
+                contentContainerStyle={styles.hashtagScroll}
+                snapToInterval={100}
+                decelerationRate="fast"
+                snapToAlignment="start"
+              >
+                {hashtagChips.map(({ key, display }) => {
+                  const isSelected = selectedHashtag && (selectedHashtag || '').replace(/^#+/, '').trim().toLowerCase() === key;
+                  return (
+                    <TouchableOpacity
+                      key={key}
+                      style={[styles.hashtagChip, isSelected && styles.hashtagChipActive]}
+                      onPress={() => {
+                        if (isSelected) {
+                          setSelectedHashtag(null);
+                        } else {
+                          incrementSearchCount();
+                          setSelectedHashtag(display);
+                        }
+                      }}
+                    >
+                      <Text style={[styles.hashtagChipText, isSelected && styles.hashtagChipTextActive]}>
+                        #{display}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          )}
+
+          {/* 선택된 해시태그 사진 그리드 - 웹과 동일 (3x3) */}
+          {selectedHashtag && (
+            <View style={[styles.hashtagPostSection, showSuggestions && { opacity: 0.3 }]}>
+              <View style={styles.hashtagPostHeader}>
+                <Text style={styles.hashtagPostTitle}>#{selectedHashtag} ({hashtagPostResults.length}장)</Text>
+                <TouchableOpacity onPress={() => setSelectedHashtag(null)}>
+                  <Text style={styles.hashtagPostClose}>해제</Text>
+                </TouchableOpacity>
+              </View>
+              {hashtagPostResults.length > 0 ? (
+                <View style={styles.hashtagPostGrid}>
+                  {hashtagPostResults.map((post) => {
+                    const img = post.images?.[0] || post.image;
+                    const id = post.id || post._id;
+                    const upTime = getTimeAgo(post.timestamp || post.createdAt);
+                    return (
+                      <TouchableOpacity
+                        key={id || (post.timestamp || 0)}
+                        style={styles.hashtagPostItem}
+                        onPress={() => navigation.navigate('PostDetail', { post })}
+                      >
+                        {img ? (
+                          <Image source={{ uri: img }} style={styles.hashtagPostImage} />
+                        ) : (
+                          <View style={styles.hashtagPostPlaceholder}>
+                            <Ionicons name="image-outline" size={24} color="#9CA3AF" />
+                          </View>
+                        )}
+                        <View style={styles.hashtagPostTimeBadge}>
+                          <Text style={styles.hashtagPostTimeText}>🕐 {upTime}</Text>
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              ) : (
+                <View style={styles.hashtagPostEmpty}>
+                  <Text style={styles.hashtagPostEmptyText}>이 해시태그가 달린 사진이 없습니다</Text>
+                </View>
+              )}
+            </View>
+          )}
         </ScreenBody>
       </ScreenContent>
     </ScreenLayout>
@@ -571,398 +646,213 @@ const SearchScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
-  headerContent: {
+  headerMinimal: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: SPACING.md, // 웹: px-4 = 16px
-    paddingVertical: SPACING.md, // 웹: p-4 = 16px
-    backgroundColor: COLORS.backgroundLight, // 웹: bg-white
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2, // 웹: shadow-sm
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 8,
+    backgroundColor: '#fff',
+  }, // 웹: px-4 pt-4 pb-2
+  backButton: { 
+    width: 40, 
+    height: 40, 
+    justifyContent: 'center', 
     alignItems: 'center',
-    paddingHorizontal: SPACING.md,
-    paddingTop: SPACING.md,
-    paddingBottom: SPACING.sm,
-    backgroundColor: COLORS.backgroundLight,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.borderLight + '80', // border-border-light/50
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2, // shadow-sm
-    zIndex: 20,
-  },
-  backButton: {
-    width: 48, // size-12 = 48px
-    height: 48,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 8, // rounded-lg
-  },
-  headerTitle: {
-    fontSize: 18, // 이미지에 맞게 조정
-    fontWeight: 'bold',
-    color: '#1c140d', // text-[#1c140d]
-    letterSpacing: -0.3,
-    lineHeight: 22,
-    flex: 1,
-    textAlign: 'center',
-  },
-  headerPlaceholder: {
-    width: 48, // w-12 = 48px
-  },
+    borderRadius: 8,
+  }, // 웹: size-10 rounded-lg
+
   searchContainer: {
-    paddingHorizontal: SPACING.md, // px-4 = 16px
-    paddingTop: 0, // 헤더 바로 아래에 붙이기
-    paddingBottom: 16, // pb-4 = 16px
-    backgroundColor: COLORS.backgroundLight, // bg-white
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    backgroundColor: '#fff',
     position: 'relative',
     zIndex: 30,
-  },
+  }, // 웹: px-4 pb-4
   searchInputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.background, // bg-background-light (웹과 동일)
-    borderRadius: 999, // rounded-full (웹과 동일)
-    height: 56, // h-14 = 56px (웹과 동일)
-    borderWidth: 0, // ring으로 처리 (웹과 동일)
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1, // shadow-sm (웹과 동일)
-  },
-  searchIconContainer: {
-    width: 56, // w-14 = 56px (웹과 동일)
-    height: 56, // h-14 = 56px (웹과 동일)
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderTopLeftRadius: 999, // rounded-l-full (웹과 동일)
-    borderBottomLeftRadius: 999,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    height: 48,
+    paddingHorizontal: 16,
     borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.1)', // ring-1 ring-inset ring-black/10 (웹과 동일)
-    borderRightWidth: 0,
-  },
+    borderColor: '#E5E7EB', // 웹: border-gray-200
+  }, // 웹: rounded-xl border border-gray-200
   searchInput: {
     flex: 1,
-    fontSize: 16, // text-base = 16px (웹과 동일)
-    fontWeight: 'normal', // font-normal (웹과 동일)
-    color: '#1c140d', // text-[#1c140d] (웹과 동일)
-    paddingLeft: SPACING.sm, // pl-2 = 8px (웹과 동일)
-    paddingRight: SPACING.md, // px-4 = 16px (웹과 동일)
-    height: 56, // h-14 = 56px (웹과 동일)
-    borderTopRightRadius: 999, // rounded-r-full (웹과 동일)
-    borderBottomRightRadius: 999,
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.1)', // ring-1 ring-inset ring-black/10 (웹과 동일)
-    borderLeftWidth: 0,
-  },
+    fontSize: 16,
+    color: '#000',
+    height: 48,
+  }, // 웹과 동일
+
   suggestionsContainer: {
-    marginTop: SPACING.md,
-    position: 'absolute', // 웹과 동일: 추천 지역 위에 오버레이
-    top: '100%', // 검색창 아래
-    left: 0,
-    right: 0,
-    zIndex: 50, // 추천 지역 위에 표시
-  },
-  suggestionsList: {
-    backgroundColor: COLORS.backgroundLight, // bg-white
-    borderRadius: 16, // rounded-2xl
-    overflow: 'hidden',
+    position: 'absolute',
+    top: '100%',
+    left: 16,
+    right: 16,
+    marginTop: 12,
+    backgroundColor: '#fff',
+    borderRadius: 16,
     borderWidth: 2,
-    borderColor: COLORS.primary + '4D', // ring-2 ring-primary/30
-    maxHeight: 360, // maxHeight: 'calc(60px * 6)'
+    borderColor: COLORS.primary + '30', // 웹: ring-2 ring-primary/30
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.25,
-    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
     elevation: 8,
-  },
+    overflow: 'hidden',
+    maxHeight: 360, // 웹: maxHeight: 'calc(60px * 6)'
+  }, // 웹: rounded-2xl shadow-2xl ring-2 ring-primary/30
   suggestionItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: SPACING.md, // px-4 = 16px
-    paddingVertical: SPACING.md, // py-4 = 16px
-    gap: 12, // gap-3 = 12px
-    height: 60, // h-[60px] = 60px
+    padding: 16,
+    gap: 12,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.border, // border-gray-100
+    borderBottomColor: '#F3F4F6', // 웹: border-gray-100
+    height: 60, // 웹: h-[60px]
   },
-  suggestionText: {
-    fontSize: 16, // text-base = 16px
-    fontWeight: '600', // font-semibold
-    color: COLORS.text, // text-[#1c140d]
-  },
-  noResultsContainer: {
-    backgroundColor: COLORS.backgroundLight, // bg-white
-    borderRadius: 16, // rounded-2xl
-    paddingHorizontal: SPACING.md, // px-4 = 16px
-    paddingVertical: SPACING.lg, // py-6 = 24px
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#FCA5A5', // ring-2 ring-red-300
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.25,
-    shadowRadius: 16,
-    elevation: 8, // shadow-2xl
-  },
-  noResultsText: {
-    marginTop: SPACING.sm, // mb-2 (아이콘 아래)
-    fontSize: 14, // text-sm = 14px
-    color: COLORS.textSecondary, // text-gray-500
-    marginBottom: SPACING.xs,
-  },
-  noResultsSubtext: {
-    fontSize: 12, // text-xs = 12px
-    color: COLORS.textSubtle, // text-gray-400
-    marginTop: SPACING.xs, // mt-1 = 4px
-  },
-  section: {
-    paddingTop: 20,
-    paddingHorizontal: SPACING.lg, // 여백 증가
-    paddingBottom: SPACING.md,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: SPACING.sm,
-    paddingHorizontal: SPACING.md,
-  },
-  sectionTitle: {
-    fontSize: 18, // 이미지에 맞게 조정
-    fontWeight: 'bold',
-    color: COLORS.text, // text-[#1c140d]
-    letterSpacing: -0.3,
-    lineHeight: 22,
-    paddingBottom: 12, // pb-3 = 12px
-    paddingHorizontal: 0, // 섹션에서 이미 padding 있음
-  },
-  clearButton: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: COLORS.textSecondary,
-  },
-  emptySection: {
-    alignItems: 'center',
-    paddingVertical: SPACING.xxl,
-  },
-  emptyTitle: {
-    marginTop: SPACING.md, // mb-4 (아이콘 아래)
-    fontSize: 16, // text-base = 16px
-    fontWeight: 'bold',
-    color: COLORS.text, // text-gray-600
-    marginBottom: SPACING.sm, // mb-2 = 8px
-  },
-  emptySubtitle: {
-    fontSize: 14, // text-sm = 14px
-    color: COLORS.textSubtle, // text-gray-400
-    textAlign: 'center',
-  },
-  recommendedScroll: {
-    paddingVertical: SPACING.sm,
-    gap: SPACING.md,
-  },
-  regionCard: {
-    width: 280,
-    height: 220, // 세로로 더 긴 직사각형 비율
-    borderRadius: 12,
-    overflow: 'hidden',
-    marginRight: SPACING.md,
-    position: 'relative',
-  },
-  regionImage: {
-    width: '100%',
-    height: '100%',
-  },
-  // 그라데이션 오버레이 - 웹 버전과 동일
-  gradientOverlayTop: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: '30%',
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    zIndex: 1,
-  },
-  gradientOverlayMiddle: {
-    position: 'absolute',
-    top: '30%',
-    left: 0,
-    right: 0,
-    height: '20%',
-    backgroundColor: 'rgba(0,0,0,0.1)',
-    zIndex: 1,
-  },
-  gradientOverlayBottom: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: '50%',
-    backgroundColor: 'rgba(0,0,0,0.8)',
-    zIndex: 1,
-  },
-  regionCategoryIcon: {
-    position: 'absolute',
-    top: 10,
-    left: 10,
-    zIndex: 1,
-  },
-  regionCategoryEmoji: {
-    fontSize: 24,
-  },
-  regionInfoContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    zIndex: 10,
-  },
-  regionInfoGradient: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: '100%',
-    backgroundColor: 'rgba(0,0,0,0.7)',
-  },
-  regionInfo: {
-    padding: 12, // padding: '12px'
-    gap: 4, // gap: '4px'
-  },
-  regionName: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: 'white',
-    lineHeight: 19.2, // lineHeight: '1.2'
-    textShadowColor: 'rgba(0,0,0,0.8)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 8,
-    marginBottom: 0,
-  },
-  regionLocation: {
-    fontSize: 13,
-    fontWeight: 'bold',
-    color: 'white',
-    lineHeight: 15.6, // lineHeight: '1.2'
-    textShadowColor: 'rgba(0,0,0,0.8)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 8,
-    marginTop: 4,
-    marginBottom: 0,
-  },
-  regionTime: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: 'rgba(255,255,255,0.9)',
-    lineHeight: 14.4, // lineHeight: '1.2'
-    textShadowColor: 'rgba(0,0,0,0.8)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 8,
-    marginTop: 4,
-  },
-  emptyRecent: {
-    paddingVertical: SPACING.lg,
-  },
-  emptyRecentText: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-  },
-  recentScroll: {
-    paddingVertical: SPACING.sm,
-    gap: SPACING.sm,
-  },
+  suggestionText: { fontSize: 16, fontWeight: '600', color: '#1c140d' }, // 웹과 동일
+  suggestionDivider: { height: 1, backgroundColor: '#F3F4F6', marginHorizontal: 0 }, // 웹: border-gray-100
+  suggestionHeader: { padding: 8, paddingLeft: 16, backgroundColor: '#FAFAFA' }, // 웹: bg-gray-50/50
+  suggestionHeaderText: { fontSize: 12, fontWeight: '500', color: '#6B7280' }, // 웹과 동일
+  suggestionCount: { fontSize: 14, color: '#6B7280', marginLeft: 'auto' }, // 웹과 동일
+
+  noResultsContainer: { padding: 24, alignItems: 'center' }, // 웹: px-4 py-6
+  noResultsText: { marginTop: 8, fontSize: 14, fontWeight: '500', color: '#6B7280' }, // 웹과 동일
+  noResultsSubtext: { marginTop: 4, fontSize: 12, color: '#9CA3AF' }, // 웹과 동일
+
+  recentSection: { paddingHorizontal: 24, paddingTop: 20, paddingBottom: 12 }, // 웹: px-6 pt-5 pb-3
+  recentSectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }, // 웹과 동일
+  recentSectionTitle: { fontSize: 18, fontWeight: 'bold', color: '#1c140d', letterSpacing: -0.015 }, // 웹과 동일
+  recentClearButton: { fontSize: 14, color: '#6B7280', fontWeight: '500' }, // 웹과 동일
+  recentScroll: { gap: 8 }, // 웹: gap-2
   recentSearchButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    borderRadius: 999,
-    backgroundColor: COLORS.borderLight,
-    marginRight: SPACING.sm,
-    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 9999, // 웹: rounded-full
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.1)', // 웹: ring-1 ring-inset ring-black/10
+    gap: 6, // 웹: gap-1.5
   },
-  recentSearchButtonActive: {
-    backgroundColor: COLORS.primary + '33', // primary/20 (웹과 동일)
-    borderWidth: 0, // 웹에서는 border 없음
+  recentSearchButtonActive: { 
+    backgroundColor: COLORS.primary + '20', // 웹: bg-primary/20
+    borderColor: 'transparent',
   },
-  recentSearchText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: COLORS.text,
-  },
-  recentSearchTextActive: {
-    color: COLORS.primary, // 웹과 동일: primary 색상
-    fontWeight: '600',
-  },
-  deleteButton: {
-    marginLeft: 4,
-    padding: 2,
-  },
-  // 추천 지역 2x2 그리드 스타일 (랜딩 페이지와 동일)
-  recommendedGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12, // 랜딩 페이지와 동일: gap: 12px
-    paddingHorizontal: 0, // 섹션에서 이미 padding 있음
-    paddingVertical: SPACING.sm,
-  },
-  regionGridCard: {
-    width: (SCREEN_WIDTH - SPACING.lg * 2 - 12) / 2, // 2열 그리드 (gap 12px 반영)
-    height: (SCREEN_WIDTH - SPACING.lg * 2 - 12) / 2, // 정사각형
-    borderRadius: 12, // 랜딩 페이지와 동일: border-radius: 12px
+  recentSearchText: { fontSize: 14, fontWeight: '500', color: '#1c140d' }, // 웹과 동일
+  recentSearchTextActive: { color: COLORS.primary, fontWeight: '700' }, // 웹과 동일
+  deleteButton: { marginLeft: 4 },
+
+  diverseSection: { paddingHorizontal: 16, paddingTop: 20, paddingBottom: 16 }, // 웹: px-4 pt-5 pb-4
+  diverseSectionTitle: { fontSize: 18, fontWeight: 'bold', color: '#000', marginBottom: 16, letterSpacing: -0.015 }, // 웹과 동일
+  diverseScroll: { gap: 16, paddingHorizontal: 16 }, // 웹: gap-4
+  diverseCard: {
+    width: SCREEN_WIDTH * 0.2, // 웹: w-[20vw]
+    borderRadius: 16, // 웹: rounded-2xl
     overflow: 'hidden',
-    position: 'relative',
+    backgroundColor: '#fff',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 2, // box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1)
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 2,
+    marginRight: 4, // 웹: mx-1
   },
-  regionGridImage: {
+  diverseImageContainer: {
+    height: 160, // 웹: h-40
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  diverseImage: { width: '100%', height: '100%', resizeMode: 'cover' },
+  diverseOverlay: { position: 'absolute', top: 0, left: 0, right: 0, height: '40%' },
+  diverseTag: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  diverseTagText: { fontSize: 12, fontWeight: '600', color: '#fff' }, // 웹: text-xs font-semibold
+  diverseInfo: { padding: 12 }, // 웹: p-3
+  diverseName: { fontSize: 14, fontWeight: 'bold', color: '#000' }, // 웹: text-sm font-bold
+  diverseTime: { fontSize: 10, color: '#9CA3AF' }, // 웹: text-[10px] text-gray-400
+  diverseCategory: { fontSize: 11, fontWeight: '500', color: '#6B7280', marginBottom: 2 }, // 웹: text-[11px] text-gray-500
+  diverseDesc: { fontSize: 11, fontWeight: '500', color: '#4B5563' }, // 웹: text-[11px] text-gray-600
+
+  weatherBadge: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.6)', // 웹: bg-black/60
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    gap: 4,
+  },
+  weatherIcon: { fontSize: 12 },
+  weatherTemp: { fontSize: 12, fontWeight: '600', color: '#fff' }, // 웹: text-xs font-semibold
+
+  hashtagSection: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 12 }, // 웹: px-4 pt-2 pb-3
+  hashtagSectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }, // 웹과 동일
+  hashtagSectionTitle: { fontSize: 16, fontWeight: 'bold', color: '#000' }, // 웹과 동일
+  hashtagMoreButton: { fontSize: 12, fontWeight: '500', color: COLORS.primary }, // 웹과 동일
+  hashtagScroll: { gap: 8, paddingHorizontal: 16 }, // 웹: gap-2
+  hashtagChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 9999, // 웹: rounded-full
+    backgroundColor: '#F3F4F6', // 웹: bg-gray-100
+    borderWidth: 0,
+  },
+  hashtagChipActive: { backgroundColor: COLORS.primary, borderWidth: 0 }, // 웹과 동일
+  hashtagChipText: { fontSize: 14, fontWeight: '500', color: '#1F2937' }, // 웹: text-gray-800
+  hashtagChipTextActive: { color: '#fff' }, // 웹과 동일
+
+  hashtagPostSection: { paddingHorizontal: 16, paddingTop: 0, paddingBottom: 16 }, // 웹: px-4 pt-0 pb-4
+  hashtagPostHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }, // 웹과 동일
+  hashtagPostTitle: { fontSize: 14, fontWeight: 'bold', color: '#000' }, // 웹과 동일
+  hashtagPostClose: { fontSize: 12, color: '#6B7280' }, // 웹과 동일
+  hashtagPostGrid: { 
+    flexDirection: 'row', 
+    flexWrap: 'wrap', 
+    gap: 6, // 웹: gap-1.5
+  },
+  hashtagPostItem: { 
+    width: (SCREEN_WIDTH - 32 - 12) / 3, // 웹: grid-cols-3, gap-1.5
+    aspectRatio: 1, 
+    borderRadius: 4, 
+    overflow: 'hidden',
+    position: 'relative',
+    backgroundColor: '#F3F4F6',
+  },
+  hashtagPostImage: { width: '100%', height: '100%', resizeMode: 'cover' },
+  hashtagPostPlaceholder: {
     width: '100%',
     height: '100%',
-  },
-  regionGridOverlay: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: '100%', // 그라데이션이 전체 높이에 적용되도록
-    zIndex: 1,
-  },
-  regionGridInfo: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingVertical: 12, // 랜딩 페이지와 동일: padding: 12px
-    paddingHorizontal: 12,
-    zIndex: 2,
-    alignItems: 'center',
     justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F3F4F6',
   },
-  regionGridName: {
-    fontSize: 14, // 랜딩 페이지와 동일: font-size: 14px
-    fontWeight: '700', // 랜딩 페이지와 동일: font-weight: 700
-    color: 'white',
-    textAlign: 'center',
+  hashtagPostTimeBadge: {
+    position: 'absolute',
+    bottom: 4,
+    left: 4,
+    right: 4,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 4,
   },
+  hashtagPostTimeText: { fontSize: 9, color: '#fff', textAlign: 'center' }, // 웹: text-[9px]
+  hashtagPostEmpty: { paddingVertical: 16, alignItems: 'center' },
+  hashtagPostEmptyText: { fontSize: 14, color: '#6B7280' }, // 웹과 동일
 });
 
 export default SearchScreen;

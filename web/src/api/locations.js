@@ -1,4 +1,5 @@
 import api from './axios';
+import { logger } from '../utils/logger';
 
 // 주변 게시물 조회
 export const getNearbyPosts = async (lat, lon, radius = 5000) => {
@@ -8,7 +9,7 @@ export const getNearbyPosts = async (lat, lon, radius = 5000) => {
     });
     return response.data;
   } catch (error) {
-    console.error('주변 게시물 조회 실패:', error);
+    logger.error('주변 게시물 조회 실패:', error);
     throw error;
   }
 };
@@ -19,7 +20,7 @@ export const getPopularLocations = async (params = {}) => {
     const response = await api.get('/locations/popular', { params });
     return response.data;
   } catch (error) {
-    console.error('인기 장소 조회 실패:', error);
+    logger.error('인기 장소 조회 실패:', error);
     throw error;
   }
 };
@@ -30,7 +31,7 @@ export const getPostsByRegion = async (region, params = {}) => {
     const response = await api.get(`/locations/region/${region}`, { params });
     return response.data;
   } catch (error) {
-    console.error('지역별 게시물 조회 실패:', error);
+    logger.error('지역별 게시물 조회 실패:', error);
     throw error;
   }
 };
@@ -41,7 +42,7 @@ export const getRegions = async () => {
     const response = await api.get('/locations/regions');
     return response.data;
   } catch (error) {
-    console.error('지역 목록 조회 실패:', error);
+    logger.error('지역 목록 조회 실패:', error);
     throw error;
   }
 };

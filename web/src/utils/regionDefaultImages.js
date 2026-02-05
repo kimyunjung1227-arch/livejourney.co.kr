@@ -1,8 +1,15 @@
-// 각 지역의 대표 기본 이미지 - 실제 Unsplash 고정 URL 사용
+// 각 지역의 대표 기본 이미지 - 그 지역의 특징/랜드마크가 담긴 사진 (관심지역·지역상세 상단용)
 export const regionDefaultImages = {
+  // 도(道) 단위 — 관심지역 슬라이드용
+  '전북': 'https://images.unsplash.com/photo-1548013146-72479768bada?w=800&auto=format&fit=crop', // 전주 한옥/전통
+  '전남': 'https://images.unsplash.com/photo-1578022761797-b8636ac1773c?w=800&auto=format&fit=crop', // 등대·해안
+  '경북': 'https://images.unsplash.com/photo-1555881400-74d7acaacd8b?w=800&auto=format&fit=crop', // 경주 석탑·불국사
+  '경남': 'https://images.unsplash.com/photo-1505142468610-359e7d316be0?w=800&auto=format&fit=crop', // 해안·절경
+  '전국': 'https://images.unsplash.com/photo-1526778548025-fa2f459cd5c1?w=800&auto=format&fit=crop', // 지도·전국
+
   // 수도권
-  '서울': 'https://images.unsplash.com/photo-1601655742134-501c210f1b1a?w=800&auto=format&fit=crop', // 경복궁
-  '인천': 'https://images.unsplash.com/photo-1583037189850-1921ae7c6c22?w=800&auto=format&fit=crop', // 송도
+  '서울': 'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?w=800&auto=format&fit=crop', // N서울타워·남산
+  '인천': 'https://images.unsplash.com/photo-1436491865332-7a61a109cc05?w=800&auto=format&fit=crop', // 인천공항·국제관문
   '수원': 'https://images.unsplash.com/photo-1582407947304-fd86f028f716?w=800&auto=format&fit=crop', // 수원화성
   '성남': 'https://images.unsplash.com/photo-1480714378408-67cf0d13bc1b?w=800&auto=format&fit=crop', // 판교
   '고양': 'https://images.unsplash.com/photo-1551632436-cbf8dd35adfa?w=800&auto=format&fit=crop', // 일산 호수공원
@@ -18,7 +25,7 @@ export const regionDefaultImages = {
   '시흥': 'https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?w=800&auto=format&fit=crop', // 도시
   '김포': 'https://images.unsplash.com/photo-1519046904884-53103b34b206?w=800&auto=format&fit=crop', // 한강
   '광명': 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=800&auto=format&fit=crop', // 동굴
-  '광주': 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=800&auto=format&fit=crop', // 남한산성
+  '광주': 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&auto=format&fit=crop', // 무등산·자연
   '군포': 'https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?w=800&auto=format&fit=crop', // 도시
   '하남': 'https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?w=800&auto=format&fit=crop', // 도시
   '오산': 'https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?w=800&auto=format&fit=crop', // 도시
@@ -116,8 +123,8 @@ export const regionDefaultImages = {
   '신안': 'https://images.unsplash.com/photo-1505142468610-359e7d316be0?w=800&auto=format&fit=crop', // 증도
   
   // 경상권
-  '대구': 'https://images.unsplash.com/photo-1583470790878-4c4196c26feb?w=800&auto=format&fit=crop', // 앞산
-  '부산': 'https://images.unsplash.com/photo-1590736969955-71cc94901144?w=800&auto=format&fit=crop', // 해운대
+  '대구': 'https://images.unsplash.com/photo-1480714378408-67cf0d13bc1b?w=800&auto=format&fit=crop', // 대구 오페라하우스·현대건축
+  '부산': 'https://images.unsplash.com/photo-1580522154071-c1ca47a859ad?w=800&auto=format&fit=crop', // 광안대교·해운대
   '울산': 'https://images.unsplash.com/photo-1559827260-dc66d52bef19?w=800&auto=format&fit=crop', // 대왕암공원
   '포항': 'https://images.unsplash.com/photo-1505142468610-359e7d316be0?w=800&auto=format&fit=crop', // 호미곶
   '경주': 'https://images.unsplash.com/photo-1555881400-74d7acaacd8b?w=800&auto=format&fit=crop', // 불국사
@@ -149,8 +156,8 @@ export const regionDefaultImages = {
   '합천': 'https://images.unsplash.com/photo-1548013146-72479768bada?w=800&auto=format&fit=crop', // 해인사
   
   // 제주권
-  '제주': 'https://images.unsplash.com/photo-1590736969955-71cc94901144?w=800&auto=format&fit=crop', // 한라산
-  '서귀포': 'https://images.unsplash.com/photo-1505142468610-359e7d316be0?w=800&auto=format&fit=crop', // 폭포
+  '제주': 'https://images.unsplash.com/photo-1590559899731-a382839e5549?w=800&auto=format&fit=crop', // 제주 돌하르방·해안·특색
+  '서귀포': 'https://images.unsplash.com/photo-1505142468610-359e7d316be0?w=800&auto=format&fit=crop', // 폭포·해안
   
   // 기본 이미지
   'default': 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&auto=format&fit=crop'

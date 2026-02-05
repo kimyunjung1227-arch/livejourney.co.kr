@@ -1,313 +1,260 @@
-import React, { useState, useEffect, useMemo } from 'react';
+
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import BottomNavigation from '../components/BottomNavigation';
-import { filterRecentPosts } from '../utils/timeUtils';
-import { getTimeAgo } from '../utils/timeUtils';
-import { logger } from '../utils/logger';
-import { getEarnedBadgesForUser } from '../utils/badgeSystem';
+import { filterRecentPosts, filterActivePosts48, getTimeAgo } from '../utils/timeUtils';
+import './MainScreen.css'; // MainScreen 스타일 재사용
+
+import { getCombinedPosts } from '../utils/mockData';
+import { getDisplayImageUrl } from '../api/upload';
 
 const RealtimeFeedScreen = () => {
   const navigate = useNavigate();
   const [realtimeData, setRealtimeData] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [currentUserCount, setCurrentUserCount] = useState(0);
+  const contentRef = useRef(null);
+  const [visibleCount, setVisibleCount] = useState(8); // 2×4 = 8개부터 시작
+  const [showHeader, setShowHeader] = useState(true);
 
   useEffect(() => {
-    const loadRealtimeData = () => {
-      try {
-        const allPosts = JSON.parse(localStorage.getItem('uploadedPosts') || '[]');
-        logger.log(`📸 전체 게시물: ${allPosts.length}개`);
-        
-        if (!Array.isArray(allPosts)) {
-          logger.error('게시물 데이터가 배열이 아닙니다:', allPosts);
-          setRealtimeData([]);
-          setLoading(false);
-          return;
-        }
-        
-        // 최근 2일 이내 게시물만 필터링
-        const posts = filterRecentPosts(allPosts, 2);
-        logger.log(`📊 실시간 여행 피드 게시물 (2일 이내): ${posts.length}개`);
-        
-        // 시간순으로 정렬 (최신순)
-        const sortedPosts = [...posts].sort((a, b) => {
-          const timeA = a.timestamp || a.createdAt || a.time || 0;
-          const timeB = b.timestamp || b.createdAt || b.time || 0;
-          const timestampA = typeof timeA === 'number' ? timeA : new Date(timeA).getTime();
-          const timestampB = typeof timeB === 'number' ? timeB : new Date(timeB).getTime();
-          return timestampB - timestampA;
-        });
-        
-        const formatted = sortedPosts.map((post) => {
-          const dynamicTime = getTimeAgo(post.timestamp || post.createdAt || post.time);
-          
-          return {
-            id: post.id,
-            images: post.images || [],
-            videos: post.videos || [],
-            image: (post.images && post.images.length > 0) ? post.images[0] : 
-                   (post.videos && post.videos.length > 0) ? post.videos[0] : 
-                   (post.image || ''),
-            title: post.location,
-            location: post.location,
-            detailedLocation: post.detailedLocation || post.location,
-            placeName: post.placeName || post.location,
-            time: dynamicTime,
-            timeLabel: dynamicTime,
-            timestamp: post.timestamp || post.createdAt || post.time,
-            user: post.user || '여행자',
-            userId: post.userId,
-            badge: post.categoryName || '여행러버',
-            category: post.category,
-            categoryName: post.categoryName,
-            content: post.note || `${post.location}의 아름다운 순간!`,
-            note: post.note,
-            tags: post.tags || [],
-            coordinates: post.coordinates,
-            likes: post.likes || 0,
-            comments: post.comments || [],
-            questions: post.questions || [],
-            qnaList: [],
-            aiLabels: post.aiLabels,
-            post: post
-          };
-        });
-        
-        setRealtimeData(formatted);
-        setLoading(false);
-      } catch (error) {
-        logger.error('실시간 여행 피드 로드 실패:', error);
-        setRealtimeData([]);
-        setLoading(false);
+    const loadData = () => {
+      const localPosts = JSON.parse(localStorage.getItem('uploadedPosts') || '[]');
+      const allPosts = getCombinedPosts(Array.isArray(localPosts) ? localPosts : []);
+      const posts = filterActivePosts48(allPosts);
+
+      const uniqueUserIds = new Set();
+      posts.forEach(post => {
+        const userId = post.userId || (typeof post.user === 'string' ? post.user : post.user?.id) || post.user;
+        if (userId) uniqueUserIds.add(String(userId));
+      });
+      setCurrentUserCount(uniqueUserIds.size);
+
+      const formattedWithRaw = posts.map(post => ({
+        ...post,
+        id: post.id,
+        image: getDisplayImageUrl(post.images?.[0] || post.image || post.thumbnail || ''),
+        location: post.location,
+        time: post.timeLabel || getTimeAgo(post.timestamp || post.createdAt || post.time),
+        content: post.note || post.content || `${post.location}의 모습`,
+        likes: post.likes || 0,
+      }));
+
+      setRealtimeData(formattedWithRaw);
+    };
+    loadData();
+  }, []);
+
+  // 데이터가 바뀌면 처음부터 다시 8개 노출
+  useEffect(() => {
+    if (realtimeData.length > 0) {
+      setVisibleCount(Math.min(8, realtimeData.length));
+    }
+  }, [realtimeData.length]);
+
+  // 무한 스크롤용: 보이는 개수만큼 데이터를 반복해서 채워 넣기
+  const displayedPosts = useMemo(() => {
+    if (!realtimeData || realtimeData.length === 0) return [];
+    return Array.from({ length: visibleCount }, (_, index) => {
+      const srcIndex = index % realtimeData.length;
+      return realtimeData[srcIndex];
+    });
+  }, [realtimeData, visibleCount]);
+
+  // 스크롤 하단 근처에서 더 많은 아이템을 추가 (무한 스크롤처럼)
+  useEffect(() => {
+    const container = contentRef.current;
+    if (!container) return;
+
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = container;
+      if (scrollTop + clientHeight >= scrollHeight - 200) {
+        setVisibleCount(prev => prev + 4); // 2×2 단위씩 추가
       }
     };
 
-    loadRealtimeData();
-
-    // 게시물 업데이트 이벤트 리스너
-    const handlePostsUpdate = () => {
-      loadRealtimeData();
-    };
-
-    window.addEventListener('postsUpdated', handlePostsUpdate);
+    container.addEventListener('scroll', handleScroll);
     return () => {
-      window.removeEventListener('postsUpdated', handlePostsUpdate);
+      container.removeEventListener('scroll', handleScroll);
     };
   }, []);
 
-  const handleItemClick = (item) => {
-    // 원본 post 데이터를 포함하여 전달
-    const postData = item.post || item;
-    // userId가 제대로 포함되도록 보장
-    if (!postData.userId && item.userId) {
-      postData.userId = item.userId;
-    }
-    if (!postData.user && item.user) {
-      postData.user = item.user;
-    }
-    
-    const allPosts = realtimeData.map(d => {
-      const post = d.post || d;
-      // 각 post에도 userId 보장
-      if (!post.userId && d.userId) {
-        post.userId = d.userId;
-      }
-      if (!post.user && d.user) {
-        post.user = d.user;
-      }
-      return post;
-    });
-    
-    const currentIndex = allPosts.findIndex(p => (p.id || p.post?.id) === item.id);
-    navigate(`/post/${item.id}`, {
-      state: {
-        post: postData,
-        allPosts: allPosts,
-        currentPostIndex: currentIndex >= 0 ? currentIndex : 0
-      }
-    });
-  };
+  // 스크롤이 시작되면 상단 헤더(제목 영역)를 숨김
+  useEffect(() => {
+    const container = contentRef.current;
+    if (!container) return;
+
+    const onScroll = () => {
+      const y = container.scrollTop;
+      // 약간만 내려도 헤더를 숨기고, 맨 위에 가까우면 다시 표시
+      setShowHeader(y < 8);
+    };
+
+    container.addEventListener('scroll', onScroll, { passive: true });
+    return () => container.removeEventListener('scroll', onScroll);
+  }, []);
 
   return (
-    <div className="screen-layout bg-background-light dark:bg-background-dark">
-      <div className="screen-content">
-        <div className="screen-header flex-shrink-0 flex flex-col bg-white dark:bg-gray-900 border-b border-zinc-200 dark:border-zinc-800 shadow-sm relative z-50">
-          <div className="flex items-center justify-between p-4">
-            <button 
-              onClick={() => navigate(-1)}
-              className="flex size-12 shrink-0 items-center justify-center text-content-light dark:text-content-dark hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors cursor-pointer"
-            >
-              <span className="material-symbols-outlined text-2xl">arrow_back</span>
-            </button>
-            <h1 className="text-text-primary-light dark:text-text-primary-dark text-[22px] font-bold leading-tight tracking-[-0.015em]">
-              지금 여기는
-            </h1>
-            <div className="w-10"></div>
-          </div>
-        </div>
+    <div className="screen-layout" style={{ background: '#fafafa', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+      {/* 헤더 */}
+      <header
+        className="screen-header"
+        style={{
+          position: 'sticky',
+          top: 0,
+          zIndex: 100,
+          borderBottom: '1px solid #f0f0f0',
+          flexShrink: 0,
+          background: 'white',
+          padding: '10px 16px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'flex-start',
+          gap: '12px',
+          transition: 'transform 0.2s ease-out, opacity 0.2s ease-out',
+          transform: showHeader ? 'translateY(0)' : 'translateY(-100%)',
+          opacity: showHeader ? 1 : 0
+        }}
+      >
+        <button
+          onClick={() => navigate(-1)}
+          style={{
+            border: 'none',
+            background: 'none',
+            fontSize: '26px',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center'
+          }}
+        >
+          <span className="material-symbols-outlined" style={{ color: '#333' }}>arrow_back</span>
+        </button>
+        <h1 style={{ fontSize: '20px', fontWeight: 700, margin: 0, color: '#1f2937' }}>지금 여기는</h1>
+      </header>
 
-        <main className="flex-1 overflow-y-auto overflow-x-hidden screen-body">
-          {loading ? (
-            <div className="flex flex-col items-center justify-center py-20 px-4">
-              <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-            </div>
-          ) : realtimeData.length > 0 ? (
-            <div className="grid grid-cols-2 gap-4 p-4">
-              {realtimeData.map((item, index) => {
-                const likedPosts = JSON.parse(localStorage.getItem('likedPosts') || '{}');
-                const isLiked = likedPosts[item.id] || false;
-                const likeCount = item.likes || 0;
-                
-                // 사용자 뱃지 로드
-                const postUserId = item.userId || item.user || 'default';
-                const userBadges = getEarnedBadgesForUser(postUserId) || [];
-                const representativeBadgeJson = localStorage.getItem(`representativeBadge_${postUserId}`);
-                const representativeBadge = representativeBadgeJson ? JSON.parse(representativeBadgeJson) : null;
-                
-                return (
-                  <div
-                    key={item.id || index}
-                    onClick={() => handleItemClick(item)}
-                    className="cursor-pointer group"
-                    style={{
-                      animation: `fadeInSlide 0.5s ease-out ${index * 0.05}s both`
-                    }}
-                  >
-                    {/* 이미지 */}
-                    <div className="relative w-full aspect-[4/5] overflow-hidden rounded-lg mb-3">
-                      {item.videos && item.videos.length > 0 ? (
-                        <video
-                          src={item.videos[0]}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                          autoPlay
-                          loop
-                          muted
-                          playsInline
-                          onMouseEnter={(e) => e.target.play()}
-                          onMouseLeave={(e) => e.target.pause()}
-                          onError={(e) => {
-                            e.currentTarget.style.display = 'none';
-                          }}
-                        />
-                      ) : (
-                        <img
-                          src={item.image || item.images?.[0] || 'https://images.unsplash.com/photo-1524222717473-730000096953?w=800&auto=format&fit=crop&q=80'}
-                          alt={item.location}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                          onError={(e) => {
-                            e.currentTarget.src = 'https://images.unsplash.com/photo-1524222717473-730000096953?w=800&auto=format&fit=crop&q=80';
-                          }}
-                        />
-                      )}
-                      
-                      {/* 우측 하단 좋아요 버튼 - 단순화 */}
-                      <div className="absolute bottom-3 right-3 flex items-center gap-1 bg-white/90 backdrop-blur-sm rounded-full px-3 py-1.5 shadow-md">
-                        <span className={`material-symbols-outlined text-base ${isLiked ? 'text-red-500 fill' : 'text-gray-600'}`}>
-                          favorite
-                        </span>
-                        <span className="text-sm font-semibold text-gray-700">{likeCount}</span>
+      {/* 컨텐츠 */}
+      <div
+        ref={contentRef}
+        className="screen-content"
+        style={{ flex: 1, overflow: 'auto', padding: '16px', paddingBottom: '100px' }}
+      >
+        {realtimeData.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '60px 0', color: '#94a3b8' }}>
+            <span className="material-symbols-outlined" style={{ fontSize: '48px', marginBottom: '16px', display: 'block' }}>schedule</span>
+            <p>아직 게시물이 없어요</p>
+          </div>
+        ) : (
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+              // 위아래(행) 간격은 0, 좌우(열) 간격만 좁게
+              rowGap: 0,
+              columnGap: '8px',
+              paddingBottom: '16px'
+            }}
+          >
+            {displayedPosts.map((post, index) => {
+              const weather = post.weather || null;
+              const hasWeather = weather && (weather.icon || weather.temperature);
+              return (
+                <div
+                  key={`${post.id}-${index}`}
+                  onClick={() => navigate(`/post/${post.id}`, { state: { post, allPosts: realtimeData } })}
+                  style={{
+                    background: '#ffffff',
+                    borderRadius: '12px',
+                    overflow: 'hidden',
+                    boxShadow: '0 2px 6px rgba(15,23,42,0.08)',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    flexDirection: 'column'
+                  }}
+                >
+                  {/* 이미지 강조 영역 (세로 길이 줄이기) */}
+                  <div style={{ width: '100%', aspectRatio: '4 / 3', background: '#e5e7eb', position: 'relative' }}>
+                    {post.image ? (
+                      <img
+                        src={post.image}
+                        alt={post.location}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                      />
+                    ) : (
+                      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#cbd5e1' }}>
+                        <span className="material-symbols-outlined" style={{ fontSize: '26px' }}>image</span>
                       </div>
+                    )}
+                    {/* 북마크 아이콘 */}
+                    <div style={{ position: 'absolute', top: '6px', right: '6px', width: '24px', height: '24px', borderRadius: '999px', background: 'rgba(15,23,42,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <span className="material-symbols-outlined" style={{ fontSize: '16px', color: '#f9fafb' }}>bookmark_border</span>
                     </div>
-                    
-                    {/* 이미지 밖 하단 텍스트 */}
-                    <div className="space-y-1.5">
-                      {/* 사용자 정보 및 뱃지 */}
-                      <div className="flex items-center gap-2 mb-1">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="text-xs font-semibold text-text-primary-light dark:text-text-primary-dark">
-                            {item.user || '여행자'}
-                          </span>
-                          {userBadges.length > 0 && (
-                            <div className="flex items-center gap-1">
-                              {userBadges.slice(0, 3).map((badge, badgeIndex) => (
-                                <div 
-                                  key={`${badge.name}-${badgeIndex}`}
-                                  className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded-full transition-all ${
-                                    badge.name === representativeBadge?.name
-                                      ? 'bg-primary/20 border border-primary'
-                                      : 'bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600'
-                                  }`}
-                                  title={badge.description || badge.name}
-                                >
-                                  <span className="text-xs">{badge.icon || '🏆'}</span>
-                                  {badge.name === representativeBadge?.name && (
-                                    <span className="text-[10px] font-semibold text-primary max-w-[60px] truncate">
-                                      {badge.name}
-                                    </span>
-                                  )}
-                                </div>
-                              ))}
-                              {userBadges.length > 3 && (
-                                <div className="flex items-center gap-0.5 px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-full">
-                                  <span className="text-[10px] font-semibold text-gray-700 dark:text-gray-300">
-                                    +{userBadges.length - 3}
-                                  </span>
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                      
-                      {/* 지역 상세 정보 */}
-                      <div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className="text-sm font-semibold text-text-primary-light dark:text-text-primary-dark">
-                            {item.detailedLocation || item.placeName || item.location || '여행지'}
-                          </p>
-                          {/* 업로드 시간 - 지역 옆에 */}
-                          {item.time && (
-                            <p className="text-[11px] text-text-secondary-light dark:text-text-secondary-dark">
-                              {item.time}
-                            </p>
-                          )}
-                        </div>
-                        {item.detailedLocation && item.detailedLocation !== item.location && (
-                          <p className="text-xs text-text-secondary-light dark:text-text-secondary-dark mt-0.5">
-                            {item.location}
-                          </p>
-                        )}
-                      </div>
-                      
-                      {/* 해시태그 - 눌러서 검색 */}
-                      {item.tags && item.tags.length > 0 && (
-                        <div className="flex gap-1.5 overflow-x-auto [-ms-scrollbar-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                          {item.tags.slice(0, 5).map((tag, tagIndex) => {
-                            const t = typeof tag === 'string' ? tag.replace(/^#+/, '') : tag;
-                            return (
-                              <button key={tagIndex} type="button" onClick={() => navigate(`/search?q=${encodeURIComponent('#' + t)}`)} className="text-[11px] font-medium text-primary bg-primary/10 hover:bg-primary/20 px-2 py-0.5 rounded-full whitespace-nowrap flex-shrink-0 cursor-pointer transition-colors">
-                                #{t}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      )}
+                    {/* 좋아요 배지 */}
+                    <div style={{ position: 'absolute', bottom: '6px', right: '6px', background: 'rgba(15,23,42,0.85)', padding: '2px 8px', borderRadius: '999px', fontSize: '12px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px', color: '#f9fafb' }}>
+                      <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>favorite</span>
+                      <span>{post.likes}</span>
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center py-20 px-4">
-              <span className="material-symbols-outlined text-7xl text-gray-300 dark:text-gray-600 mb-4">
-                update
-              </span>
-              <p className="text-base font-medium text-gray-500 dark:text-gray-400 mb-2 text-center">
-                아직 게시물이 없습니다
-              </p>
-              <p className="text-sm text-gray-400 dark:text-gray-500 text-center mb-4 max-w-xs">
-                첫 번째 여행 사진을 올려보세요!
-              </p>
-              <button
-                onClick={() => navigate('/upload')}
-                className="bg-primary text-white px-6 py-3 rounded-full font-semibold hover:bg-primary/90 transition-colors shadow-lg flex items-center gap-2"
-              >
-                <span className="material-symbols-outlined">add_a_photo</span>
-                첫 사진 올리기
-              </button>
-            </div>
-          )}
-        </main>
+
+                  {/* 간단한 설명 영역 */}
+                  <div style={{ padding: '11px 12px 12px' }}>
+                    <div style={{ fontSize: '14px', fontWeight: 700, color: '#111827', marginBottom: '6px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {post.location || '어딘가의 지금'}
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#4b5563', marginBottom: '6px', maxHeight: '3.2em', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {post.content}
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', color: '#6b7280' }}>
+                      <span style={{ fontWeight: 600 }}>{post.time}</span>
+                      <span style={{ maxWidth: '60%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        📍 {post.location}
+                      </span>
+                    </div>
+                    {hasWeather && (
+                      <div style={{ marginTop: '4px', fontSize: '12px', color: '#6b7280', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        {weather.icon && <span>{weather.icon}</span>}
+                        {weather.temperature && <span>{weather.temperature}</span>}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
+
+      {/* 위로가기 버튼 - 프로필 버튼 바로 위, 흰색 완전 원형 */}
+      <button
+        type="button"
+        onClick={() => {
+          if (contentRef.current) {
+            contentRef.current.scrollTop = 0;
+            if (typeof contentRef.current.scrollTo === 'function') {
+              contentRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+          }
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }}
+        style={{
+          position: 'fixed',
+          bottom: 'calc(80px + env(safe-area-inset-bottom, 0px) + 20px)',
+          // 화면 전체가 아니라, 가운데 460px짜리 폰 화면 기준으로 오른쪽 정렬
+          right: 'calc((100vw - 460px) / 2 + 20px)',
+          width: '46px',
+          height: '46px',
+          borderRadius: '50%',
+          background: 'rgba(255,255,255,0.85)', // 반투명 흰색
+          border: '1px solid rgba(148,163,184,0.5)', // 연한 회색 테두리
+          boxShadow: '0 4px 14px rgba(15,23,42,0.22)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: 'pointer',
+          zIndex: 200
+        }}
+        aria-label="위로가기"
+      >
+        <span className="material-symbols-outlined" style={{ fontSize: '22px', color: '#111827' }}>north</span>
+      </button>
 
       <BottomNavigation />
     </div>
@@ -315,4 +262,3 @@ const RealtimeFeedScreen = () => {
 };
 
 export default RealtimeFeedScreen;
-

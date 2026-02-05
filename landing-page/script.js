@@ -1,58 +1,58 @@
 // Email Form Submission
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
   const emailForm = document.getElementById('signupForm');
   const emailInput = document.getElementById('emailInput');
-  
+
   if (!emailForm || !emailInput) {
     console.log('Form not found, skipping form handler');
   } else {
     const emailSubmit = emailForm.querySelector('button[type="submit"]');
-  
-    emailForm.addEventListener('submit', function(e) {
+
+    emailForm.addEventListener('submit', function (e) {
       e.preventDefault();
-      
+
       const email = emailInput.value.trim();
-      
+
       if (!email) {
         alert('이메일을 입력해주세요.');
         return;
       }
-  
+
       // 이메일 형식 검증
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(email)) {
         alert('올바른 이메일 형식을 입력해주세요.');
         return;
       }
-  
+
       // 버튼 상태 변경
       emailSubmit.textContent = '처리 중...';
       emailSubmit.disabled = true;
-  
+
       // TODO: 실제 백엔드 API 연동
       // 현재는 로컬스토리지에 저장하고 시뮬레이션
       setTimeout(() => {
         // 로컬스토리지에 저장
         const subscribers = JSON.parse(localStorage.getItem('subscribers') || '[]');
-        
+
         if (subscribers.includes(email)) {
           alert('이미 등록된 이메일입니다.');
           emailSubmit.textContent = '초기 멤버 신청';
           emailSubmit.disabled = false;
           return;
         }
-  
+
         subscribers.push(email);
         localStorage.setItem('subscribers', JSON.stringify(subscribers));
-  
+
         // 성공 처리
         emailSubmit.textContent = '✓ 신청 완료!';
         emailSubmit.classList.add('success');
         emailInput.value = '';
-  
+
         // 감사 메시지
         alert('감사합니다! 라이브 저니의 초기 멤버가 되셨습니다.\n서비스 출시 소식을 이메일로 보내드리겠습니다.');
-  
+
         // 3초 후 버튼 원상복구
         setTimeout(() => {
           emailSubmit.textContent = '초기 멤버 신청';

@@ -16,7 +16,7 @@ export const initStatusBar = async () => {
     await StatusBar.setBackgroundColor({ color: '#ffffff' });
     await StatusBar.setOverlaysWebView({ overlay: false });
   } catch (error) {
-    console.error('StatusBar 설정 실패:', error);
+    logger.error('StatusBar 설정 실패:', error);
   }
 };
 
@@ -27,7 +27,7 @@ export const hideStatusBar = async () => {
   try {
     await StatusBar.hide();
   } catch (error) {
-    console.error('StatusBar 숨기기 실패:', error);
+    logger.error('StatusBar 숨기기 실패:', error);
   }
 };
 
@@ -38,7 +38,7 @@ export const showStatusBar = async () => {
   try {
     await StatusBar.show();
   } catch (error) {
-    console.error('StatusBar 표시 실패:', error);
+    logger.error('StatusBar 표시 실패:', error);
   }
 };
 
@@ -62,7 +62,7 @@ export const setStatusBarColor = async (color) => {
   try {
     await StatusBar.setBackgroundColor({ color });
   } catch (error) {
-    console.error('StatusBar 색상 변경 실패:', error);
+    logger.error('StatusBar 색상 변경 실패:', error);
   }
 };
 

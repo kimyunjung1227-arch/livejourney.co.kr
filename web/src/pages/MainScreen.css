@@ -1,6 +1,6 @@
 .main-screen {
   min-height: 100vh;
-  background: #f5f5f5;
+  background: #fafafa;
   padding-bottom: 70px;
 }
 
@@ -25,7 +25,7 @@
 
 .filter-tab {
   padding: 8px 20px;
-  background: #f5f5f5;
+  background: #fafafa;
   border: none;
   border-radius: 20px;
   font-size: 14px;
@@ -179,3 +179,18 @@
   font-size: 20px;
 }
 
+/* Interest Place Item Delete Button Visibility */
+.delete-btn {
+  display: none;
+  /* Hidden by default */
+}
+
+.interest-place-item:hover .delete-btn {
+  display: flex !important;
+  /* Show on hover */
+}
+
+.interest-place-item.selected .delete-btn {
+  display: flex !important;
+  /* Show when selected */
+}
