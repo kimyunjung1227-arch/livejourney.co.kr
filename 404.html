@@ -1,57 +1,64 @@
 <!DOCTYPE html>
 <html lang="ko">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="manifest" href="/manifest.json" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <meta name="description" content="실시간으로 공유하는 여행 이야기 - LiveJourney" />
-    <meta name="theme-color" content="#ff6b35" />
-    <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <meta name="apple-mobile-web-app-title" content="LiveJourney" />
-    <link rel="apple-touch-icon" href="/logo.svg" />
-    <title>📸 LiveJourney - 실시간 여행 공유</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&family=Noto+Sans+KR:wght@700&display=swap" rel="stylesheet" />
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet" />
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <style>
-      .material-symbols-outlined {
-        font-variation-settings: 'FILL' 1, 'wght' 700, 'GRAD' 0, 'opsz' 48
-      }
-      body {
-        min-height: max(884px, 100dvh);
-      }
-    </style>
-    <script>
-      // GitHub Pages SPA 라우팅 지원
-      // 모든 404 요청을 index.html로 리다이렉트
-      var path = window.location.pathname;
-      var search = window.location.search;
-      var hash = window.location.hash;
-      
-      // base path 제거 (이미 포함되어 있을 수 있음)
-      var basePath = '/app';
-      if (path.startsWith(basePath)) {
-        path = path.substring(basePath.length);
-      }
-      
-      // index.html로 리다이렉트
-      var indexPath = basePath + '/index.html';
-      if (path !== '/' && path !== basePath && path !== indexPath) {
-        // 경로 정보를 쿼리 파라미터로 전달
-        var separator = search ? '&' : '?';
-        window.location.replace(indexPath + separator + 'redirect=' + encodeURIComponent(path) + search + hash);
-      } else {
-        window.location.replace(indexPath + search + hash);
-      }
-    </script>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
+
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <link rel="manifest" href="manifest.json" />
+  <meta name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="description" content="실시간으로 공유하는 여행 이야기 - LiveJourney" />
+  <meta name="theme-color" content="#ff6b35" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="LiveJourney" />
+  <link rel="apple-touch-icon" href="logo.svg" />
+  <title>📸 LiveJourney - 실시간 여행 공유</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&family=Noto+Sans+KR:wght@700&display=swap"
+    rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 1, 'wght' 700, 'GRAD' 0, 'opsz' 48
+    }
+
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  <script>
+    // GitHub Pages SPA 라우팅 지원
+    // 모든 404 요청을 index.html로 리다이렉트
+    var path = window.location.pathname;
+    var search = window.location.search;
+    var hash = window.location.hash;
+
+    // base path 제거 (이미 포함되어 있을 수 있음)
+    var basePath = '/livejourney.co.kr';
+    if (path.startsWith(basePath)) {
+      path = path.substring(basePath.length);
+    }
+
+    // index.html로 리다이렉트
+    var indexPath = basePath + '/index.html';
+    if (path !== '/' && path !== basePath && path !== indexPath) {
+      // 경로 정보를 쿼리 파라미터로 전달
+      var separator = search ? '&' : '?';
+      window.location.replace(indexPath + separator + 'redirect=' + encodeURIComponent(path) + search + hash);
+    } else {
+      window.location.replace(indexPath + search + hash);
+    }
+  </script>
+</head>
+
+<body>
+  <div id="root"></div>
+  <script type="module" src="./src/main.jsx"></script>
+</body>
+
 </html>
