@@ -208,7 +208,7 @@ const OnboardingScreen = () => {
           step={step + 1}
           onLogin={handleStart}
           onSkip={handleSkip}
-          middleImage={step === 0 ? '/onboarding-collage.jpg.png' : undefined}
+          middleImage={undefined}
         >
           {renderIllustration()}
         </OnboardingLayout>
