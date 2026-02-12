@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import BottomNavigation from '../components/BottomNavigation';
 
 const NoticesScreen = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const fromMain = location.state?.fromMain === true;
   const [selectedNotice, setSelectedNotice] = useState(null);
 
   // 공지사항 데이터 (LiveJourney 앱 기반)
@@ -65,7 +67,7 @@ LiveJourney에는 7개 카테고리, 총 20개의 뱃지가 있습니다!
 
 ## 🔔 관심 지역 설정
 - 관심 지역을 설정하면 해당 지역의 새로운 사진이 올라올 때 알림을 받을 수 있습니다
-- **설정 > 관심 지역/장소 관리**에서 설정하세요
+- **메인 화면** 상단 관심 지역 영역에서 추가 버튼(+)으로 설정하세요
 
 ## 💡 활용 팁
 - 해시태그를 많이 사용하면 더 많은 사람들이 내 사진을 찾을 수 있습니다
@@ -485,7 +487,7 @@ LiveJourney는 **과거의 정보가 아닌, 지금 이 순간의 여정(Journey
       <div className="flex-1 overflow-y-auto overflow-x-hidden relative">
         <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-border-light bg-surface-light/80 dark:border-border-dark dark:bg-surface-dark/80 backdrop-blur-sm px-4">
           <button
-            onClick={() => navigate('/settings')}
+            onClick={() => (fromMain ? navigate('/main', { replace: true }) : navigate(-1))}
             className="flex size-12 shrink-0 items-center justify-center cursor-pointer text-black dark:text-white hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
           >
             <span className="material-symbols-outlined text-2xl">arrow_back</span>

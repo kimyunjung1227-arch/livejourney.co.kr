@@ -1,47 +1,91 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-// 온보딩 공통 레이아웃 (사용자가 제공한 코드 기반)
-const OnboardingLayout = ({ title, description, step, children, onLogin, onSkip }) => {
+// 온보딩 레이아웃 - 참고: 일러스트 → 제목 → 설명(가깝게) → 페이지 점 → 버튼
+const OnboardingLayout = ({ title, description, step, children, onLogin, onSkip, middleImage }) => {
+  const isLastStep = step === 3;
   return (
-    <div className="flex flex-col min-h-screen w-full max-w-md mx-auto bg-white px-5 pt-4 pb-8 font-sans">
-      {/* 상단 건너뛰기 버튼 */}
-      <div className="flex justify-end mb-4">
+    <div className="flex flex-col min-h-screen w-full max-w-md mx-auto bg-white px-4 pt-3 pb-8 font-sans">
+      <div className="flex justify-end mb-2">
         <button
           type="button"
           onClick={onSkip}
-          className="text-sm font-medium text-gray-400 hover:text-gray-600"
+          className="text-xs font-medium text-gray-400 hover:text-gray-600"
         >
           건너뛰기
         </button>
       </div>
 
-      <div className="flex flex-1 flex-col items-center justify-center gap-6">
-        <h1 className="text-2xl font-bold text-center whitespace-pre-line leading-tight">
-          {title}
-        </h1>
-
-        <div className="w-full flex items-center justify-center relative overflow-hidden">
-          {children}
-        </div>
-
-        <div className="text-center">
-          <p className="text-gray-600 text-sm mb-4 leading-relaxed px-4 whitespace-pre-line">
-            {description}
-          </p>
-          <p className="text-xs font-semibold mb-2 text-gray-400">
-            <span className="text-black">{step}</span> of 3
-          </p>
-
-          <div className="w-full h-1 bg-gray-100 rounded-full mb-4" />
-
-          <button
-            type="button"
-            onClick={onLogin}
-            className="w-full h-11 bg-[#00BCD4] text-white rounded-full font-semibold text-sm hover:bg-[#00A5BD] transition-colors"
+      {/* 콘텐츠 블록을 화면 세로 중앙으로 */}
+      <div className="flex flex-1 min-h-0 flex-col items-center justify-center">
+        <div className="flex flex-col items-center w-full">
+          {/* 1. 일러스트 영역 - 고정 높이 38vh */}
+          <div
+            className="flex items-center justify-center w-full flex-shrink-0"
+            style={{ height: '38vh', paddingTop: 8, paddingBottom: 16 }}
           >
-            로그인
-          </button>
+            {middleImage ? (
+              <img
+                src={middleImage}
+                alt=""
+                className="w-full max-w-[290px] h-full mx-auto rounded-xl object-cover shadow-sm border border-gray-100"
+                style={{ maxHeight: '100%' }}
+              />
+            ) : (
+              <div className="w-full max-w-[290px] h-full mx-auto flex items-center justify-center [&>*]:max-h-full [&>img]:max-h-full">
+                {children}
+              </div>
+            )}
+          </div>
+
+          {/* 2. 제목 - 1줄, 사이즈 줄여서 3줄 구성 */}
+          <div className="w-full max-w-[300px] flex-shrink-0 min-h-[56px] flex items-center justify-center px-2 mb-0.5">
+            <h1 className="text-lg font-bold text-center whitespace-pre-line leading-tight text-gray-900 break-keep">
+              {title}
+            </h1>
+          </div>
+
+          {/* 3. 설명 - 2줄, 작은 글씨로 3줄 안에 자연스럽게 */}
+          <div className="w-full max-w-[300px] flex-shrink-0 min-h-[48px] flex items-center justify-center px-2 mb-2">
+            <p className="text-gray-600 text-sm leading-snug text-center whitespace-pre-line w-full break-keep">
+              {description}
+            </p>
+          </div>
+
+          {/* 4. 하단(점 + 버튼) */}
+          <div className="w-full max-w-[320px] flex-shrink-0 min-h-[140px] flex flex-col items-center justify-start pt-2">
+          <div className="flex justify-center gap-1.5 mb-4">
+            {[1, 2, 3].map((i) => (
+              <span
+                key={i}
+                className={`inline-block w-2 h-2 rounded-full transition-colors ${
+                  i === step ? 'bg-gray-800' : 'bg-gray-200'
+                }`}
+                aria-hidden
+              />
+            ))}
+          </div>
+          {isLastStep ? (
+            <>
+              <button
+                type="button"
+                onClick={onLogin}
+                className="w-full h-11 bg-[#00BCD4] text-white rounded-full font-medium text-sm hover:bg-[#00A5BD] transition-colors"
+              >
+                시작하기
+              </button>
+              <button
+                type="button"
+                onClick={onSkip}
+                className="mt-3 text-xs text-gray-500 hover:text-gray-700"
+              >
+                계정 없이 둘러보기
+              </button>
+            </>
+          ) : (
+            <div className="w-full h-11 rounded-full" aria-hidden />
+          )}
+          </div>
         </div>
       </div>
     </div>
@@ -61,23 +105,33 @@ const OnboardingScreen = () => {
       description: '지금 사람들이 올린 현장 사진으로\n어디가 핫한지 바로 확인하세요.'
     },
     {
-      title: '날씨·혼잡도까지 한 번에',
-      description: '사진 속 날씨와 분위기를 함께 보여줘서\n가야 할지 말지 쉽게 결정할 수 있어요.'
+      title: '지도에서 현지 정보 확인하기',
+      description: '궁금한 곳? 지도에서 실시간으로 물어보세요.\n핀을 연결해 나만의 여행 코스를 만드세요.'
     },
     {
-      title: '내 여행 기록도 자동 정리',
-      description: '찍은 사진만 올리면\n지역·날짜별로 여행 기록이 쌓여요.'
+      title: '흩어진 사진이 여행 기록이 됩니다',
+      description: '사진만 올리면 찍은 날짜와 위치를 바탕으로\n자동으로 여행별·도시별 앨범이 정리돼요.'
     }
   ];
 
   const current = slides[step];
 
-  const handleLogin = () => {
-    navigate('/start');
+  const handleStart = () => {
+    const goMain = () => navigate('/main');
+    if (typeof navigator !== 'undefined' && navigator.geolocation) {
+      // 위치 권한 요청 → 브라우저/기기 시스템 팝업 표시 (최초 1회. 이미 허용/거부했으면 팝업 안 뜸)
+      navigator.geolocation.getCurrentPosition(
+        goMain,
+        goMain,
+        { enableHighAccuracy: false, timeout: 10000, maximumAge: 0 }
+      );
+    } else {
+      goMain();
+    }
   };
 
   const handleSkip = () => {
-    navigate('/start');
+    navigate('/main');
   };
 
   const startDrag = (clientX) => {
@@ -112,76 +166,94 @@ const OnboardingScreen = () => {
   };
 
   const renderIllustration = () => {
-    // 1번: 사진 콜라주 (이미지 예시와 유사)
-    if (step === 0) {
-      return (
-        <div className="w-full h-full flex items-center justify-center">
-          <div className="relative w-[90%] h-[80%] rounded-3xl overflow-hidden bg-white">
-            <div className="grid grid-cols-3 gap-3 p-4">
-              {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => (
-                <div
-                  key={i}
-                  className={`rounded-2xl bg-gray-200 overflow-hidden ${
-                    i % 5 === 0 ? 'col-span-2 h-32' : 'h-20'
-                  }`}
-                  style={{
-                    transform:
-                      i % 3 === 0 ? 'rotate(4deg)' : i % 3 === 1 ? 'rotate(-3deg)' : 'rotate(2deg)',
-                    transformOrigin: 'center center'
-                  }}
-                >
-                  <div className="w-full h-full bg-gradient-to-tr from-sky-200 via-emerald-200 to-amber-200" />
-                </div>
-              ))}
-            </div>
+    // 1번: 레이아웃에서 middleImage로 표시하므로 여기서는 미사용
+    if (step === 0) return null;
 
-            {/* 위/아래 화이트 그라데이션 */}
-            <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-white to-transparent" />
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-white to-transparent" />
-          </div>
-        </div>
-      );
-    }
-
-    // 2번: 날씨/혼잡도 카드
+    // 2번: 지도 기능 - 1번과 동일한 작은 사이즈
     if (step === 1) {
       return (
-        <div className="space-y-4 w-full px-10">
-          <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-50">
-            <div className="w-full h-24 bg-gray-50 rounded-lg animate-pulse" />
-          </div>
-          <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-50">
-            <div className="w-full h-24 bg-gray-50 rounded-lg animate-pulse" />
-          </div>
-        </div>
+        <img
+          src="/지도기능.jpg.png"
+          alt="지도에서 현지 정보 확인"
+          className="w-full max-w-[290px] rounded-xl object-cover shadow-sm border border-gray-100"
+          style={{ maxHeight: '38vh' }}
+        />
       );
     }
 
-    // 3번: 타임라인 + 사진 썸네일
+    // 3번: 여행 기록 카드 - 동일 작은 영역
     return (
-      <div className="w-full h-full flex items-center justify-center px-4">
-        <div className="flex items-center justify-between w-full max-w-xs">
-          <div className="flex flex-col gap-6 text-left text-xs text-gray-700">
-            <div>
-              <div className="text-sm font-semibold">2023·10월 일기</div>
-              <div className="text-[11px] text-gray-500">지역 · 남해/백팩</div>
+      <div className="relative w-full" style={{ width: 290, maxWidth: '100%', height: '38vh', maxHeight: 240 }}>
+        <div
+          className="absolute inset-0 flex items-center justify-center"
+          style={{ width: 240, height: 200 }}
+        >
+          {/* 세 번째(맨 아래) 카드 */}
+          <div
+            style={{
+              position: 'absolute',
+              width: 220,
+              height: 155,
+              borderRadius: 14,
+              top: 96,
+              left: '50%',
+              transform: 'translateX(-50%) scale(0.9)',
+              backgroundImage: 'url(https://i.imgur.com/y012d8e.jpeg)',
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+              boxShadow: '0 6px 14px rgba(0,0,0,0.12)',
+              opacity: 0.8
+            }}
+          />
+          {/* 두 번째(중간) 카드 */}
+          <div
+            style={{
+              position: 'absolute',
+              width: 220,
+              height: 155,
+              borderRadius: 14,
+              top: 48,
+              left: '50%',
+              transform: 'translateX(-50%) scale(0.95)',
+              backgroundImage: 'url(https://i.imgur.com/8o35d9f.jpeg)',
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+              boxShadow: '0 6px 14px rgba(0,0,0,0.12)',
+              opacity: 0.9
+            }}
+          />
+          {/* 첫 번째(맨 위) 카드 */}
+          <div
+            style={{
+              position: 'absolute',
+              width: 220,
+              height: 155,
+              borderRadius: 14,
+              top: 0,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              backgroundImage: 'url(https://i.imgur.com/4kX9z1a.jpeg)',
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+              boxShadow: '0 6px 14px rgba(0,0,0,0.15)'
+            }}
+          >
+            <div
+              style={{
+                position: 'absolute',
+                top: 10,
+                left: 10,
+                backgroundColor: 'rgba(255,255,255,0.9)',
+                color: '#007aff',
+                padding: '4px 10px',
+                borderRadius: 12,
+                fontSize: 11,
+                fontWeight: 600,
+                boxShadow: '0 1px 4px rgba(0,0,0,0.08)'
+              }}
+            >
+              도쿄 · 2024년 10월
             </div>
-            <div>
-              <div className="text-sm font-semibold">2023·12월 일기</div>
-              <div className="text-[11px] text-gray-500">5일 · 제주/걷기</div>
-            </div>
-          </div>
-          <div className="flex-1 mx-4 h-40 relative">
-            <div className="absolute left-1/2 top-0 bottom-0 w-[2px] bg-gray-200 -translate-x-1/2" />
-            <div className="absolute left-1/2 top-4 -translate-x-1/2 w-3 h-3 rounded-full bg-sky-400" />
-            <div className="absolute left-1/2 bottom-4 -translate-x-1/2 w-3 h-3 rounded-full bg-emerald-400" />
-          </div>
-          <div className="flex flex-col gap-2">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="w-16 h-10 rounded-xl bg-gray-200 overflow-hidden">
-                <div className="w-full h-full bg-gradient-to-tr from-sky-200 to-emerald-200" />
-              </div>
-            ))}
           </div>
         </div>
       </div>
@@ -205,8 +277,9 @@ const OnboardingScreen = () => {
           title={current.title}
           description={current.description}
           step={step + 1}
-          onLogin={handleLogin}
+          onLogin={handleStart}
           onSkip={handleSkip}
+          middleImage={step === 0 ? '/onboarding-collage.jpg.png' : undefined}
         >
           {renderIllustration()}
         </OnboardingLayout>

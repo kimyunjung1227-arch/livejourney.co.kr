@@ -327,21 +327,14 @@ export const analyzeImageForTags = async (imageFile, location = '', existingNote
           method: 'multimodal-ai'
         };
       } else {
-        logger.warn('⚠️ AI 결과가 비어있거나 실패:', {
-          aiResult,
-          success: aiResult?.success,
-          tagsCount: aiResult?.tags?.length || 0
-        });
+        logger.debug('AI 태그 없음 → 이미지/위치 기반 태그로 진행');
       }
     } catch (aiError) {
-      logger.warn('⚠️ 멀티모달 AI 실패, 기존 방식으로 폴백:');
-      logger.warn('  에러:', aiError);
-      logger.warn('  메시지:', aiError.message);
-      logger.warn('  스택:', aiError.stack);
+      logger.debug('AI 호출 실패, 로컬 분석 사용:', aiError.message);
     }
     
-    // 2차 시도: 기존 방식 (색상 분석 기반)
-    logger.log('🔄 기존 방식으로 태그 생성...');
+    // 2차 시도: 기존 방식 (색상·위치·노트 기반) — AI 미사용 시 항상 여기서 태그·카테고리 생성
+    logger.log('🔄 이미지/위치 기반 태그·카테고리 생성 중...');
     const keywords = new Set();
     
     // 병렬 처리로 속도 향상

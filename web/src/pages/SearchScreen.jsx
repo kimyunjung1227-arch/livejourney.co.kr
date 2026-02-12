@@ -9,6 +9,7 @@ import { getCombinedPosts } from '../utils/mockData';
 import { getDisplayImageUrl } from '../api/upload';
 import { getWeatherByRegion } from '../api/weather';
 import { useHorizontalDragScroll } from '../hooks/useHorizontalDragScroll';
+import BackButton from '../components/BackButton';
 
 // 해시태그 파싱: #동백꽃 #바다 #힐링 → ['동백꽃','바다','힐링']
 const parseHashtags = (q) => {
@@ -19,6 +20,35 @@ const parseHashtags = (q) => {
 
 // 기본 인기 해시태그 (게시물 태그가 없을 때 해시태그 영역에 표시)
 const DEFAULT_HASHTAGS = ['바다', '힐링', '맛집', '자연', '꽃', '일출', '카페', '여행', '휴양', '등산', '야경', '축제', '해변', '산', '전통', '한옥', '감귤', '벚꽃', '단풍', '도시'];
+
+// 지역별 재미있는 한 줄 설명 (성심당의 도시 스타일)
+const REGION_TAGLINES = {
+  '서울': '한강과 궁궐의 도시', '부산': '해운대와 광안리의 도시', '대구': '김광석과 치맥의 도시',
+  '인천': '짜장면과 차이나타운의 도시', '광주': '무등산과 빛고을', '대전': '성심당의 도시',
+  '울산': '간절곶 일출의 도시', '세종': '호수공원과 행정의 도시', '수원': '화성과 갈비의 도시',
+  '용인': '에버랜드의 도시', '성남': '판교와 IT의 도시', '고양': '일산 호수와 킨텍스의 도시',
+  '부천': '만화와 영화의 도시', '안양': '안양천과 예술의 도시', '파주': '헤이리와 DMZ의 도시',
+  '평택': '평택항과 송탄의 도시', '화성': '융건릉과 제부도의 도시', '김포': '한강과 김포공항의 도시',
+  '광명': '광명동굴의 도시', '이천': '도자기와 쌀의 고장', '양평': '두물머리와 세미원의 고장',
+  '가평': '남이섬과 아침고요의 고장', '포천': '산정호수와 허브아일랜드의 고장',
+  '춘천': '닭갈비와 소양강의 도시', '강릉': '커피와 정동진 일출의 도시', '속초': '오징어와 설악산의 도시',
+  '원주': '치악산과 단풍의 고장', '동해': '촛대바위와 추암의 도시', '태백': '눈꽃과 스키의 고장',
+  '삼척': '환선굴과 동굴의 도시', '평창': '용평과 올림픽의 고장', '양양': '서핑과 낙산사의 도시',
+  '청주': '직지와 상당산성의 도시', '충주': '충주호와 사과의 고장', '제천': '의림지와 한방의 고장',
+  '천안': '호두과자와 독립기념관의 도시', '아산': '온양온천과 이순신의 고장', '공주': '백제와 무령왕릉의 도시',
+  '보령': '머드와 대천해수욕장의 도시', '서산': '간월암과 마애삼존불의 고장', '당진': '왜목마을과 일출의 고장',
+  '부여': '백제 궁남지의 도시', '전주': '한옥과 비빔밥의 도시', '군산': '이성당 빵과 경암동의 도시',
+  '익산': '미륵사지와 보석의 고장', '정읍': '내장산 단풍의 고장', '남원': '춘향과 광한루의 도시',
+  '목포': '갓바위와 회의 도시', '여수': '밤바다와 오동도의 도시', '순천': '순천만 갈대의 도시',
+  '광양': '매화와 불고기의 도시', '담양': '죽녹원과 대나무의 고장', '보성': '녹차밭과 드라이브의 고장',
+  '포항': '과메기와 호미곶 일출의 도시', '경주': '불국사와 신라 천년의 도시', '구미': '반도체와 골드키위의 도시',
+  '안동': '하회마을과 간고등어의 고장', '김천': '직지사와 포도의 고장', '영주': '부석사와 소수서원의 고장',
+  '창원': '진해 벚꽃의 도시', '진주': '진주성과 비빔밥의 도시', '통영': '한려수도와 회의 도시',
+  '사천': '바다와 항공의 도시', '김해': '수로왕릉과 가야의 도시', '거제': '해금강과 외도의 도시',
+  '양산': '통도사와 신불산의 고장', '제주': '한라산과 흑돼지의 섬', '서귀포': '정방폭포와 감귤의 도시'
+};
+
+const getRegionTagline = (name) => REGION_TAGLINES[name] || `${name}의 숨은 보석`;
 
 const SearchScreen = () => {
   const navigate = useNavigate();
@@ -31,6 +61,7 @@ const SearchScreen = () => {
   const [allPosts, setAllPosts] = useState([]);
   const [selectedHashtag, setSelectedHashtag] = useState(null);
   const [searchCount, setSearchCount] = useState(0);
+  const [searchEvents, setSearchEvents] = useState([]);
   const [photoFocusMode, setPhotoFocusMode] = useState(false);
   const [weatherData, setWeatherData] = useState({});
 
@@ -153,7 +184,7 @@ const SearchScreen = () => {
       축제: '축제정보',
       문화: '문화정보',
       액티비티: '액티비티',
-      명소: '가볼만한 곳' 
+      명소: '명소' 
     };
     const bloomPcts = [70, 75, 80, 85, 90, 95];
     for (const [key, posts] of groups) {
@@ -175,7 +206,7 @@ const SearchScreen = () => {
       cards.push({
         name,
         category: type,
-        categoryLabel: labels[type] || '가볼만한 곳',
+        categoryLabel: labels[type] || '명소',
         image: p.images?.[0] || p.image,
         shortDesc,
         detailedLocation: p.detailedLocation || p.placeName || shortDesc,
@@ -224,6 +255,31 @@ const SearchScreen = () => {
     () => recentSearches.filter((s) => !String(s).startsWith('#')),
     [recentSearches]
   );
+
+  // 가장 많이 검색된 지역 (searchEvents 기반, 상위 5개)
+  const mostSearchedRegions = useMemo(() => {
+    if (!searchEvents || searchEvents.length === 0) return [];
+
+    const counts = new Map();
+    searchEvents.forEach((ev) => {
+      const t = String(ev?.term || '').trim().toLowerCase();
+      if (!t || t.startsWith('#')) return;
+
+      // 추천 지역 목록에서 매칭되는 지역 찾기
+      const matched = recommendedRegions.find((r) => {
+        const nameLower = r.name.toLowerCase();
+        return nameLower === t || nameLower.includes(t) || t.includes(nameLower);
+      });
+      if (!matched) return;
+
+      const key = matched.name;
+      counts.set(key, (counts.get(key) || 0) + 1);
+    });
+
+    const items = Array.from(counts.entries()).map(([name, count]) => ({ name, count }));
+    items.sort((a, b) => b.count - a.count);
+    return items.slice(0, 5);
+  }, [searchEvents, recommendedRegions]);
 
   // 해시태그 칩: 전체 게시물에서 태그 수집, 빈도순 상위 24개. 없으면 기본 인기 해시태그 사용
   const hashtagChips = useMemo(() => {
@@ -318,12 +374,17 @@ const SearchScreen = () => {
 
     // 검색 이벤트 저장 (핫플 의도 신호용)
     if (term) {
+      const entry = { term: String(term).trim().toLowerCase(), ts: Date.now() };
       try {
         const raw = JSON.parse(localStorage.getItem('searchEvents') || '[]');
-        const next = [{ term: String(term).trim().toLowerCase(), ts: Date.now() }, ...raw].slice(0, 500);
+        const base = Array.isArray(raw) ? raw : [];
+        const next = [entry, ...base].slice(0, 500);
         localStorage.setItem('searchEvents', JSON.stringify(next));
+        setSearchEvents(next);
       } catch {
-        localStorage.setItem('searchEvents', JSON.stringify([{ term: String(term).trim().toLowerCase(), ts: Date.now() }]));
+        const next = [entry];
+        localStorage.setItem('searchEvents', JSON.stringify(next));
+        setSearchEvents(next);
       }
     }
   }, []);
@@ -491,6 +552,16 @@ const SearchScreen = () => {
     }
     setSearchCount(parseInt(localStorage.getItem('searchCount') || '0', 10));
 
+    // 검색 이벤트(검색어 기록) 로드
+    try {
+      const rawEvents = JSON.parse(localStorage.getItem('searchEvents') || '[]');
+      if (Array.isArray(rawEvents)) {
+        setSearchEvents(rawEvents);
+      }
+    } catch (e) {
+      logger.error('검색 이벤트 로드 실패:', e);
+    }
+
     const handlePostsUpdate = () => {
       setTimeout(loadAllPosts, 200);
     };
@@ -535,12 +606,7 @@ const SearchScreen = () => {
       <div className="screen-content flex flex-col flex-1 min-h-0 overflow-hidden">
         {/* 헤더 - 최소화 (고정) */}
         <div className="flex-shrink-0 flex items-center px-4 pt-4 pb-2 bg-white dark:bg-gray-900">
-          <button
-            onClick={() => navigate(-1)}
-            className="flex size-12 shrink-0 items-center justify-center text-black dark:text-white hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
-          >
-            <span className="material-symbols-outlined text-2xl">arrow_back</span>
-          </button>
+          <BackButton />
         </div>
 
         {/* 검색창 - 스크롤해도 계속 보이게 (고정) */}
@@ -619,16 +685,16 @@ const SearchScreen = () => {
           className="screen-body flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain"
           style={{ minHeight: 0, WebkitOverflowScrolling: 'touch' }}
         >
-          {/* 최근 검색한 지역 - 해시태그 위 */}
+          {/* 최근 검색한 지역 - 해시태그 위 (공간 최소화) */}
           {recentRegionSearches.length > 0 && (
-            <div className={`px-6 pt-5 pb-3 ${showSuggestions ? 'opacity-30' : ''}`}>
+            <div className={`px-4 pt-3 pb-1 ${showSuggestions ? 'opacity-30' : ''}`}>
               <div className="flex items-center justify-between mb-3">
-                <h2 className="text-[#1c140d] dark:text-background-light text-lg font-bold leading-tight tracking-[-0.015em] pb-3">
+                <h2 className="text-[#1c140d] dark:text-background-light text-base font-bold leading-tight tracking-[-0.015em] pb-1">
                   최근 검색한 지역
                 </h2>
                 <button
                   onClick={handleClearRecentSearches}
-                  className="text-sm font-medium text-gray-500 dark:text-gray-400 hover:text-primary dark:hover:text-primary transition-colors"
+                  className="text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-primary dark:hover:text-primary transition-colors"
                 >
                   지우기
                 </button>
@@ -636,9 +702,9 @@ const SearchScreen = () => {
               <div
                 className={`flex overflow-x-scroll overflow-y-hidden [-ms-scrollbar-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden snap-x snap-mandatory scroll-smooth ${showSuggestions ? 'opacity-30 pointer-events-none' : ''}`}
                 onMouseDown={handleDragStart}
-                style={{ scrollBehavior: 'smooth', WebkitOverflowScrolling: 'touch' }}
+                style={{ scrollBehavior: 'smooth', WebkitOverflowScrolling: 'touch', maxHeight: 64 }}
               >
-                <div className="flex items-center px-4 gap-2 pb-2">
+                <div className="flex items-center px-2 gap-2 pb-1">
                   {recentRegionSearches.map((search, index) => (
                     <button
                       key={index}
@@ -663,15 +729,15 @@ const SearchScreen = () => {
             </div>
           )}
 
-          {/* 지금 가장 핫한 추천 여행지 - 가로 스크롤 카드 (이미지 스타일) */}
+          {/* 추천여행지 - 가로 스크롤 카드 (이미지 스타일) */}
           <div className={`px-4 pt-5 pb-4 ${showSuggestions ? 'opacity-30 pointer-events-none' : ''}`}>
             <h2 className="text-black dark:text-white text-lg font-bold leading-tight tracking-[-0.015em] mb-4">
-              지금 가장 핫한 추천 여행지
+              추천여행지
             </h2>
             <div
               onMouseDown={handleDragStart}
-              className="flex overflow-x-auto overflow-y-hidden gap-4 pb-4 scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden snap-x snap-mandatory"
-              style={{ WebkitOverflowScrolling: 'touch' }}
+              className="flex overflow-x-auto overflow-y-hidden pb-4 scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden snap-x snap-mandatory"
+              style={{ WebkitOverflowScrolling: 'touch', gap: '10px' }}
             >
               {diverseRegionCards.length === 0 ? (
                 <div className="w-full py-10 px-4 text-center">
@@ -681,63 +747,76 @@ const SearchScreen = () => {
                 </div>
               ) : (
                 diverseRegionCards.map((card, index) => {
-                  // 카테고리별 색상 매핑
-                  const categoryColors = {
-                    '개화': '#F97316',
-                    '맛집': '#EF4444',
-                    '카페': '#8B4513',
-                    '해변': '#0EA5E9',
-                    '등산': '#10B981',
-                    '야경': '#6366F1',
-                    '일출일몰': '#F59E0B',
-                    '축제': '#EC4899',
-                    '문화': '#8B5CF6',
-                    '액티비티': '#14B8A6',
-                    '명소': '#64748B'
-                  };
-                  const tagBg = categoryColors[card.category] || '#8B5CF6';
                   const displayImage = getDisplayImageUrl(card.image || getRegionDefaultImage(card.name));
                   const weather = weatherData[card.name];
                   return (
                     <div
                       key={`${card.name}-${card.category}-${index}`}
                       onClick={() => handleRegionClickWithDragCheck(card.name)}
-                      className="flex-shrink-0 w-[16vw] rounded-2xl bg-white dark:bg-gray-800 overflow-hidden cursor-pointer hover:shadow-lg transition-all snap-start mx-1"
-                      style={{ boxShadow: '0 2px 10px rgba(0,0,0,0.06)', scrollSnapStop: 'always' }}
+                      className="flex-shrink-0 rounded-2xl bg-white dark:bg-gray-800 overflow-hidden cursor-pointer hover:shadow-lg transition-all snap-start mx-1"
+                      style={{ width: '200px', minWidth: '200px', maxWidth: '200px', boxShadow: '0 2px 10px rgba(0,0,0,0.06)', scrollSnapStop: 'always' }}
                     >
-                      <div className="relative h-32 overflow-hidden">
-                        <img src={displayImage} alt={card.name} className="w-full h-full object-cover" />
-                        <span
-                          className="absolute top-3 right-3 text-white text-xs font-semibold px-2.5 py-1 rounded-lg"
-                          style={{ backgroundColor: tagBg }}
-                        >
-                          {card.categoryLabel}
-                        </span>
+                      <div className="relative w-full overflow-hidden" style={{ aspectRatio: '1', height: 'auto' }}>
+                        <img src={displayImage} alt={card.name} className="w-full h-full object-cover" style={{ display: 'block' }} />
                         {weather && (
-                          <span className="absolute top-3 left-3 text-white text-xs font-semibold bg-black/60 backdrop-blur-sm px-2.5 py-1 rounded-lg flex items-center gap-1">
+                          <span className="absolute top-3 right-3 text-white text-xs font-semibold bg-black/60 backdrop-blur-sm px-2.5 py-1 rounded-lg flex items-center gap-1">
                             <span>{weather.icon}</span>
                             <span>{weather.temperature}</span>
                           </span>
                         )}
                       </div>
-                      <div className="p-3">
+                      <div className="p-3" style={{ background: '#f8fafc', borderTop: '3px solid #475569', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
                         <div className="flex items-center gap-1.5 mb-1">
                           <p className="text-black dark:text-white font-bold text-sm truncate">{card.name}</p>
                           {card.time && (
                             <span className="text-gray-400 dark:text-gray-500 text-[10px] whitespace-nowrap">🕐 {card.time}</span>
                           )}
                         </div>
-                        <p className="text-gray-500 dark:text-gray-400 text-[11px] font-medium mb-0.5 truncate">{card.categoryLabel}</p>
-                        <p className="text-gray-600 dark:text-gray-300 text-[11px] font-medium truncate">{card.shortDesc}</p>
+                        <p className="text-gray-500 dark:text-gray-400 text-[11px] font-medium truncate">{getRegionTagline(card.name)}</p>
                       </div>
                     </div>
                   );
                 })
               )}
               {/* 끝까지 시원하게 슬라이드 가능하도록 여백 추가 */}
-              <div className="flex-shrink-0 w-[16vw]"></div>
+              <div className="flex-shrink-0" style={{ width: '200px' }}></div>
             </div>
           </div>
+
+          {/* 지금 검색이 가장 많은 지역 - 해시태그 위 */}
+          {mostSearchedRegions.length > 0 && (
+            <div className={`px-4 pt-2 pb-2 ${showSuggestions ? 'opacity-30 pointer-events-none' : ''}`}>
+              <div className="flex items-center justify-between mb-2">
+                <h2 className="text-black dark:text-white text-base font-bold">
+                  지금 검색이 가장 많은 지역
+                </h2>
+              </div>
+              <div
+                onMouseDown={handleDragStart}
+                className="flex overflow-x-auto overflow-y-hidden gap-2 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                style={{ WebkitOverflowScrolling: 'touch' }}
+              >
+                {mostSearchedRegions.map(({ name, count }, index) => (
+                  <button
+                    key={name}
+                    type="button"
+                    onClick={() => {
+                      if (!hasMovedRef.current) {
+                        incrementSearchCount(name);
+                        navigate(`/region/${name}`, { state: { region: { name } } });
+                      }
+                    }}
+                    className="flex-shrink-0 px-4 py-2.5 rounded-full text-sm font-medium bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-100 hover:bg-primary/20 dark:hover:bg-primary/30 transition-colors flex items-center gap-2"
+                    style={{ scrollSnapStop: 'always' }}
+                  >
+                    <span className="material-symbols-outlined text-primary text-[18px]">trending_up</span>
+                    <span className="text-xs text-gray-500 dark:text-gray-300">{index + 1}.</span>
+                    <span>{name}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* 해시태그 - 추천 여행지 밑, 클릭 시 하단에 사진 표시 */}
           {hashtagChips.length > 0 && (
@@ -799,7 +878,7 @@ const SearchScreen = () => {
                 </button>
               </div>
               {hashtagPostResults.length > 0 ? (
-                <div className="grid grid-cols-3 gap-1">
+              <div className="grid grid-cols-3" style={{ gap: '7px' }}>
                   {hashtagPostResults.map((post) => {
                     const img = getDisplayImageUrl(post.images?.[0] || post.image || post.thumbnail);
                     const id = post.id || post._id;

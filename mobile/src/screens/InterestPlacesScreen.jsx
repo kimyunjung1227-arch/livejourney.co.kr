@@ -15,6 +15,7 @@ const InterestPlacesScreen = () => {
   const [placeInput, setPlaceInput] = useState('');
   const [interestPlaces, setInterestPlaces] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedIndex, setSelectedIndex] = useState(null); // 선택된 관심지역 카드 인덱스
 
   const popularPlaces = [
     '서울', '부산', '제주', '강릉', '경주', 
@@ -132,7 +133,14 @@ const InterestPlacesScreen = () => {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>⭐ 내 관심 지역/장소 ({interestPlaces.length})</Text>
             {interestPlaces.map((place, index) => (
-              <View key={index} style={styles.placeCard}>
+              <TouchableOpacity
+                key={index}
+                style={styles.placeCard}
+                activeOpacity={0.9}
+                onPress={() =>
+                  setSelectedIndex(selectedIndex === index ? null : index)
+                }
+              >
                 <View style={styles.placeInfo}>
                   <View style={styles.placeHeader}>
                     <Ionicons name="star" size={20} color={COLORS.primary} />
@@ -145,13 +153,15 @@ const InterestPlacesScreen = () => {
                     {new Date(place.addedAt).toLocaleDateString('ko-KR')} 추가
                   </Text>
                 </View>
-                <TouchableOpacity
-                  style={styles.deleteButton}
-                  onPress={() => handleToggle(place)}
-                >
-                  <Text style={styles.deleteButtonText}>삭제</Text>
-                </TouchableOpacity>
-              </View>
+                {selectedIndex === index && (
+                  <TouchableOpacity
+                    style={styles.deleteCircle}
+                    onPress={() => handleToggle(place)}
+                  >
+                    <Ionicons name="close" size={16} color="#ffffff" />
+                  </TouchableOpacity>
+                )}
+              </TouchableOpacity>
             ))}
           </View>
         )}
@@ -308,6 +318,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.primary + '40',
     marginBottom: SPACING.sm,
+    position: 'relative', // X 버튼을 카드 상단에 띄우기 위해
   },
   placeInfo: {
     flex: 1,
@@ -334,16 +345,21 @@ const styles = StyleSheet.create({
     color: COLORS.textTertiary,
     marginLeft: 28,
   },
-  deleteButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    backgroundColor: '#fee',
-    borderRadius: 8,
-  },
-  deleteButtonText: {
-    fontSize: 11,
-    fontWeight: 'bold',
-    color: '#f00',
+  deleteCircle: {
+    position: 'absolute',
+    top: SPACING.sm,
+    right: SPACING.sm,
+    width: 28,
+    height: 28,
+    borderRadius: 14, // 완전한 구 형태
+    backgroundColor: '#FF4B4B', // 눈에 잘 보이는 삭제 색상
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 1.5,
   },
 });
 

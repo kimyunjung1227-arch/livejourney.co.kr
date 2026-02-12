@@ -42,7 +42,7 @@ const CrowdedPlaceScreen = () => {
     }, []);
 
     return (
-        <div className="screen-layout" style={{ background: '#fafafa', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+        <div className="screen-layout" style={{ background: '#ffffff', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
             {/* 헤더 */}
             <header className="screen-header" style={{ 
                 display: 'flex', 
@@ -78,8 +78,16 @@ const CrowdedPlaceScreen = () => {
                         <p>아직 붐비는 곳 정보가 없어요</p>
                     </div>
                 ) : (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', rowGap: 0, columnGap: '8px', paddingBottom: '16px' }}>
-                        {crowdedData.map(post => (
+                    <div
+                        style={{
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                            rowGap: '12px',
+                            columnGap: '10px',
+                            paddingBottom: '16px'
+                        }}
+                    >
+                        {crowdedData.map((post) => (
                             <div
                                 key={post.id}
                                 onClick={() => navigate('/map', { state: { selectedPin: { lat: post.center?.lat, lng: post.center?.lng } } })}
@@ -87,42 +95,44 @@ const CrowdedPlaceScreen = () => {
                                     background: '#ffffff',
                                     borderRadius: '12px',
                                     overflow: 'hidden',
-                                    boxShadow: '0 2px 6px rgba(15,23,42,0.08)',
+                                    boxShadow: 'none',
                                     cursor: 'pointer',
-                                    transition: 'transform 0.18s ease',
                                     display: 'flex',
                                     flexDirection: 'column'
                                 }}
                             >
-                                {/* 상단 이미지 영역 (세로 길이 줄이기) */}
-                                <div style={{ width: '100%', aspectRatio: '4 / 3', background: '#eee', position: 'relative' }}>
+                                {/* 이미지: 정사각형 (지금 여기는 더보기와 동일) */}
+                                <div style={{ width: '100%', paddingBottom: '100%', height: 0, position: 'relative', background: '#e5e7eb' }}>
                                     {post.image ? (
-                                        <img src={getDisplayImageUrl(post.image)} alt={post.location} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                                        <img
+                                            src={getDisplayImageUrl(post.image)}
+                                            alt={post.location}
+                                            style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                                        />
                                     ) : (
-                                        <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#cbd5e1' }}>
-                                            <span className="material-symbols-outlined" style={{ fontSize: '28px' }}>image</span>
+                                        <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#cbd5e1' }}>
+                                            <span className="material-symbols-outlined" style={{ fontSize: '22px' }}>image</span>
                                         </div>
                                     )}
-                                    {/* 북마크 아이콘 */}
-                                    <div style={{ position: 'absolute', top: '6px', right: '6px', width: '24px', height: '24px', borderRadius: '999px', background: 'rgba(15,23,42,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                        <span className="material-symbols-outlined" style={{ fontSize: '16px', color: '#f9fafb' }}>bookmark_border</span>
+                                    <div style={{ position: 'absolute', bottom: '4px', right: '4px', background: 'rgba(15,23,42,0.7)', padding: '2px 6px', borderRadius: '999px', fontSize: '11px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '2px', color: '#f9fafb' }}>
+                                        <span className="material-symbols-outlined" style={{ fontSize: '12px' }}>favorite</span>
+                                        <span>{post.likes}</span>
                                     </div>
                                 </div>
-                                {/* 텍스트 영역 */}
-                                <div style={{ padding: '11px 12px 12px' }}>
-                                    <div style={{ fontSize: '14px', fontWeight: 700, color: '#111827', marginBottom: '6px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                        {post.location}
+
+                                {/* 하단 시트: 시간·급상승 한 줄(우측 정렬) */}
+                                <div style={{ padding: '12px 14px 14px', background: '#f8fafc', borderTop: '3px solid #475569', boxShadow: '0 -2px 0 0 #475569, 0 2px 8px rgba(0,0,0,0.08)', minHeight: '92px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                                    <div style={{ fontSize: '13px', fontWeight: 700, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                                        📍 {post.location}
                                     </div>
-                                    <div style={{ fontSize: '12px', color: '#4b5563', marginBottom: '6px', maxHeight: '3.2em', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                        {post.content}
-                                    </div>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', color: '#6b7280' }}>
-                                        <span style={{ fontWeight: 600 }}>
-                                            {post.time}
-                                        </span>
-                                        {post.rising && (
-                                            <span style={{ color: '#ef4444', fontWeight: 700, whiteSpace: 'nowrap' }}>🔥 급상승</span>
-                                        )}
+                                    {post.content && (
+                                        <div style={{ fontSize: '12px', color: '#4b5563', marginTop: '4px', lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', flex: '1 1 auto', minHeight: 0 }}>
+                                            {post.content}
+                                        </div>
+                                    )}
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px', flexShrink: 0, fontSize: '11px', color: '#6b7280' }}>
+                                        <span>{post.time}</span>
+                                        {post.rising && <span style={{ color: '#ef4444', fontWeight: 700 }}>🔥 급상승</span>}
                                     </div>
                                 </div>
                             </div>

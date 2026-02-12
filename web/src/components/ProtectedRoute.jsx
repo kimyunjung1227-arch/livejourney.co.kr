@@ -22,14 +22,8 @@ const ProtectedRoute = ({ children }) => {
     return children;
   }
 
-  // 로그인이 필요한 페이지 접근 시, 로그인/회원가입 화면으로 유도
-  try {
-    sessionStorage.setItem('showLoginScreen', 'true');
-  } catch (e) {
-    // sessionStorage 사용 불가한 환경은 조용히 무시
-  }
-
-  return <Navigate to="/start" replace />;
+  // 로그인이 필요한 페이지 접근 시, 프로필 탭으로 보내서 거기서 로그인 가능하도록
+  return <Navigate to="/profile" replace />;
 };
 
 export default ProtectedRoute;

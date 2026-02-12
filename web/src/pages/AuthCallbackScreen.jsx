@@ -21,7 +21,7 @@ const AuthCallbackScreen = () => {
           logger.error('소셜 로그인 오류:', errorMsg);
           setError(errorMsg);
           setTimeout(() => {
-            navigate('/start', { replace: true });
+            navigate('/main', { replace: true });
           }, 3000);
           return;
         }
@@ -44,32 +44,27 @@ const AuthCallbackScreen = () => {
             
             logger.log('✅ 소셜 로그인 성공:', user);
             
-            // 소셜 로그인 후: 처음이라면 관심 지역 설정, 그 이후에는 메인으로 이동
-            const hasCompletedInterest = localStorage.getItem('hasCompletedInterestSetup') === 'true';
-            if (!hasCompletedInterest) {
-              navigate('/interest-places', { replace: true });
-            } else {
-              navigate('/main', { replace: true });
-            }
+            // 로그인 후 바로 메인으로 (관심지역 설정 단계 제거)
+            navigate('/main', { replace: true });
           } catch (parseError) {
             logger.error('사용자 정보 파싱 오류:', parseError);
             setError('사용자 정보를 처리할 수 없습니다.');
             setTimeout(() => {
-              navigate('/start', { replace: true });
+              navigate('/main', { replace: true });
             }, 3000);
           }
         } else {
           console.error('토큰 또는 사용자 정보가 없습니다');
           setError('로그인 정보를 가져올 수 없습니다.');
           setTimeout(() => {
-            navigate('/start', { replace: true });
+            navigate('/main', { replace: true });
           }, 3000);
         }
       } catch (err) {
         logger.error('콜백 처리 오류:', err);
         setError('로그인 처리 중 오류가 발생했습니다.');
         setTimeout(() => {
-          navigate('/start', { replace: true });
+          navigate('/main', { replace: true });
         }, 3000);
       }
     };

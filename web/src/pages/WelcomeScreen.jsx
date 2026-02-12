@@ -22,12 +22,10 @@ const WelcomeScreen = () => {
 
 
   return (
-    <div className="relative flex h-full w-full flex-col overflow-hidden bg-white dark:bg-zinc-900 font-display">
-      {/* 중앙 컨텐츠 - 로고만 표시 */}
-      <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
-        <div className="flex flex-col items-center justify-center gap-6">
-          <LiveJourneyLogo size={180} showText={true} />
-        </div>
+    <div className="relative flex h-[100dvh] w-full items-center justify-center overflow-hidden bg-white dark:bg-zinc-900 font-display">
+      {/* 중앙 컨텐츠 - 로고만 표시 (완전 중앙 정렬) */}
+      <div className="flex flex-col items-center justify-center px-6 text-center gap-6">
+        <LiveJourneyLogo size={180} showText={true} />
       </div>
     </div>
   );

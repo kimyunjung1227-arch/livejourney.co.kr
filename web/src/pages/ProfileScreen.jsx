@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+
+const LONG_PRESS_MS = 450;
 import { useNavigate, useLocation } from 'react-router-dom';
+import BackButton from '../components/BackButton';
 import { useAuth } from '../contexts/AuthContext';
 import BottomNavigation from '../components/BottomNavigation';
 import { getUnreadCount } from '../utils/notifications';
@@ -81,6 +84,8 @@ const ProfileScreen = () => {
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const [isEditMode, setIsEditMode] = useState(false);
   const [selectedPhotos, setSelectedPhotos] = useState([]);
+  const longPressTimerRef = useRef(null);
+  const didLongPressRef = useRef(false);
   const [activeTab, setActiveTab] = useState('my'); // 'my' | 'map' | 'savedRoutes'
   const [savedRoutes, setSavedRoutes] = useState([]);
   const [selectedSavedRoute, setSelectedSavedRoute] = useState(null);
@@ -149,6 +154,7 @@ const ProfileScreen = () => {
   const [selectedDate, setSelectedDate] = useState('');
   const [filteredPosts, setFilteredPosts] = useState([]);
   const [availableDates, setAvailableDates] = useState([]);
+  const [mapDatesExpanded, setMapDatesExpanded] = useState(false); // 나의 기록 지도 날짜 5개 이상일 때 펼치기
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState('');
   const [followerCount, setFollowerCount] = useState(0);
@@ -824,6 +830,36 @@ const ProfileScreen = () => {
     }
   };
 
+  const clearLongPressTimer = useCallback(() => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  }, []);
+
+  const handlePhotoLongPress = useCallback((post) => {
+    didLongPressRef.current = true;
+    if (!isEditMode) {
+      setIsEditMode(true);
+      setSelectedPhotos([post.id]);
+    } else {
+      togglePhotoSelection(post.id);
+    }
+  }, [isEditMode, selectedPhotos]);
+
+  const handlePhotoPressStart = useCallback((post) => {
+    didLongPressRef.current = false;
+    clearLongPressTimer();
+    longPressTimerRef.current = setTimeout(() => {
+      longPressTimerRef.current = null;
+      handlePhotoLongPress(post);
+    }, LONG_PRESS_MS);
+  }, [clearLongPressTimer, handlePhotoLongPress]);
+
+  const handlePhotoPressEnd = useCallback(() => {
+    clearLongPressTimer();
+  }, [clearLongPressTimer]);
+
   const deleteSelectedPhotos = () => {
     if (selectedPhotos.length === 0) {
       alert('삭제할 사진을 선택해주세요.');
@@ -872,9 +908,14 @@ const ProfileScreen = () => {
     alert(`${selectedPhotos.length}개의 사진이 삭제되었습니다.`);
   };
 
-  // 저장된 경로 미리보기 지도 렌더링
+  // 저장된 경로 미리보기 지도 렌더링 (저장된 경로 탭일 때)
   useEffect(() => {
-    if (activeTab !== 'savedRoutes') return;
+    if (activeTab !== 'savedRoutes') {
+      savedRoutesMapInstance.current = null;
+      savedRoutesMarkersRef.current = [];
+      savedRoutesPolylineRef.current = null;
+      return;
+    }
 
     const route = selectedSavedRoute;
 
@@ -1179,18 +1220,14 @@ const ProfileScreen = () => {
       <div className="screen-content">
         {/* 헤더 */}
         <header className="screen-header bg-white dark:bg-gray-900 flex items-center p-4 justify-between">
-          <button
-            onClick={() => navigate('/main')}
-            className="flex size-12 shrink-0 items-center justify-center text-text-primary-light dark:text-text-primary-dark hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
-          >
-            <span className="material-symbols-outlined text-2xl">arrow_back</span>
-          </button>
+          <BackButton />
           <h1 className="text-text-primary-light dark:text-text-primary-dark text-base font-semibold">프로필</h1>
           <button
             onClick={() => navigate('/settings')}
-            className="flex size-12 shrink-0 items-center justify-center text-text-primary-light dark:text-text-primary-dark hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+            className="flex size-10 shrink-0 items-center justify-center text-text-primary-light dark:text-text-primary-dark hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+            aria-label="설정"
           >
-            <span className="material-symbols-outlined text-2xl">settings</span>
+            <span className="material-symbols-outlined text-xl">settings</span>
           </button>
         </header>
 
@@ -1208,9 +1245,7 @@ const ProfileScreen = () => {
                     className="w-16 h-16 rounded-full object-cover border-2 border-gray-200 dark:border-gray-700"
                   />
                 ) : (
-                  <div className="w-16 h-16 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
-                    <span className="material-symbols-outlined text-gray-500 dark:text-gray-400 text-4xl">person</span>
-                  </div>
+                  <div className="w-16 h-16 rounded-full bg-gray-200 dark:bg-gray-700" />
                 )}
               </div>
 
@@ -1244,7 +1279,7 @@ const ProfileScreen = () => {
                         <span className="text-xs font-medium text-text-secondary-light dark:text-text-secondary-dark">뱃지 없음</span>
                       )}
                     </button>
-                    {/* 뱃지 모아보기 버튼 - 완전 원형, 크기 32px, 폰트에 맞는 배경 */}
+                    {/* 뱃지 모아보기 버튼 - 플러스 아이콘 */}
                     <button
                       onClick={() => navigate('/badges')}
                       className="flex items-center justify-center rounded-full transition-colors bg-primary/10 hover:bg-primary/20"
@@ -1313,7 +1348,7 @@ const ProfileScreen = () => {
                     : 'bg-gray-100 dark:bg-gray-800 text-text-secondary-light dark:text-text-secondary-dark hover:bg-gray-200 dark:hover:bg-gray-700'
                   }`}
               >
-                📸 내 사진
+                내 사진
               </button>
               <button
                 onClick={() => setActiveTab('map')}
@@ -1322,7 +1357,7 @@ const ProfileScreen = () => {
                     : 'bg-gray-100 dark:bg-gray-800 text-text-secondary-light dark:text-text-secondary-dark hover:bg-gray-200 dark:hover:bg-gray-700'
                   }`}
               >
-                🗺️ 나의 기록 지도
+                나의 기록 지도
               </button>
               <button
                 onClick={() => setActiveTab('savedRoutes')}
@@ -1331,7 +1366,7 @@ const ProfileScreen = () => {
                     : 'bg-gray-100 dark:bg-gray-800 text-text-secondary-light dark:text-text-secondary-dark hover:bg-gray-200 dark:hover:bg-gray-700'
                   }`}
               >
-                🛤️ 저장된 경로
+                저장된 경로
               </button>
             </div>
 
@@ -1339,9 +1374,6 @@ const ProfileScreen = () => {
             {/* 내 사진 탭 (타임라인 형식) */}
             {activeTab === 'my' && myPosts.length === 0 && (
               <div className="text-center py-8">
-                <span className="material-symbols-outlined text-6xl text-gray-300 dark:text-gray-600 mb-4 block">
-                  add_photo_alternate
-                </span>
                 <p className="text-text-secondary-light dark:text-text-secondary-dark text-base font-medium mb-2">
                   아직 올린 사진이 없어요
                 </p>
@@ -1353,7 +1385,6 @@ const ProfileScreen = () => {
                   onClick={() => navigate('/upload')}
                   className="bg-primary text-white py-3 px-6 rounded-full font-semibold hover:bg-primary/90 transition-colors shadow-lg inline-flex items-center gap-2"
                 >
-                  <span className="material-symbols-outlined">add_a_photo</span>
                   첫 사진 올리기
                 </button>
               </div>
@@ -1361,32 +1392,14 @@ const ProfileScreen = () => {
 
             {activeTab === 'my' && myPosts.length > 0 && (
               <div className="space-y-6">
-                {/* 편집 버튼 행 - 날짜 헤더와 동일한 위치/스타일 */}
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="flex items-center gap-2">
-                    <span className="material-symbols-outlined text-primary text-xl">photo_library</span>
-                    <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300">내 사진</h3>
-                  </div>
-                  <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700"></div>
-                  <button
-                    onClick={toggleEditMode}
-                    className={`text-sm font-semibold py-1.5 px-3 rounded-lg transition-colors ${isEditMode
-                      ? 'bg-primary text-white hover:bg-primary/90'
-                      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
-                    }`}
-                  >
-                    {isEditMode ? '완료' : '편집'}
-                  </button>
-                </div>
-
-                {/* 편집 모드 + 선택 시: 가로형 휴지통 버튼 (모아서 삭제) */}
+                {/* 편집 모드 + 선택 시: 작은 삭제 버튼 (선택 개수 작게) */}
                 {isEditMode && selectedPhotos.length > 0 && (
                   <button
                     onClick={deleteSelectedPhotos}
-                    className="w-full py-3 px-4 rounded-xl bg-red-500 hover:bg-red-600 active:bg-red-700 text-white font-semibold flex items-center justify-center gap-2 mb-4"
+                    className="w-full py-2 px-3 rounded-lg bg-red-500/90 hover:bg-red-600 text-white text-xs font-medium flex items-center justify-center gap-1.5 mb-3"
                   >
-                    <span className="material-symbols-outlined text-xl">delete</span>
-                    <span>선택한 {selectedPhotos.length}장 삭제</span>
+                    <span className="material-symbols-outlined text-base">delete</span>
+                    <span>선택 {selectedPhotos.length}장 삭제</span>
                   </button>
                 )}
 
@@ -1404,20 +1417,30 @@ const ProfileScreen = () => {
                   }, {})
                 )
                   .sort((a, b) => new Date(b[1][0].createdAt) - new Date(a[1][0].createdAt))
-                  .map(([date, posts]) => (
+                  .map(([date, posts], dateIndex) => (
                     <div key={date}>
-                      {/* 날짜 헤더 */}
+                      {/* 날짜 헤더 + 첫 번째 그룹에만 편집 버튼 */}
                       <div className="flex items-center gap-3 mb-3">
                         <div className="flex items-center gap-2">
-                          <span className="material-symbols-outlined text-primary text-xl">calendar_today</span>
                           <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300">{date}</h3>
                         </div>
                         <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700"></div>
                         <span className="text-xs text-gray-500 dark:text-gray-400">{posts.length}장</span>
+                        {dateIndex === 0 && (
+                          <button
+                            onClick={toggleEditMode}
+                            className={`text-xs font-medium transition-colors ${isEditMode
+                              ? 'text-primary hover:text-primary/80'
+                              : 'text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-400'
+                            }`}
+                          >
+                            {isEditMode ? '완료' : '편집'}
+                          </button>
+                        )}
                       </div>
 
-                      {/* 사진 그리드 */}
-                      <div className="grid grid-cols-2 gap-4">
+                      {/* 사진 그리드 (작은 썸네일) */}
+                      <div className="grid grid-cols-4 gap-2">
                         {posts.map((post, index) => {
                           const likedPosts = JSON.parse(localStorage.getItem('likedPosts') || '{}');
                           const isLiked = likedPosts[post.id] || false;
@@ -1428,7 +1451,17 @@ const ProfileScreen = () => {
                           return (
                             <div
                               key={post.id || index}
+                              onMouseDown={() => handlePhotoPressStart(post)}
+                              onMouseUp={handlePhotoPressEnd}
+                              onMouseLeave={handlePhotoPressEnd}
+                              onTouchStart={() => handlePhotoPressStart(post)}
+                              onTouchEnd={handlePhotoPressEnd}
+                              onTouchCancel={handlePhotoPressEnd}
                               onClick={(e) => {
+                                if (didLongPressRef.current) {
+                                  didLongPressRef.current = false;
+                                  return;
+                                }
                                 if (isEditMode) {
                                   togglePhotoSelection(post.id);
                                 } else {
@@ -1444,7 +1477,7 @@ const ProfileScreen = () => {
                               className="cursor-pointer"
                             >
                               {/* 이미지 */}
-                              <div className="aspect-square relative overflow-hidden rounded-lg mb-2">
+                              <div className="aspect-square relative overflow-hidden rounded-md mb-1">
                                 {post.videos && post.videos.length > 0 ? (
                                   <video
                                     src={post.videos[0]}
@@ -1462,46 +1495,29 @@ const ProfileScreen = () => {
                                   />
                                 )}
 
-                                {/* 우측 하단 하트 아이콘 */}
-                                {!isEditMode && (
-                                  <div className="absolute bottom-2 right-2 flex items-center gap-1 bg-white/80 backdrop-blur-sm rounded-full px-2 py-1">
-                                    <span className={`material-symbols-outlined text-sm ${isLiked ? 'text-red-500 fill' : 'text-gray-600'}`}>
-                                      favorite
-                                    </span>
-                                    <span className="text-xs font-semibold text-gray-700">{likeCount}</span>
-                                  </div>
-                                )}
+                                {/* 프로필 화면에서는 좋아요 아이콘/숫자 숨김 */}
 
-                                {/* 편집 모드: 선택 체크박스만 (선택 후 하단 삭제 버튼으로 삭제) */}
+                                {/* 편집 모드: 선택 체크박스 */}
                                 {isEditMode && (
                                   <div
-                                    className="absolute top-2 right-2 w-7 h-7 rounded-full border-2 flex items-center justify-center transition-all cursor-pointer bg-white/90 dark:bg-gray-800/90 border-gray-300 dark:border-gray-600"
+                                    className="absolute top-0.5 right-0.5 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all cursor-pointer bg-white/90 dark:bg-gray-800/90 border-gray-300 dark:border-gray-600"
                                     onClick={(e) => { e.stopPropagation(); togglePhotoSelection(post.id); }}
                                     role="button"
                                   >
                                     {selectedPhotos.includes(post.id) ? (
-                                      <span className="material-symbols-outlined text-primary text-lg">check_circle</span>
+                                      <span className="text-primary text-[10px] font-semibold">선택</span>
                                     ) : (
-                                      <span className="material-symbols-outlined text-gray-400 text-lg">radio_button_unchecked</span>
+                                      <span className="text-gray-400 text-[10px]">선택</span>
                                     )}
                                   </div>
                                 )}
                               </div>
 
-                              {/* 이미지 밖 하단 텍스트 */}
-                              <div className="space-y-1">
-                                <p className="text-sm font-semibold text-text-primary-light dark:text-text-primary-dark line-clamp-2">
+                              {/* 이미지 밖 하단 텍스트 — 사진 아래 시트 스타일 통일 */}
+                              <div className="space-y-0.5 min-w-0" style={{ borderTop: '3px solid #475569', background: '#f8fafc', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', padding: '12px 14px 14px' }}>
+                                <p className="text-[10px] font-medium text-text-primary-light dark:text-text-primary-dark truncate">
                                   {post.note || post.location || '기록'}
                                 </p>
-                                {post.tags && post.tags.length > 0 && (
-                                  <div className="flex flex-wrap gap-1">
-                                    {post.tags.slice(0, 3).map((tag, tagIndex) => (
-                                      <span key={tagIndex} className="text-xs text-text-secondary-light dark:text-text-secondary-dark">
-                                        #{typeof tag === 'string' ? tag.replace('#', '') : tag}
-                                      </span>
-                                    ))}
-                                  </div>
-                                )}
                               </div>
                             </div>
                           );
@@ -1517,9 +1533,6 @@ const ProfileScreen = () => {
               <div>
                 {myPosts.length === 0 ? (
                   <div className="text-center py-12">
-                    <span className="material-symbols-outlined text-6xl text-gray-300 dark:text-gray-600 mb-4 block">
-                      add_a_photo
-                    </span>
                     <p className="text-text-secondary-light dark:text-text-secondary-dark text-base font-medium mb-2">
                       아직 기록이 없어요
                     </p>
@@ -1531,65 +1544,78 @@ const ProfileScreen = () => {
                       onClick={() => navigate('/upload')}
                       className="bg-primary text-white py-3 px-6 rounded-full font-semibold hover:bg-primary/90 transition-colors shadow-lg inline-flex items-center gap-2"
                     >
-                      <span className="material-symbols-outlined">add_a_photo</span>
                       첫 사진 올리기
                     </button>
                   </div>
                 ) : (
                   <div>
-                    {/* 날짜 필터 - 가벼운 디자인 */}
-                    {availableDates.length > 0 && (
-                      <div className="mb-3 flex items-center gap-2 flex-wrap">
-                        <button
-                          onClick={() => setSelectedDate('')}
-                          className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${!selectedDate
-                              ? 'bg-primary text-white shadow-sm'
-                              : 'bg-white/95 backdrop-blur-md text-gray-700 border border-gray-200 hover:bg-gray-50'
-                            }`}
-                        >
-                          전체
-                        </button>
-                        {availableDates.slice(0, 7).map((date) => {
-                          const dateObj = new Date(date);
-                          const dateStr = dateObj.toLocaleDateString('ko-KR', {
-                            month: 'short',
-                            day: 'numeric',
-                          });
-                          const isSelected = selectedDate === date;
-                          return (
-                            <button
-                              key={date}
-                              onClick={() => setSelectedDate(isSelected ? '' : date)}
-                              className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${isSelected
-                                  ? 'bg-primary text-white shadow-sm'
-                                  : 'bg-white/95 backdrop-blur-md text-gray-700 border border-gray-200 hover:bg-gray-50'
-                                }`}
-                            >
-                              {dateStr}
-                            </button>
-                          );
-                        })}
-                        {availableDates.length > 7 && (
+                    {/* 날짜 필터 - 5개 이상이면 기본 4개만 표시, 펼치기로 전체 */}
+                    {availableDates.length > 0 && (() => {
+                      const showExpand = availableDates.length >= 5;
+                      const visibleDates = showExpand && !mapDatesExpanded
+                        ? availableDates.slice(0, 4)
+                        : availableDates;
+                      return (
+                        <div className="mb-3 flex items-center gap-2 flex-wrap">
                           <button
-                            onClick={() => {
-                              const input = document.createElement('input');
-                              input.type = 'date';
-                              input.max = new Date().toISOString().split('T')[0];
-                              input.value = selectedDate || '';
-                              input.onchange = (e) => {
-                                if (e.target.value) {
-                                  setSelectedDate(e.target.value);
-                                }
-                              };
-                              input.click();
-                            }}
-                            className="px-3 py-1.5 rounded-full text-xs font-semibold bg-white/95 backdrop-blur-md text-gray-700 border border-gray-200 hover:bg-gray-50 transition-all"
+                            onClick={() => setSelectedDate('')}
+                            className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${!selectedDate
+                                ? 'bg-primary text-white shadow-sm'
+                                : 'bg-white/95 backdrop-blur-md text-gray-700 border border-gray-200 hover:bg-gray-50'
+                              }`}
                           >
-                            + 더보기
+                            전체
                           </button>
-                        )}
-                      </div>
-                    )}
+                          {visibleDates.map((date) => {
+                            const dateObj = new Date(date);
+                            const dateStr = dateObj.toLocaleDateString('ko-KR', {
+                              month: 'short',
+                              day: 'numeric',
+                            });
+                            const isSelected = selectedDate === date;
+                            return (
+                              <button
+                                key={date}
+                                onClick={() => setSelectedDate(isSelected ? '' : date)}
+                                className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${isSelected
+                                    ? 'bg-primary text-white shadow-sm'
+                                    : 'bg-white/95 backdrop-blur-md text-gray-700 border border-gray-200 hover:bg-gray-50'
+                                  }`}
+                              >
+                                {dateStr}
+                              </button>
+                            );
+                          })}
+                          {showExpand && (
+                            <button
+                              onClick={() => setMapDatesExpanded((prev) => !prev)}
+                              className="px-3 py-1.5 rounded-full text-xs font-semibold bg-white/95 backdrop-blur-md text-gray-700 border border-gray-200 hover:bg-gray-50 transition-all"
+                            >
+                              {mapDatesExpanded ? '접기' : `펼치기 (${availableDates.length}일)`}
+                            </button>
+                          )}
+                          {availableDates.length > 7 && (
+                            <button
+                              onClick={() => {
+                                const input = document.createElement('input');
+                                input.type = 'date';
+                                input.max = new Date().toISOString().split('T')[0];
+                                input.value = selectedDate || '';
+                                input.onchange = (e) => {
+                                  if (e.target.value) {
+                                    setSelectedDate(e.target.value);
+                                  }
+                                };
+                                input.click();
+                              }}
+                              className="px-3 py-1.5 rounded-full text-xs font-semibold bg-white/95 backdrop-blur-md text-gray-700 border border-gray-200 hover:bg-gray-50 transition-all"
+                            >
+                              + 날짜 선택
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })()}
 
                     {/* 지도 영역 */}
                     <div
@@ -1625,9 +1651,12 @@ const ProfileScreen = () => {
                           return R * c;
                         };
 
+                        // 촬영일(photoDate) 우선 정렬해 이동 순서 반영
                         const sortedPosts = [...filteredPosts].sort((a, b) => {
-                          const dateA = new Date(a.createdAt || a.timestamp || 0);
-                          const dateB = new Date(b.createdAt || b.timestamp || 0);
+                          const rawA = a.photoDate || a.createdAt || a.timestamp || 0;
+                          const rawB = b.photoDate || b.createdAt || b.timestamp || 0;
+                          const dateA = new Date(rawA).getTime();
+                          const dateB = new Date(rawB).getTime();
                           return dateA - dateB;
                         });
 
@@ -1636,7 +1665,13 @@ const ProfileScreen = () => {
                           const coords1 = getPostCoordinates(sortedPosts[i]);
                           const coords2 = getPostCoordinates(sortedPosts[i + 1]);
                           if (coords1 && coords2) {
-                            totalDistance += getDistanceKm(coords1.lat, coords1.lng, coords2.lat, coords2.lng);
+                            const lat1 = Number(coords1.lat);
+                            const lng1 = Number(coords1.lng);
+                            const lat2 = Number(coords2.lat);
+                            const lng2 = Number(coords2.lng);
+                            if (Number.isFinite(lat1) && Number.isFinite(lng1) && Number.isFinite(lat2) && Number.isFinite(lng2)) {
+                              totalDistance += getDistanceKm(lat1, lng1, lat2, lng2);
+                            }
                           }
                         }
 
@@ -1649,16 +1684,14 @@ const ProfileScreen = () => {
 
                         return (
                           <div className="absolute bottom-3 left-3 right-3 z-20 flex items-center justify-center gap-3">
-                            <div className="px-3 py-1.5 bg-white/95 backdrop-blur-md rounded-full border border-white/50 shadow-sm flex items-center gap-1.5">
-                              <span className="material-symbols-outlined text-primary text-sm">straighten</span>
+                            <div className="px-3 py-1.5 bg-white/95 backdrop-blur-md rounded-full border border-white/50 shadow-sm">
                               <span className="text-xs font-semibold text-gray-700">
-                                {totalDistance.toFixed(1)}km
+                                총 {totalDistance.toFixed(1)}km
                               </span>
                             </div>
-                            <div className="px-3 py-1.5 bg-white/95 backdrop-blur-md rounded-full border border-white/50 shadow-sm flex items-center gap-1.5">
-                              <span className="material-symbols-outlined text-primary text-sm">place</span>
+                            <div className="px-3 py-1.5 bg-white/95 backdrop-blur-md rounded-full border border-white/50 shadow-sm">
                               <span className="text-xs font-semibold text-gray-700">
-                                {visitedPlaces.length}곳
+                                방문 {visitedPlaces.length}곳
                               </span>
                             </div>
                           </div>
@@ -1668,7 +1701,7 @@ const ProfileScreen = () => {
 
                     {/* 지역별 사진 수 */}
                     <div className="space-y-2">
-                      <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">📍 지역</h3>
+                      <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">지역</h3>
                       {Object.entries(
                         filteredPosts.reduce((acc, post) => {
                           const location = post.location || '기타';
@@ -1686,7 +1719,6 @@ const ProfileScreen = () => {
                             }}
                           >
                             <div className="flex items-center gap-2">
-                              <span className="material-symbols-outlined text-primary text-xl">location_on</span>
                               <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{location}</span>
                             </div>
                             <span className="text-xs font-semibold text-primary bg-primary/10 px-2 py-1 rounded-full">
@@ -1700,7 +1732,7 @@ const ProfileScreen = () => {
               </div>
             )}
 
-            {/* 저장된 경로 탭 */}
+            {/* 저장된 경로 탭 - 바로 보기 */}
             {activeTab === 'savedRoutes' && (() => {
               const deleteRoute = (routeId) => {
                 if (!confirm('이 경로를 삭제하시겠습니까?')) return;
@@ -1716,30 +1748,23 @@ const ProfileScreen = () => {
               return (
                 <div className="space-y-4">
                   {savedRoutes.length === 0 ? (
-                    <div className="text-center py-12">
-                      <span className="material-symbols-outlined text-6xl text-gray-300 dark:text-gray-600 mb-4 block">route</span>
+                  <div className="text-center py-12">
                       <p className="text-text-secondary-light dark:text-text-secondary-dark text-base font-medium mb-2">저장된 경로가 없어요</p>
                       <p className="text-gray-400 dark:text-gray-500 text-sm mb-4">지도에서 경로를 만들고 저장해보세요!</p>
                       <button
                         onClick={() => navigate('/map')}
                         className="bg-primary text-white py-3 px-6 rounded-full font-semibold hover:bg-primary/90 transition-colors shadow-lg inline-flex items-center gap-2"
                       >
-                        <span className="material-symbols-outlined">map</span>
                         지도에서 경로 만들기
                       </button>
                     </div>
                   ) : (
                     <>
-                      {/* 상단 경로 미리보기 지도 */}
                       <div className="space-y-2">
                         <div className="flex items-center justify-between">
-                          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                            🛤️ 저장된 경로 미리보기
-                          </h3>
+                          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">저장한 경로</h3>
                           {selectedSavedRoute && (
-                            <span className="text-xs text-gray-500 dark:text-gray-400">
-                              {selectedSavedRoute.pins?.length || 0}개 장소
-                            </span>
+                            <span className="text-xs text-gray-500 dark:text-gray-400">{selectedSavedRoute.pins?.length || 0}개 장소</span>
                           )}
                         </div>
                         <div
@@ -1747,57 +1772,38 @@ const ProfileScreen = () => {
                           className="w-full h-64 rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-800"
                         />
                       </div>
-
-                      {/* 경로 리스트 */}
                       {savedRoutes.map((route) => {
                         const isSelected = selectedSavedRoute?.id === route.id;
                         return (
-                          <button
+                          <div
                             key={route.id}
-                            type="button"
-                            onClick={() => setSelectedSavedRoute(route)}
-                            className={`w-full flex items-center gap-4 p-4 rounded-xl text-left transition-colors ${
-                              isSelected
-                                ? 'bg-primary/10 border border-primary/60'
-                                : 'bg-gray-50 dark:bg-gray-800 border border-transparent hover:bg-gray-100 dark:hover:bg-gray-700'
+                            className={`flex items-center gap-4 p-4 rounded-xl border transition-colors ${
+                              isSelected ? 'bg-primary/10 border-primary/60' : 'bg-gray-50 dark:bg-gray-800 border-transparent hover:bg-gray-100 dark:hover:bg-gray-700'
                             }`}
                           >
-                            {route.pins?.[0]?.image ? (
-                              <img
-                                src={getDisplayImageUrl(route.pins[0].image)}
-                                alt=""
-                                className="w-16 h-16 rounded-lg object-cover flex-shrink-0"
-                              />
-                            ) : (
-                              <div className="w-16 h-16 rounded-lg bg-gray-200 dark:bg-gray-700 flex items-center justify-center flex-shrink-0">
-                                <span className="material-symbols-outlined text-3xl text-gray-400">place</span>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedSavedRoute(route)}
+                              className="flex-1 flex items-center gap-4 text-left min-w-0 p-0 border-0 bg-transparent cursor-pointer"
+                            >
+                              {route.pins?.[0]?.image ? (
+                                <img src={getDisplayImageUrl(route.pins[0].image)} alt="" className="w-16 h-16 rounded-lg object-cover flex-shrink-0" />
+                              ) : (
+                                <div className="w-16 h-16 rounded-lg bg-gray-200 dark:bg-gray-700 flex-shrink-0" />
+                              )}
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">{route.pins?.length || 0}개 장소 경로</p>
+                                <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{route.pins?.map((p) => p.location).filter(Boolean).join(' → ') || '저장된 경로'}</p>
                               </div>
-                            )}
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">
-                                {route.pins?.length || 0}개 장소 경로
-                              </p>
-                              <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                                {route.pins?.map((p) => p.location).filter(Boolean).join(' → ') || '저장된 경로'}
-                              </p>
-                            </div>
-                            <div className="flex flex-col gap-2 flex-shrink-0">
-                              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-semibold bg-white/80 dark:bg-gray-900/60 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-700">
-                                <span className="material-symbols-outlined text-xs">visibility</span>
-                                이 경로 보기
-                              </span>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  deleteRoute(route.id);
-                                }}
-                                className="px-3 py-1.5 rounded-lg bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-xs font-semibold hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors"
-                              >
-                                삭제
-                              </button>
-                            </div>
-                          </button>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); deleteRoute(route.id); }}
+                              className="px-3 py-1.5 rounded-lg bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-xs font-semibold hover:bg-red-200 dark:hover:bg-red-900/50 flex-shrink-0"
+                            >
+                              삭제
+                            </button>
+                          </div>
                         );
                       })}
                     </>
@@ -1815,12 +1821,12 @@ const ProfileScreen = () => {
             <div className="w-full max-w-md bg-white dark:bg-gray-900 rounded-2xl shadow-2xl">
               {/* 헤더 */}
               <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-800">
-                <h2 className="text-lg font-bold">🏆 대표 뱃지 선택</h2>
+                <h2 className="text-lg font-bold">대표 뱃지 선택</h2>
                 <button
                   onClick={() => setShowBadgeSelector(false)}
-                  className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
+                  className="px-3 h-8 flex items-center justify-center rounded-full text-xs font-medium text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800"
                 >
-                  <span className="material-symbols-outlined">close</span>
+                  닫기
                 </button>
               </div>
 
@@ -1829,12 +1835,9 @@ const ProfileScreen = () => {
                 {representativeBadge && (
                   <button
                     onClick={removeRepresentativeBadge}
-                    className="w-full mb-3 p-3 bg-red-50 dark:bg-red-900/20 border-2 border-red-300 dark:border-red-800 rounded-xl hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+                    className="w-full mb-3 p-3 bg-red-50 dark:bg-red-900/20 border-2 border-red-300 dark:border-red-800 rounded-xl hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors text-red-500 text-sm font-semibold"
                   >
-                    <div className="flex items-center justify-center gap-2">
-                      <span className="material-symbols-outlined text-red-500">close</span>
-                      <span className="text-red-500 font-semibold text-sm">대표 뱃지 제거</span>
-                    </div>
+                    대표 뱃지 제거
                   </button>
                 )}
 
@@ -1884,9 +1887,9 @@ const ProfileScreen = () => {
                 </h2>
                 <button
                   onClick={() => setShowFollowListModal(false)}
-                  className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
+                  className="px-3 h-8 rounded-full text-xs font-medium text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800"
                 >
-                  <span className="material-symbols-outlined text-xl">close</span>
+                  닫기
                 </button>
               </div>
               <div className="px-4 pt-4 pb-6 overflow-y-auto flex-1 min-h-0">
@@ -1945,12 +1948,10 @@ const ProfileScreen = () => {
                             className="flex items-center gap-3 flex-1 min-w-0 text-left"
                           >
                             {/* 프로필 이미지 */}
-                            <div className="w-11 h-11 rounded-full overflow-hidden flex-shrink-0 bg-teal-100 dark:bg-teal-900 flex items-center justify-center">
+                            <div className="w-11 h-11 rounded-full overflow-hidden flex-shrink-0 bg-teal-100 dark:bg-teal-900">
                               {profileImage ? (
                                 <img src={profileImage} alt="" className="w-full h-full object-cover" />
-                              ) : (
-                                <span className="material-symbols-outlined text-teal-600 dark:text-teal-400 text-2xl">person</span>
-                              )}
+                              ) : null}
                             </div>
                             {/* 사용자 이름 + 대표 뱃지 */}
                             <div className="flex-1 min-w-0 flex flex-col items-start gap-1">

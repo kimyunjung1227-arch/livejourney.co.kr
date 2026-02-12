@@ -6,7 +6,7 @@ import { getDisplayImageUrl } from '../api/upload';
 import { useAuth } from '../contexts/AuthContext';
 import { getWeatherByRegion } from '../api/weather';
 import { getTimeAgo } from '../utils/dateUtils';
-import { toggleLike, isPostLiked, addComment } from '../utils/socialInteractions';
+import { toggleLike, isPostLiked, addComment, getPostAccuracyCount, hasUserMarkedAccurate, toggleAccuracyFeedback } from '../utils/socialInteractions';
 import { toggleInterestPlace, isInterestPlace } from '../utils/interestPlaces';
 import { getEarnedBadgesForUser } from '../utils/badgeSystem';
 import { getUserLevel } from '../utils/levelSystem';
@@ -135,6 +135,8 @@ const PostDetailScreen = () => {
   const [authorLevelInfo, setAuthorLevelInfo] = useState(null);
   const [showHeartAnimation, setShowHeartAnimation] = useState(false);
   const [isFollowAuthor, setIsFollowAuthor] = useState(false);
+  const [accuracyMarked, setAccuracyMarked] = useState(false);
+  const [accuracyCount, setAccuracyCount] = useState(0);
   const [weatherInfo, setWeatherInfo] = useState({
     icon: '☀️',
     condition: '맑음',
@@ -230,6 +232,8 @@ const PostDetailScreen = () => {
       setLikeCount(passedPost.likes || 0);
       setLiked(isPostLiked(passedPost.id));
       setIsFavorited(isInterestPlace(passedPost.location || passedPost.placeName));
+      setAccuracyMarked(hasUserMarkedAccurate(passedPost.id));
+      setAccuracyCount(getPostAccuracyCount(passedPost.id));
       setLoading(false);
       return;
     }
@@ -255,6 +259,8 @@ const PostDetailScreen = () => {
         setLikeCount(localPost.likes || 0);
         setLiked(isPostLiked(localPost.id));
         setIsFavorited(isInterestPlace(localPost.location || localPost.placeName));
+        setAccuracyMarked(hasUserMarkedAccurate(localPost.id));
+        setAccuracyCount(getPostAccuracyCount(localPost.id));
         setLoading(false);
         return;
       }
@@ -287,6 +293,21 @@ const PostDetailScreen = () => {
       setLoading(false);
     }
   }, [postId, passedPost, navigate, formatQnA]);
+
+  // 정보 정확도 평가 상태 동기화 (API에서 로드한 경우 등)
+  useEffect(() => {
+    if (!post?.id) return;
+    setAccuracyMarked(hasUserMarkedAccurate(post.id));
+    setAccuracyCount(getPostAccuracyCount(post.id));
+  }, [post?.id]);
+
+  // 정보가 정확해요 버튼 클릭
+  const handleAccuracyClick = useCallback(() => {
+    if (!post?.id) return;
+    const result = toggleAccuracyFeedback(post.id);
+    setAccuracyMarked(result.marked);
+    setAccuracyCount(result.newCount);
+  }, [post?.id]);
 
   // 좋아요 처리
   const handleFavorite = useCallback(() => {
@@ -689,15 +710,20 @@ const PostDetailScreen = () => {
   const addressText = useMemo(() => post?.address || null, [post]);
   const userName = useMemo(() => post?.user?.username || post?.user || '실시간정보왕', [post]);
   const userBadge = useMemo(() => post?.user?.badges?.[0] || post?.badge || '여행러버', [post]);
-  // EXIF에서 추출한 촬영 날짜 우선 사용, 없으면 업로드 시간
+  // EXIF에서 추출한 촬영 날짜 우선 사용
   const photoDate = useMemo(() => post?.photoDate || post?.exifData?.photoDate || null, [post]);
-  const timeText = useMemo(() => {
-    if (photoDate) {
-      const date = new Date(photoDate);
-      return getTimeAgo(date);
-    }
-    return post?.time || (post?.createdAt ? getTimeAgo(post.createdAt) : '방금 전');
-  }, [post, photoDate]);
+  // 상세 화면용 촬영 시간 라벨 (예: "2/10 14:30 촬영")
+  const captureLabel = useMemo(() => {
+    const src = photoDate || post?.timestamp || post?.createdAt;
+    if (!src) return null;
+    const d = new Date(src);
+    if (Number.isNaN(d.getTime())) return null;
+    const month = d.getMonth() + 1;
+    const day = d.getDate();
+    const hours = d.getHours();
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    return `${month}/${day} ${hours}:${minutes} 촬영`;
+  }, [photoDate, post]);
   const categoryName = useMemo(() => post?.categoryName || null, [post]);
   // EXIF에서 검증된 위치 정보
   const verifiedLocation = useMemo(() => post?.verifiedLocation || post?.exifData?.gpsCoordinates ? locationText : null, [post, locationText]);
@@ -1064,12 +1090,6 @@ const PostDetailScreen = () => {
                   <p className="text-base font-bold text-zinc-900 dark:text-zinc-100">
                     {verifiedLocation || detailedLocationText || locationText}
                   </p>
-                  {hasExifData && (
-                    <span className="text-xs font-semibold text-white bg-green-600 px-2 py-1 rounded-full flex items-center gap-1">
-                      <span className="text-[10px]">✓</span>
-                      <span>검증됨</span>
-                    </span>
-                  )}
                   {categoryName && (
                     <span className="text-xs font-semibold text-white bg-primary px-3 py-1 rounded-full">
                       {categoryName.includes('개화') && '🌸'}
@@ -1089,12 +1109,7 @@ const PostDetailScreen = () => {
                   <div className="flex items-center gap-1.5 text-zinc-600 dark:text-zinc-400">
                     <span className="material-symbols-outlined !text-lg">schedule</span>
                     <span>
-                      {timeText}
-                      {photoDate && (
-                        <span className="ml-1 text-xs text-green-600 dark:text-green-400" title={`촬영: ${new Date(photoDate).toLocaleString('ko-KR')}`}>
-                          (EXIF)
-                        </span>
-                      )}
+                      {captureLabel || post?.time || (post?.createdAt ? getTimeAgo(post.createdAt) : '방금 전')}
                     </span>
                   </div>
                   <div className="flex items-center gap-1.5 text-zinc-600 dark:text-zinc-400">
@@ -1187,6 +1202,28 @@ const PostDetailScreen = () => {
                   })()}
                 </div>
               </div>
+          </div>
+
+          {/* 정보가 정확해요 - 다른 사용자들이 정보 정확도 평가 */}
+          <div className="px-4 py-3 border-t border-gray-100 dark:border-gray-800">
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">이 정보가 도움이 되었나요?</p>
+            <button
+              type="button"
+              onClick={handleAccuracyClick}
+              className={`w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-sm font-semibold transition-colors ${
+                accuracyMarked
+                  ? 'bg-primary/15 text-primary border-2 border-primary'
+                  : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-2 border-transparent hover:bg-gray-200 dark:hover:bg-gray-700'
+              }`}
+            >
+              <span className={`material-symbols-outlined text-xl ${accuracyMarked ? 'text-primary' : ''}`} style={accuracyMarked ? { fontVariationSettings: "'FILL' 1" } : {}}>
+                check_circle
+              </span>
+              <span>정보가 정확해요</span>
+              {accuracyCount > 0 && (
+                <span className="text-primary font-bold">({accuracyCount})</span>
+              )}
+            </button>
           </div>
 
           {/* 인터랙션 바 - 좋아요, 댓글, 공유 */}

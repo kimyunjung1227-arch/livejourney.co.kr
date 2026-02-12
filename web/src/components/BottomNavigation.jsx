@@ -148,7 +148,7 @@ const BottomNavigation = React.memo(() => {
     >
       <button
         onClick={() => navigate('/main')}
-        className={`flex flex-col items-center justify-center gap-1.5 py-2 ${isActive('/main') ? 'text-[#00BCD4]' : 'text-text-subtle-light dark:text-text-subtle-dark hover:text-[#00BCD4] transition-colors'
+        className={`flex flex-col items-center justify-center gap-1.5 py-2 ${isActive('/main') ? 'text-[#00BCD4]' : 'text-text-subtle-light dark:text-text-subtle-dark hover:text-text-primary-light dark:hover:text-text-primary-dark transition-colors'
           }`}
       >
         <span className="material-symbols-outlined" style={{ fontSize: 26 }}>home</span>
@@ -157,7 +157,7 @@ const BottomNavigation = React.memo(() => {
       {/* 검색 탭 */}
       <button
         onClick={() => navigate('/search')}
-        className={`flex flex-col items-center justify-center gap-1.5 py-2 ${isActive('/search') ? 'text-[#00BCD4]' : 'text-text-subtle-light dark:text-text-subtle-dark hover:text-[#00BCD4] transition-colors'
+        className={`flex flex-col items-center justify-center gap-1.5 py-2 ${isActive('/search') ? 'text-[#00BCD4]' : 'text-text-subtle-light dark:text-text-subtle-dark hover:text-text-primary-light dark:hover:text-text-primary-dark transition-colors'
           }`}
       >
         <span className="material-symbols-outlined" style={{ fontSize: 26 }}>search</span>
@@ -181,7 +181,7 @@ const BottomNavigation = React.memo(() => {
       </button>
       <button
         onClick={() => navigate('/map')}
-        className={`flex flex-col items-center justify-center gap-1.5 py-2 ${isActive('/map') ? 'text-[#00BCD4]' : 'text-text-subtle-light dark:text-text-subtle-dark hover:text-[#00BCD4] transition-colors'
+        className={`flex flex-col items-center justify-center gap-1.5 py-2 ${isActive('/map') ? 'text-[#00BCD4]' : 'text-text-subtle-light dark:text-text-subtle-dark hover:text-text-primary-light dark:hover:text-text-primary-dark transition-colors'
           }`}
       >
         <span className="material-symbols-outlined" style={{ fontSize: 26 }}>map</span>
@@ -189,7 +189,7 @@ const BottomNavigation = React.memo(() => {
       </button>
       <button
         onClick={() => navigate('/profile')}
-        className={`flex flex-col items-center justify-center gap-1.5 py-2 ${isActive('/profile') ? 'text-[#00BCD4]' : 'text-text-subtle-light dark:text-text-subtle-dark hover:text-[#00BCD4] transition-colors'
+        className={`flex flex-col items-center justify-center gap-1.5 py-2 ${isActive('/profile') ? 'text-[#00BCD4]' : 'text-text-subtle-light dark:text-text-subtle-dark hover:text-text-primary-light dark:hover:text-text-primary-dark transition-colors'
           }`}
       >
         <span className="material-symbols-outlined" style={{ fontSize: 26 }}>person</span>

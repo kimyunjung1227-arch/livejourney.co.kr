@@ -188,31 +188,46 @@ router.post('/', async (req, res) => {
 
     const {
       content,
-      location,
+      location: locationRaw,
       detailedLocation,
-      coordinates,
+      coordinates: coordinatesRaw,
       images,
       tags,
       category,
+      categoryName,
       placeName,
       exifData
     } = req.body;
 
+    // location: 프론트가 문자열 또는 { name, lat, lon, region, country } 객체로 보낼 수 있음
+    let locationStr = '알 수 없는 위치';
+    let coordinates = coordinatesRaw;
+    if (typeof locationRaw === 'string' && locationRaw.trim()) {
+      locationStr = locationRaw.trim();
+    } else if (locationRaw && typeof locationRaw === 'object') {
+      locationStr = locationRaw.name || locationRaw.region || locationRaw.address || '알 수 없는 위치';
+      if (locationRaw.lat != null && (locationRaw.lon != null || locationRaw.lng != null)) {
+        const lng = locationRaw.lng ?? locationRaw.lon;
+        coordinates = { lat: locationRaw.lat, lng };
+      }
+    }
+
     const newPost = new Post({
       user: userId,
       note: content,
-      location: location || '알 수 없는 위치',
-      detailedLocation,
-      placeName,
+      location: locationStr,
+      detailedLocation: detailedLocation || locationStr,
+      placeName: placeName || locationStr,
       coordinates: coordinates
         ? {
             type: 'Point',
-            coordinates: [coordinates.lng, coordinates.lat]
+            coordinates: [Number(coordinates.lng), Number(coordinates.lat)]
           }
         : undefined,
-      images: images || [],
-      tags: tags || [],
-      category: category || 'general'
+      images: Array.isArray(images) ? images : [],
+      tags: Array.isArray(tags) ? tags : [],
+      category: category || 'general',
+      categoryName: categoryName || '일반'
     });
 
     // 🔹 AI 태그 생성 시도 (GEMINI_API_KEY가 설정된 경우만)

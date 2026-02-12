@@ -1,144 +1,129 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  toggleInterestPlace,
-  isInterestPlace,
-  getInterestPlaces
-} from '../utils/interestPlaces';
-import { getRegionDefaultImage } from '../utils/regionDefaultImages';
+import { getInterestPlaces } from '../utils/interestPlaces';
+import BackButton from '../components/BackButton';
+import { REGIONS, getSubregions } from '../utils/regionSubregions';
 
 const InterestPlacesScreen = () => {
   const navigate = useNavigate();
-  const [interestPlaces, setInterestPlaces] = useState([]);
-  const [selectedRegions, setSelectedRegions] = useState([]);
-
-  // 선택 가능한 관심 지역 목록 (중복 선택 허용)
-  const availableRegions = [
-    '서울', '경기도', '인천', '부산', '대구',
-    '광주', '대전', '울산', '세종', '강원도',
-    '충청북도', '충청남도', '전라북도', '전라남도',
-    '경상북도', '경상남도', '제주도'
-  ];
+  const [selectedSet, setSelectedSet] = useState(new Set());
+  const [selectedRegion, setSelectedRegion] = useState('서울');
 
   useEffect(() => {
-    loadData();
-
-    const handleChange = () => loadData();
-    window.addEventListener('interestPlaceChanged', handleChange);
-
-    return () => {
-      window.removeEventListener('interestPlaceChanged', handleChange);
-    };
+    const places = getInterestPlaces();
+    const names = new Set((places || []).map((p) => p.name).filter(Boolean));
+    setSelectedSet(names);
   }, []);
 
-  const loadData = () => {
-    const places = getInterestPlaces();
-    setInterestPlaces(places);
-    // 기존 저장된 관심 지역 이름들을 선택 상태로 초기화
-    const names = places.map((p) => p.name).filter(Boolean);
-    setSelectedRegions(names);
-  };
-
-  const handleToggleRegion = (region) => {
-    setSelectedRegions((prev) =>
-      prev.includes(region) ? prev.filter((r) => r !== region) : [...prev, region]
-    );
+  const toggle = (name) => {
+    setSelectedSet((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
   };
 
   const handleDone = () => {
-    // 선택이 없으면 그냥 메인으로
-    if (!selectedRegions || selectedRegions.length === 0) {
-      localStorage.setItem('hasCompletedInterestSetup', 'true');
-      navigate('/main', { replace: true });
-      return;
+    const list = Array.from(selectedSet);
+    if (list.length === 0) {
+      localStorage.setItem('interestPlaces', JSON.stringify([]));
+    } else {
+      const now = new Date().toISOString();
+      const newPlaces = list.map((name) => ({
+        name,
+        location: name,
+        region: name,
+        coordinates: null,
+        addedAt: now
+      }));
+      localStorage.setItem('interestPlaces', JSON.stringify(newPlaces));
     }
-
-    const now = new Date().toISOString();
-    const newPlaces = selectedRegions.map((region) => ({
-      name: region,
-      location: region,
-      region,
-      coordinates: null,
-      addedAt: now
-    }));
-
-    localStorage.setItem('interestPlaces', JSON.stringify(newPlaces));
-    localStorage.setItem('hasCompletedInterestSetup', 'true');
-    window.dispatchEvent(
-      new CustomEvent('interestPlaceChanged', {
-        detail: { place: selectedRegions, enabled: true }
-      })
-    );
-
-    navigate('/main', { replace: true });
+    window.dispatchEvent(new CustomEvent('interestPlaceChanged', { detail: { place: list, enabled: true } }));
+    navigate(-1);
   };
 
-  const handleSkip = () => {
-    localStorage.setItem('hasCompletedInterestSetup', 'true');
-    navigate('/main', { replace: true });
-  };
+  const subregions = getSubregions(selectedRegion);
 
   return (
-    <div className="flex h-screen w-full flex-col bg-white overflow-hidden">
-      {/* 상단 헤더 */}
-      <header className="flex-shrink-0 border-b border-gray-200 bg-white pt-5 pb-4 px-5">
-        <button
-          type="button"
-          onClick={handleSkip}
-          className="mb-4 inline-flex h-8 w-8 items-center justify-center rounded-full hover:bg-gray-100"
-        >
-          <span className="material-symbols-outlined text-gray-900 text-xl">arrow_back</span>
-        </button>
-        <h2 className="text-base font-semibold text-gray-900 mb-1">내 피드에서 보고 싶은</h2>
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">관심 지역</h1>
-        <p className="text-sm text-gray-500 mb-4">
-          선택한 지역을 기준으로 메인 피드가 구성됩니다. 원하시는 만큼 골라 주세요.
-        </p>
-      </header>
+    <div className="flex h-screen w-full items-center justify-center bg-black/40">
+      {/* 팝업 카드: 크기 고정으로 지역 변경 시에도 동일한 레이아웃 유지 */}
+      <div className="w-full max-w-md h-[85vh] max-h-[720px] bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+        {/* 헤더 */}
+        <header className="flex-shrink-0 border-b border-gray-200 bg-white">
+          <div className="flex items-center h-12 px-4 gap-3">
+            <BackButton ariaLabel="관심지역 설정 닫기" />
+            <h1 className="text-base font-bold text-gray-900 flex-1 text-center pr-9">관심지역 설정</h1>
+          </div>
+        </header>
 
-      {/* 컨텐츠: 칩 형태로 관심 지역 선택 */}
-      <div className="flex-1 overflow-y-auto bg-white px-5 pt-3">
-        <div className="flex flex-wrap gap-2">
-          {availableRegions.map((region) => {
-            const selected = selectedRegions.includes(region);
+        {/* 본문: 좌우 2열 고정 높이 (세부지역 개수와 관계없이 동일한 팝업 크기) */}
+        <div className="flex flex-1 min-h-0 h-[calc(100%-7rem)]">
+          {/* 왼쪽: 시·도 리스트 (전국 17개) */}
+          <div className="w-2/5 flex-shrink-0 border-r border-gray-100 bg-gray-50 overflow-y-auto">
+            {REGIONS.map((region) => {
+              const active = selectedRegion === region;
+              return (
+                <button
+                  key={region}
+                  type="button"
+                  onClick={() => setSelectedRegion(region)}
+                  className={`w-full text-left px-3 py-2.5 text-sm truncate ${
+                    active ? 'bg-white font-semibold text-gray-900' : 'text-gray-500 hover:bg-gray-100'
+                  }`}
+                >
+                  {region}
+                </button>
+              );
+            })}
+          </div>
 
-            return (
-              <button
-                key={region}
-                type="button"
-                onClick={() => handleToggleRegion(region)}
-                className={`inline-flex items-center rounded-full px-4 py-2 text-sm border transition-all ${
-                  selected
-                    ? 'bg-[#00BCD4] text-white border-[#00BCD4]'
-                    : 'bg-white text-gray-800 border-gray-200 hover:bg-[#E0F7FA]'
-                }`}
-              >
-                <span>{region}</span>
-              </button>
-            );
-          })}
+          {/* 오른쪽: 세부지역 (광역시는 구/군, 도는 시/군) */}
+          <div className="flex-1 bg-white flex flex-col min-h-0 overflow-hidden">
+            <div className="flex-shrink-0 px-4 py-2 border-b border-gray-100 text-sm font-semibold text-gray-800">
+              {selectedRegion}
+            </div>
+            <div className="flex-1 overflow-y-auto min-h-0">
+              {subregions.length === 0 ? (
+                <div className="px-4 py-6 text-sm text-gray-500">세부지역 없음</div>
+              ) : (
+                subregions.map((name) => {
+                  const label = name;
+                  const selected = selectedSet.has(label);
+                  return (
+                    <button
+                      key={label}
+                      type="button"
+                      onClick={() => toggle(label)}
+                      className={`w-full flex items-center justify-between px-4 py-3 text-left text-sm border-b border-gray-50 ${
+                        selected ? 'bg-[#E0F7FA] text-[#006064]' : 'text-gray-800 hover:bg-gray-50'
+                      }`}
+                    >
+                      <span>{name}</span>
+                      {selected && (
+                        <span className="material-symbols-outlined text-[#00BCD4] text-xl flex-shrink-0">check_circle</span>
+                      )}
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </div>
         </div>
-      </div>
 
-      {/* 하단 버튼 영역 */}
-      <div className="flex-shrink-0 px-5 pb-6 pt-4 bg-white">
-        <p className="text-xs text-gray-400 mb-3 text-center">
-          관심 지역은 나중에 프로필에서 다시 수정할 수 있어요.
-        </p>
-        <button
-          type="button"
-          onClick={handleDone}
-          className="w-full h-11 rounded-full bg-[#00BCD4] text-sm font-semibold text-white active:bg-[#00A5BD]"
-        >
-          다음
-        </button>
+        {/* 하단 버튼 */}
+        <div className="flex-shrink-0 p-4 border-t border-gray-200 bg-white">
+          <button
+            type="button"
+            onClick={handleDone}
+            className="w-full h-11 rounded-full bg-[#00BCD4] text-white text-sm font-semibold hover:bg-[#00A5BD]"
+          >
+            선택 완료 ({selectedSet.size}개)
+          </button>
+        </div>
       </div>
     </div>
   );
 };
 
 export default InterestPlacesScreen;
-
-
-
-

@@ -7,7 +7,7 @@ const LiveJourneyLogo = ({ size = 96, showText = true, className = '' }) => {
     <div className={`flex flex-col items-center gap-4 ${className}`}>
       {/* 메인 앱 로고 이미지 */}
       <div
-        className="rounded-3xl shadow-xl overflow-hidden bg-gradient-to-br from-cyan-400 to-sky-500"
+        className="rounded-3xl shadow-xl overflow-hidden bg-black"
         style={{ width: size, height: size }}
       >
         <img
@@ -25,13 +25,8 @@ const LiveJourneyLogo = ({ size = 96, showText = true, className = '' }) => {
       {showText && (
         <div className="flex flex-col items-center gap-1">
           <h1
-            className="text-4xl font-bold tracking-tight"
-            style={{
-              background: 'linear-gradient(135deg, #00BCD4 0%, #0097A7 60%, #FFC107 100%)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              backgroundClip: 'text',
-            }}
+            className="logo-text text-4xl font-bold tracking-tight"
+            style={{ color: '#000000' }}
           >
             LiveJourney
           </h1>

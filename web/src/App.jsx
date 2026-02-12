@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider } from './contexts/AuthContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import { initStatusBar } from './utils/statusBar'
+import SosAlertBanner from './components/SosAlertBanner'
 
 // Pages
 import WelcomeScreen from './pages/WelcomeScreen'
@@ -65,6 +66,7 @@ function App() {
       <Router basename={basename}>
         <div className="app-container">
           <div className="page-wrapper">
+            <SosAlertBanner />
             <Routes>
               {/* 1. 스플래시 → 2. 온보딩 → 3. 로그인(StartScreen) */}
               <Route path="/" element={<WelcomeScreen />} />

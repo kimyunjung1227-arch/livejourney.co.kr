@@ -36,13 +36,7 @@ const StartScreen = () => {
     try {
       const result = await testerLogin();
       if (result.success) {
-        const hasCompletedInterest = localStorage.getItem('hasCompletedInterestSetup') === 'true';
-        // 처음 로그인이라면 관심 지역 설정으로, 아니면 바로 메인으로
-        if (!hasCompletedInterest) {
-          navigate('/interest-places', { replace: true });
-        } else {
-          navigate('/main', { replace: true });
-        }
+        navigate('/main', { replace: true });
       } else {
         setError(result.error);
       }

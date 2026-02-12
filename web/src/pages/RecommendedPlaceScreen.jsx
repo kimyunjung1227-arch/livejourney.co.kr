@@ -120,7 +120,7 @@ const RecommendedPlaceScreen = () => {
                       onError={(e) => { e.target.onerror = null; e.target.src = PLACEHOLDER_IMAGE; }}
                     />
                   </div>
-                  <div style={{ padding: '10px' }}>
+                  <div style={{ padding: '12px 14px 14px', background: '#f8fafc', borderTop: '3px solid #475569', boxShadow: '0 -2px 0 0 #475569, 0 2px 8px rgba(0,0,0,0.08)' }}>
                     <div style={{ fontSize: '13px', fontWeight: 600, color: '#333', marginBottom: '4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {item.title}
                     </div>

@@ -234,4 +234,39 @@ export const getBookmarkedPosts = () => {
   return JSON.parse(localStorage.getItem('bookmarkedPosts') || '[]');
 };
 
+// --- 정보 정확도 평가 (다른 사용자 게시물에 대한 "정보가 정확해요" 표시) ---
+const ACCURACY_COUNT_KEY = 'postAccuracyCount';
+const USER_ACCURACY_MARKS_KEY = 'userAccuracyMarks';
+
+/** 게시물별 정확도 평가 수 조회 */
+export const getPostAccuracyCount = (postId) => {
+  const counts = JSON.parse(localStorage.getItem(ACCURACY_COUNT_KEY) || '{}');
+  return Number(counts[postId]) || 0;
+};
+
+/** 현재 사용자가 해당 게시물에 "정확해요"를 눌렀는지 */
+export const hasUserMarkedAccurate = (postId) => {
+  const marks = JSON.parse(localStorage.getItem(USER_ACCURACY_MARKS_KEY) || '{}');
+  return !!marks[postId];
+};
+
+/** "정보가 정확해요" 토글 (한 번 누르면 표시, 다시 누르면 취소) */
+export const toggleAccuracyFeedback = (postId) => {
+  const marks = JSON.parse(localStorage.getItem(USER_ACCURACY_MARKS_KEY) || '{}');
+  const counts = JSON.parse(localStorage.getItem(ACCURACY_COUNT_KEY) || '{}');
+  const wasMarked = !!marks[postId];
+  const currentCount = Number(counts[postId]) || 0;
+
+  marks[postId] = !wasMarked;
+  counts[postId] = Math.max(0, currentCount + (wasMarked ? -1 : 1));
+
+  localStorage.setItem(USER_ACCURACY_MARKS_KEY, JSON.stringify(marks));
+  localStorage.setItem(ACCURACY_COUNT_KEY, JSON.stringify(counts));
+
+  return {
+    marked: !wasMarked,
+    newCount: counts[postId]
+  };
+};
+
 

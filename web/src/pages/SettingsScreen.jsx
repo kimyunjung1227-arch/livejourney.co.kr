@@ -158,20 +158,6 @@ const SettingsScreen = () => {
                     chevron_right
                   </span>
                 </button>
-                <button
-                  onClick={() => navigate('/interest-places')}
-                  className="flex h-14 items-center justify-between px-4 hover:bg-surface-subtle-light dark:hover:bg-surface-subtle-dark transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="material-symbols-outlined text-primary">star</span>
-                    <p className="text-base font-normal leading-normal text-black dark:text-white">
-                      관심 지역/장소 관리
-                    </p>
-                  </div>
-                  <span className="material-symbols-outlined text-black dark:text-white">
-                    chevron_right
-                  </span>
-                </button>
               </div>
             </div>
 

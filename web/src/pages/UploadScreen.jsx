@@ -668,6 +668,25 @@ const UploadScreen = () => {
       return;
     }
 
+    // 촬영 시점 제약: 당일(24시간 이내)에 촬영된 사진만 업로드 허용
+    if (formData.images.length > 0) {
+      const now = Date.now();
+      const photoTs = formData.photoDate
+        ? new Date(formData.photoDate).getTime()
+        : (formData.exifData?.photoTimestamp ?? null);
+
+      if (!photoTs || Number.isNaN(photoTs)) {
+        alert('촬영일 정보가 없는 사진은 업로드할 수 없어요.\n당일(24시간 이내)에 촬영한 사진만 올려주세요.');
+        return;
+      }
+
+      const diffHours = (now - photoTs) / (1000 * 60 * 60);
+      if (diffHours > 24) {
+        alert('당일(24시간 이내)에 촬영된 사진만 업로드할 수 있어요.\n다른 사진을 선택해주세요.');
+        return;
+      }
+    }
+
     logger.log('Validation passed - proceeding with upload');
 
     try {
@@ -1262,27 +1281,27 @@ const UploadScreen = () => {
                     onMouseDown={(e) => { if (!e.target.closest('button')) handleDragStart(e); }}
                   >
                     {formData.images.map((image, index) => (
-                      <div
+                    <div
                         key={`img-row-${index}`}
                         className="relative flex-shrink-0 w-24 h-24 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600 bg-gray-100"
-                      >
+                    >
                         <img src={image} alt="" className="w-full h-full object-cover" />
                         <button
-                          type="button"
-                          onClick={(e) => {
+                        type="button"
+                        onClick={(e) => {
                             e.stopPropagation();
                             setFormData(prev => ({
-                              ...prev,
-                              images: prev.images.filter((_, i) => i !== index),
-                              imageFiles: prev.imageFiles.filter((_, i) => i !== index)
+                            ...prev,
+                            images: prev.images.filter((_, i) => i !== index),
+                            imageFiles: prev.imageFiles.filter((_, i) => i !== index)
                             }));
-                          }}
-                          onMouseDown={(e) => e.stopPropagation()}
-                          className="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-black/60 text-white flex items-center justify-center text-xs hover:bg-black/80"
+                        }}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-white text-gray-800 border border-gray-300 shadow-md flex items-center justify-center text-xs font-bold hover:bg-red-500 hover:text-white hover:border-red-500 transition-colors"
                         >
-                          ×
+                        ×
                         </button>
-                      </div>
+                    </div>
                     ))}
 
                     {formData.videos.map((video, index) => (

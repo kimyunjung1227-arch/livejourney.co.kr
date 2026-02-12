@@ -441,104 +441,104 @@ const RegionDetailScreen = () => {
                   </button>
                 </div>
               ) : (
-                <div className="grid grid-cols-2 gap-4 px-4">
-                  {realtimePhotos.map((photo) => {
-                    const likedPosts = JSON.parse(localStorage.getItem('likedPosts') || '{}');
-                    const isLiked = likedPosts[photo.id] || false;
-                    const likeCount = photo.likes || photo.likeCount || 0;
+                <div className="px-4 pb-4">
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                      rowGap: '7px',
+                      columnGap: '7px'
+                    }}
+                  >
+                    {realtimePhotos.map((photo) => {
+                      const weather = photo.weather || null;
+                      const hasWeather = weather && (weather.icon || weather.temperature);
+                      const likedPosts = JSON.parse(localStorage.getItem('likedPosts') || '{}');
+                      const isLiked = likedPosts[photo.id] || false;
+                      const likeCount = photo.likes || photo.likeCount || 0;
 
-                    return (
-                      <div
-                        key={photo.id}
-                        className="cursor-pointer group"
-                        onClick={() => {
-                          const currentIndex = allRegionPosts.findIndex(p => p.id === photo.id);
-                          navigate(`/post/${photo.id}`, {
-                            state: {
-                              post: photo,
-                              allPosts: allRegionPosts,
-                              currentPostIndex: currentIndex >= 0 ? currentIndex : 0
-                            }
-                          });
-                        }}
-                      >
-                        <div>
-                          {/* 이미지 */}
-                          <div className="relative w-full aspect-[4/5] overflow-hidden rounded-lg mb-3">
+                      return (
+                        <div
+                          key={photo.id}
+                          onClick={() => {
+                            const currentIndex = allRegionPosts.findIndex(p => p.id === photo.id);
+                            navigate(`/post/${photo.id}`, {
+                              state: {
+                                post: photo,
+                                allPosts: allRegionPosts,
+                                currentPostIndex: currentIndex >= 0 ? currentIndex : 0
+                              }
+                            });
+                          }}
+                          style={{
+                            background: '#ffffff',
+                            borderRadius: '12px',
+                            overflow: 'hidden',
+                            boxShadow: '0 2px 6px rgba(15,23,42,0.08)',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            flexDirection: 'column'
+                          }}
+                        >
+                          {/* 이미지: 정사각형, 좋아요 뱃지 포함 */}
+                          <div style={{ width: '100%', paddingBottom: '100%', height: 0, position: 'relative', background: '#e5e7eb' }}>
                             {photo.videos && photo.videos.length > 0 ? (
                               <video
                                 src={getDisplayImageUrl(photo.videos[0])}
-                                className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                                className="w-full h-full object-cover"
+                                style={{ position: 'absolute', top: 0, left: 0 }}
                                 autoPlay
                                 loop
                                 muted
                                 playsInline
                               />
                             ) : (
-                              <img
-                                className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                                src={getDisplayImageUrl(photo.image)}
-                                alt={`${region.name} 실시간 정보`}
-                              />
+                              <>
+                                {photo.image ? (
+                                  <img
+                                    src={getDisplayImageUrl(photo.image)}
+                                    alt={photo.location || region.name}
+                                    style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                                  />
+                                ) : (
+                                  <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#cbd5e1' }}>
+                                    <span className="material-symbols-outlined" style={{ fontSize: '22px' }}>image</span>
+                                  </div>
+                                )}
+                              </>
                             )}
-
-
-                            {/* 우측 하단 하트 아이콘 */}
-                            <div className="absolute bottom-3 right-3 flex items-center gap-1 bg-white/90 backdrop-blur-sm rounded-full px-3 py-1.5 shadow-md">
-                              <span className={`material-symbols-outlined text-base ${isLiked ? 'text-red-500 fill' : 'text-gray-600'}`}>
+                            <div style={{ position: 'absolute', bottom: '4px', right: '4px', background: 'rgba(255,255,255,0.9)', padding: '2px 6px', borderRadius: '999px', fontSize: '11px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px', color: '#1f2937' }}>
+                              <span className={`material-symbols-outlined text-base ${isLiked ? 'text-red-500' : 'text-gray-600'}`}>
                                 favorite
                               </span>
-                              <span className="text-sm font-semibold text-gray-700">{likeCount}</span>
+                              <span>{likeCount}</span>
                             </div>
                           </div>
 
-                          {/* 이미지 밖 하단 텍스트 */}
-                          <div className="space-y-2">
-                            {/* 지역 상세 정보 */}
-                            <div>
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <p className="text-base font-bold text-text-primary-light dark:text-text-primary-dark">
-                                  {photo.detailedLocation || photo.placeName || photo.location || region.name}
-                                </p>
-                                {/* 업로드 시간 - 지역 옆에 */}
-                                {photo.time && (
-                                  <p className="text-xs text-text-secondary-light dark:text-text-secondary-dark">
-                                    {photo.time}
-                                  </p>
-                                )}
+                          {/* 하단 시트: "지금 여기는" 더보기 스타일 */}
+                          <div style={{ padding: '12px 14px 14px', background: '#f8fafc', borderTop: '3px solid #475569', boxShadow: '0 -2px 0 0 #475569, 0 2px 8px rgba(0,0,0,0.08)', minHeight: '92px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                            <div style={{ fontSize: '13px', fontWeight: 700, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                              📍 {photo.detailedLocation || photo.placeName || photo.location || region.name}
+                            </div>
+                            {(photo.note || photo.content) && (
+                              <div style={{ fontSize: '12px', color: '#4b5563', marginTop: '4px', lineHeight: 1.4, height: '2.8em', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                                {photo.note || photo.content}
                               </div>
-                              {photo.detailedLocation && photo.detailedLocation !== photo.location && (
-                                <p className="text-sm text-text-secondary-light dark:text-text-secondary-dark mt-0.5">
-                                  {photo.location}
-                                </p>
+                            )}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px', flexShrink: 0, fontSize: '11px', color: '#6b7280' }}>
+                              <span>{photo.time}</span>
+                              {hasWeather && (
+                                <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                  {weather.icon && <span>{weather.icon}</span>}
+                                  {weather.temperature && <span>{weather.temperature}</span>}
+                                </span>
                               )}
                             </div>
-
-                            {/* 해시태그 - 눌러서 검색 */}
-                            {photo.tags && photo.tags.length > 0 && (
-                              <div className="flex gap-1.5 overflow-x-auto [-ms-scrollbar-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" style={{ scrollSnapType: 'x mandatory' }}>
-                                {photo.tags.slice(0, 5).map((tag, tagIndex) => {
-                                  const t = typeof tag === 'string' ? tag.replace(/^#+/, '') : tag;
-                                  return (
-                                    <button key={tagIndex} type="button" onClick={() => navigate(`/search?q=${encodeURIComponent('#' + t)}`)} className="text-xs font-medium text-primary bg-primary/10 hover:bg-primary/20 px-2.5 py-1 rounded-full whitespace-nowrap flex-shrink-0 cursor-pointer transition-colors" style={{ scrollSnapAlign: 'start', scrollSnapStop: 'always' }}>
-                                      #{t}
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            )}
-
-                            {/* 메모/내용 */}
-                            {photo.note && (
-                              <p className="text-sm text-text-secondary-light dark:text-text-secondary-dark line-clamp-2">
-                                {photo.note}
-                              </p>
-                            )}
                           </div>
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
+                  </div>
                 </div>
               )}
             </div>

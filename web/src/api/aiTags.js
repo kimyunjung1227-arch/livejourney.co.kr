@@ -53,9 +53,8 @@ export const generateAITags = async (imageFile, location = '', exifData = null) 
       };
     }
 
-    logger.warn('⚠️ AI 태그 생성 실패 (success: false)');
-    logger.warn('  실패 이유:', response.data?.message);
-    logger.warn('  전체 응답:', response.data);
+    // AI 미사용 시 로컬 분석으로 자동 전환되므로 경고 1줄만 (개발 시에만 상세 로그)
+    logger.debug('AI 태그 건너뜀 → 로컬 분석 사용. 이유:', response.data?.message || 'AI 응답 없음');
     return {
       success: false,
       tags: [],

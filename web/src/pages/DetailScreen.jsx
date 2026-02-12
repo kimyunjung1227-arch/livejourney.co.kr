@@ -514,19 +514,14 @@ const DetailScreen = () => {
                         </div>
                       </div>
 
-                      {/* 이미지 밖 하단 텍스트 - 사진이 먼저 보이도록 글자 살짝 축소 */}
-                      <div className="space-y-1.5">
+                      {/* 이미지 밖 하단 텍스트 - 사진 아래 시트 스타일 통일 */}
+                      <div className="space-y-1.5" style={{ borderTop: '3px solid #475569', background: '#f8fafc', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', padding: '12px 14px 14px', marginTop: 0 }}>
                         {/* 지역 상세 정보 */}
                         <div>
                           <div className="flex items-center gap-2 flex-wrap">
                             <p className="text-sm font-semibold text-text-primary-light dark:text-text-primary-dark">
                               {item.verifiedLocation || item.detailedLocation || item.placeName || item.location || '여행지'}
                             </p>
-                            {(item.exifData || item.verifiedLocation || item.photoDate) && (
-                              <span className="text-[9px] font-semibold text-white bg-green-600 px-1.5 py-0.5 rounded-full">
-                                ✓ 검증
-                              </span>
-                            )}
                             {/* 업로드 시간 - 지역 옆에 */}
                             {item.time && (
                               <p className="text-[11px] text-text-secondary-light dark:text-text-secondary-dark">
