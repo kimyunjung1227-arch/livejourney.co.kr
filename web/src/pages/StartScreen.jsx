@@ -134,8 +134,32 @@ const StartScreen = () => {
                 className="flex cursor-pointer items-center justify-center gap-3 rounded-full h-12 px-6 bg-[#FEE500] text-[#000000] text-sm font-bold tracking-tight hover:bg-[#fdd835] active:bg-[#fbc02d] transition-all shadow-md disabled:opacity-50"
                 style={{ touchAction: 'manipulation' }}
               >
-                <span className="material-symbols-outlined text-base bg-black text-[#FEE500] rounded-full w-6 h-6 flex items-center justify-center">
-                  chat
+                {/* 실제 카카오톡 로고 느낌의 말풍선 + TALK 아이콘 */}
+                <span className="w-6 h-6 flex items-center justify-center">
+                  <svg
+                    viewBox="0 0 24 24"
+                    xmlns="http://www.w3.org/2000/svg"
+                    aria-hidden="true"
+                  >
+                    {/* 노란 원 배경 */}
+                    <circle cx="12" cy="12" r="12" fill="#FEE500" />
+                    {/* 갈색 말풍선 */}
+                    <path
+                      d="M12 6C8.962 6 6.5 8.01 6.5 10.64c0 1.82 1.18 3.39 2.98 4.3L8.8 18.4c-.07.27.2.5.46.38l3.16-1.43c.52.08 1.06.13 1.58.13 3.038 0 5.5-2.01 5.5-4.64C19.5 8.01 17.038 6 14 6h-2z"
+                      fill="#381E1F"
+                    />
+                    {/* TALK 텍스트 */}
+                    <text
+                      x="12"
+                      y="13.5"
+                      textAnchor="middle"
+                      fontSize="6.2"
+                      fontWeight="700"
+                      fill="#FEE500"
+                    >
+                      TALK
+                    </text>
+                  </svg>
                 </span>
                 <span className="truncate">카카오로 시작하기</span>
               </button>

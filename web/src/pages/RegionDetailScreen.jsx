@@ -252,36 +252,15 @@ const RegionDetailScreen = () => {
     };
   }, [loadRegionData, fetchWeatherData, region.name]);
 
-  // 상단에는 항상 그 지역의 특징이 담긴 대표 사진 표시 (지역상세 정체성)
-  const heroImageUrl = getRegionDefaultImage(region.name || regionName);
-
   return (
-    <div className="screen-layout bg-background-light dark:bg-background-dark relative h-screen overflow-hidden">
-      <div className="screen-content relative">
-        {/* 상단 풀블리드 사진 — 뒤로가기 구역까지 겹침 */}
-        <div
-          className="absolute top-0 left-0 right-0 z-0"
-          style={{ height: '42vh', minHeight: 240 }}
-        >
-          <img
-            src={heroImageUrl}
-            alt={region.name}
-            className="w-full h-full object-cover block"
-            style={{ display: 'block' }}
-          />
-          <div
-            className="absolute inset-0"
-            style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.15) 0%, transparent 50%, rgba(0,0,0,0.4) 100%)' }}
-            aria-hidden
-          />
-        </div>
-
+    <div className="screen-layout bg-white dark:bg-background-dark relative h-screen overflow-hidden">
+      <div className="screen-content relative bg-white dark:bg-background-dark">
         {/* 뒤로가기 구역 — sticky + pointer-events-none 제거로 항상 클릭 가능 */}
         <header
           className="flex flex-col sticky top-0 z-[100] shrink-0"
           style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
         >
-          <div className="flex items-center justify-between p-4 pb-2">
+          <div className="flex items-center justify-between p-4 pb-2 bg-white dark:bg-background-dark">
             <button
               type="button"
               onClick={() => {
@@ -291,13 +270,13 @@ const RegionDetailScreen = () => {
                   navigate('/main', { replace: true });
                 }
               }}
-              className="flex size-12 shrink-0 items-center justify-center text-white rounded-full bg-transparent hover:bg-black/20 transition-colors cursor-pointer touch-manipulation"
+              className="flex size-12 shrink-0 items-center justify-center text-black dark:text-white rounded-full bg-transparent hover:bg-gray-100 dark:hover:bg-black/20 transition-colors cursor-pointer touch-manipulation"
               aria-label="뒤로가기"
               style={{ WebkitTapHighlightColor: 'transparent' }}
             >
-              <span className="material-symbols-outlined text-2xl" style={{ textShadow: '0 1px 3px rgba(0,0,0,0.6)' }}>arrow_back</span>
+              <span className="material-symbols-outlined text-2xl">arrow_back</span>
             </button>
-            <h1 className="flex-1 text-center text-lg font-bold leading-tight tracking-[-0.015em] text-white" style={{ textShadow: '0 1px 4px rgba(0,0,0,0.7)' }}>
+            <h1 className="flex-1 text-center text-lg font-bold leading-tight tracking-[-0.015em] text-black dark:text-white">
               {region.name}
             </h1>
             <button
@@ -332,7 +311,7 @@ const RegionDetailScreen = () => {
         <div
           ref={bodyRef}
           className="screen-body relative z-10 bg-background-light dark:bg-background-dark rounded-t-[20px]"
-          style={{ marginTop: '-16px', boxShadow: '0 -4px 20px rgba(0,0,0,0.08)', overflowY: 'auto', maxHeight: '58vh' }}
+          style={{ overflowY: 'auto', maxHeight: '58vh' }}
         >
           <main>
 
@@ -584,7 +563,7 @@ const RegionDetailScreen = () => {
       {/* 명소 선택 모달 - 화면 가운데 */}
       {showLandmarkModal && (
         <div
-          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+          className="fixed inset-0 bg-black/30 md:bg-black/40 flex items-center justify-center z-[200] p-4"
           onClick={() => setShowLandmarkModal(false)}
         >
           <div

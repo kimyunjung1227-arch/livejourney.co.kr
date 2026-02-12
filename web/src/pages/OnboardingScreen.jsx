@@ -117,17 +117,8 @@ const OnboardingScreen = () => {
   const current = slides[step];
 
   const handleStart = () => {
-    const goMain = () => navigate('/main');
-    if (typeof navigator !== 'undefined' && navigator.geolocation) {
-      // 위치 권한 요청 → 브라우저/기기 시스템 팝업 표시 (최초 1회. 이미 허용/거부했으면 팝업 안 뜸)
-      navigator.geolocation.getCurrentPosition(
-        goMain,
-        goMain,
-        { enableHighAccuracy: false, timeout: 10000, maximumAge: 0 }
-      );
-    } else {
-      goMain();
-    }
+    // 온보딩에서 "시작하기"를 누르면 로그인 화면으로 이동
+    navigate('/start');
   };
 
   const handleSkip = () => {
@@ -181,81 +172,19 @@ const OnboardingScreen = () => {
       );
     }
 
-    // 3번: 여행 기록 카드 - 동일 작은 영역
+    // 3번: 여행 기록 기능 – 제공해주신 카드 타임라인 이미지 사용
+    // 원본 이미지에 여백이 많아서, 컨테이너를 잘라내는 방식으로 살짝 확대해서 넣습니다.
     return (
-      <div className="relative w-full" style={{ width: 290, maxWidth: '100%', height: '38vh', maxHeight: 240 }}>
-        <div
-          className="absolute inset-0 flex items-center justify-center"
-          style={{ width: 240, height: 200 }}
-        >
-          {/* 세 번째(맨 아래) 카드 */}
-          <div
-            style={{
-              position: 'absolute',
-              width: 220,
-              height: 155,
-              borderRadius: 14,
-              top: 96,
-              left: '50%',
-              transform: 'translateX(-50%) scale(0.9)',
-              backgroundImage: 'url(https://i.imgur.com/y012d8e.jpeg)',
-              backgroundSize: 'cover',
-              backgroundPosition: 'center',
-              boxShadow: '0 6px 14px rgba(0,0,0,0.12)',
-              opacity: 0.8
-            }}
-          />
-          {/* 두 번째(중간) 카드 */}
-          <div
-            style={{
-              position: 'absolute',
-              width: 220,
-              height: 155,
-              borderRadius: 14,
-              top: 48,
-              left: '50%',
-              transform: 'translateX(-50%) scale(0.95)',
-              backgroundImage: 'url(https://i.imgur.com/8o35d9f.jpeg)',
-              backgroundSize: 'cover',
-              backgroundPosition: 'center',
-              boxShadow: '0 6px 14px rgba(0,0,0,0.12)',
-              opacity: 0.9
-            }}
-          />
-          {/* 첫 번째(맨 위) 카드 */}
-          <div
-            style={{
-              position: 'absolute',
-              width: 220,
-              height: 155,
-              borderRadius: 14,
-              top: 0,
-              left: '50%',
-              transform: 'translateX(-50%)',
-              backgroundImage: 'url(https://i.imgur.com/4kX9z1a.jpeg)',
-              backgroundSize: 'cover',
-              backgroundPosition: 'center',
-              boxShadow: '0 6px 14px rgba(0,0,0,0.15)'
-            }}
-          >
-            <div
-              style={{
-                position: 'absolute',
-                top: 10,
-                left: 10,
-                backgroundColor: 'rgba(255,255,255,0.9)',
-                color: '#007aff',
-                padding: '4px 10px',
-                borderRadius: 12,
-                fontSize: 11,
-                fontWeight: 600,
-                boxShadow: '0 1px 4px rgba(0,0,0,0.08)'
-              }}
-            >
-              도쿄 · 2024년 10월
-            </div>
-          </div>
-        </div>
+      <div
+        className="w-full max-w-[290px] h-full mx-auto rounded-xl overflow-hidden shadow-sm border border-gray-100 flex items-center justify-center"
+        style={{ maxHeight: '38vh' }}
+      >
+        <img
+          src="/기록기능.png.png"
+          alt="여행 기록 기능 예시"
+          className="w-full h-full object-cover"
+          style={{ transform: 'scale(1.08)' }} // 가장자리 여백을 조금 잘라내서 꽉 차게 보이도록 확대
+        />
       </div>
     );
   };
