@@ -31,34 +31,14 @@
       min-height: max(884px, 100dvh);
     }
   </style>
-  <script>
-    // GitHub Pages SPA 라우팅 지원
-    // 모든 404 요청을 index.html로 리다이렉트
-    var path = window.location.pathname;
-    var search = window.location.search;
-    var hash = window.location.hash;
-
-    // base path 제거 (이미 포함되어 있을 수 있음)
-    var basePath = '/livejourney.co.kr';
-    if (path.startsWith(basePath)) {
-      path = path.substring(basePath.length);
-    }
-
-    // index.html로 리다이렉트
-    var indexPath = basePath + '/index.html';
-    if (path !== '/' && path !== basePath && path !== indexPath) {
-      // 경로 정보를 쿼리 파라미터로 전달
-      var separator = search ? '&' : '?';
-      window.location.replace(indexPath + separator + 'redirect=' + encodeURIComponent(path) + search + hash);
-    } else {
-      window.location.replace(indexPath + search + hash);
-    }
-  </script>
 </head>
 
 <body>
-  <div id="root"></div>
-  <script type="module" src="./src/main.jsx"></script>
+  <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;">
+    <h1>페이지를 찾을 수 없습니다.</h1>
+    <p>주소를 다시 확인해 주세요.</p>
+    <a href="/livejourney.co.kr/" style="margin-top:16px;color:#2563eb;">메인으로 돌아가기</a>
+  </div>
 </body>
 
 </html>
