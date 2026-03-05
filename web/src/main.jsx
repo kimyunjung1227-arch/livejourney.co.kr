@@ -51,47 +51,31 @@ const handleGitHubPagesRedirect = () => {
   }
 };
 
-// 앱 초기화
-const initApp = async () => {
-  try {
-    // GitHub Pages 리다이렉트 처리
-    handleGitHubPagesRedirect();
-    // Kakao Map API 로드 및 대기
-    await loadKakaoMapAPI();
-    logger.log('🗺️ Kakao Map API 준비 완료!');
-    
-    // 브라우저 알림 권한 요청 (사용자가 로그인한 경우에만)
-    setTimeout(async () => {
-      const user = localStorage.getItem('user');
-      if (user) {
-        const hasPermission = await requestNotificationPermission();
-        if (hasPermission) {
-          logger.log('✅ 브라우저 알림 권한 허용됨');
-        } else {
-          logger.log('ℹ️ 브라우저 알림 권한이 거부되었거나 요청되지 않았습니다.');
-        }
-      }
-    }, 2000); // 앱 로드 후 2초 뒤에 권한 요청
-    
-    // React 앱 렌더링
-    ReactDOM.createRoot(document.getElementById('root')).render(
-      <React.StrictMode>
-        <App />
-      </React.StrictMode>,
-    );
-    
-    logger.log('✅ 앱 렌더링 완료');
-  } catch (err) {
-    logger.error('❌ 앱 초기화 실패:', err);
-    
-    // Kakao Map 없이도 앱 실행 (지도 기능만 제외)
-    logger.warn('⚠️ Kakao Map 없이 앱을 시작합니다 (지도 기능 제한됨)');
-    ReactDOM.createRoot(document.getElementById('root')).render(
-      <React.StrictMode>
-        <App />
-      </React.StrictMode>,
-    );
-  }
+// 앱 초기화 (Kakao는 백그라운드 로드, 앱은 즉시 표시)
+const initApp = () => {
+  handleGitHubPagesRedirect();
+
+  // Kakao Map은 백그라운드에서 로드 (기다리지 않음 → 로드 시간 초과로 앱이 막히지 않음)
+  loadKakaoMapAPI()
+    .then(() => logger.log('🗺️ Kakao Map API 준비 완료'))
+    .catch(() => logger.warn('⚠️ Kakao Map 로드 실패 또는 지연 (지도 화면에서만 제한됨)'));
+
+  // 앱 즉시 렌더링
+  ReactDOM.createRoot(document.getElementById('root')).render(
+    <React.StrictMode>
+      <App />
+    </React.StrictMode>,
+  );
+  logger.log('✅ 앱 렌더링 완료');
+
+  setTimeout(() => {
+    const user = localStorage.getItem('user');
+    if (user) {
+      requestNotificationPermission().then((ok) => {
+        if (ok) logger.log('✅ 브라우저 알림 권한 허용됨');
+      });
+    }
+  }, 2000);
 };
 
 // 앱 시작
