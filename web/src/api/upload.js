@@ -14,18 +14,18 @@ const SUPABASE_IMAGE_BUCKET = 'post-images';
  * - http/https/blob 은 그대로 반환
  * - url 이 객체면 url.url 또는 url.src 등 문자열로 추출 후 변환
  */
+// blob: URL은 새로고침 후 사라져 404 발생 → placeholder 반환으로 요청 방지
+const PLACEHOLDER_IMAGE = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIGZpbGw9IiNlNWU3ZWIiLz48cGF0aCBkPSJNMjAgMTR2MTJNMTRIMjBoMTIiIHN0cm9rZT0iIzljYTljYSIgc3Ryb2tlLXdpZHRoPSIyIi8+PC9zdmc+';
+
 export const getDisplayImageUrl = (url) => {
   if (url == null) return '';
   const raw = typeof url === 'string' ? url : (url.url || url.src || url.href || '');
   if (!raw || typeof raw !== 'string') return '';
   const trimmed = raw.trim();
   if (!trimmed) return '';
-  if (trimmed.startsWith('http://') || trimmed.startsWith('https://') || trimmed.startsWith('blob:')) {
-    return trimmed;
-  }
-  if (trimmed.startsWith('/')) {
-    return `${UPLOAD_ORIGIN}${trimmed}`;
-  }
+  if (trimmed.startsWith('blob:')) return PLACEHOLDER_IMAGE;
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed;
+  if (trimmed.startsWith('/')) return `${UPLOAD_ORIGIN}${trimmed}`;
   return trimmed;
 };
 

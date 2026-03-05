@@ -61,13 +61,13 @@ export const generateAITags = async (imageFile, location = '', exifData = null) 
       message: response.data?.message || 'AI 태그 생성 실패'
     };
   } catch (error) {
-    // API 호출 실패 시 null 반환 (기존 방식으로 폴백)
-    logger.error('❌ AI 태그 생성 API 호출 실패:');
-    logger.error('  에러 메시지:', error.message);
-    logger.error('  응답 데이터:', error.response?.data);
-    logger.error('  상태 코드:', error.response?.status);
-    logger.error('  요청 URL:', error.config?.url);
-    logger.error('  전체 에러:', error);
+    // 백엔드 없음(ERR_NETWORK) 등 실패 시 null 반환 → 로컬 분석으로 폴백
+    const isNetworkError = error.code === 'ERR_NETWORK' || error.message === 'Network Error';
+    if (isNetworkError) {
+      logger.warn('⚠️ AI 태그 API 사용 불가(백엔드 미연결) → 로컬 태그 사용');
+    } else {
+      logger.warn('❌ AI 태그 생성 실패:', error.message);
+    }
     return null;
   }
 };

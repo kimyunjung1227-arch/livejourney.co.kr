@@ -43,12 +43,20 @@ export const createPostSupabase = async (post) => {
 
     return { success: true, post: data };
   } catch (error) {
-    logger.error('Supabase createPost 실패:', {
-      code: error?.code,
-      message: error?.message,
-      details: error?.details,
-      hint: error?.hint,
-    });
+    const code = error?.code;
+    const msg = error?.message || '';
+    logger.error('Supabase createPost 실패:', { code, message: msg, details: error?.details, hint: error?.hint });
+
+    // 23502: user_id NOT NULL 제약 → Supabase에서 컬럼을 nullable로 변경해야 함
+    if (code === '23502' && msg.includes('user_id')) {
+      return {
+        success: false,
+        error: 'user_id_not_null',
+        code,
+        hint: 'Supabase SQL Editor에서 실행: ALTER TABLE posts ALTER COLUMN user_id DROP NOT NULL;',
+      };
+    }
+
     return {
       success: false,
       error: error?.message || error?.code || 'unknown_error',

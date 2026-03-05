@@ -932,12 +932,15 @@ const UploadScreen = () => {
               logger.log('✅ Supabase 게시물 저장 완료:', { supabasePostId: result.post?.id });
             } else {
               logger.warn('Supabase 게시물 저장 실패:', result?.error, result?.code);
+              if (result?.error === 'user_id_not_null' && result?.hint) {
+                logger.warn('💡 해결: Supabase SQL Editor에서 실행 →', result.hint);
+              }
             }
           } catch (err) {
             logger.warn('Supabase 게시물 저장 중 예외:', err);
           }
           if (!supabaseSaved) {
-            logger.warn('💡 게시물은 이 기기 localStorage에만 저장되었습니다. Supabase 대시보드에서 RLS/정책을 확인해 주세요.');
+            logger.warn('💡 게시물은 이 기기 localStorage에만 저장되었습니다. Supabase RLS 또는 user_id 컬럼(nullable)을 확인해 주세요.');
           }
 
           setUploadProgress(100);
