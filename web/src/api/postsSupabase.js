@@ -32,11 +32,24 @@ export const createPostSupabase = async (post) => {
       created_at: post.createdAt ? new Date(post.createdAt) : new Date(),
     };
 
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from('posts')
       .insert(payload)
       .select('*')
       .single();
+
+    // user_id가 public.users에 없으면 FK 오류(23503) → user_id 없이 재시도
+    if (error && error.code === '23503' && payload.user_id) {
+      const fallbackPayload = { ...payload, user_id: null };
+      const retry = await supabase
+        .from('posts')
+        .insert(fallbackPayload)
+        .select('*')
+        .single();
+      if (!retry.error) {
+        return { success: true, post: retry.data };
+      }
+    }
 
     if (error) {
       throw error;

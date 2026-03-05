@@ -721,25 +721,35 @@ const UserProfileScreen = () => {
                 </button>
               </div>
 
-              {/* 이미지 */}
+              {/* 이미지/동영상 */}
               <div style={{
                 width: '100%',
                 aspectRatio: '4/3',
                 overflow: 'hidden',
                 background: '#f5f5f5'
               }}>
-                <img
-                  src={getDisplayImageUrl(selectedPost.post.images?.[0] || selectedPost.post.imageUrl || selectedPost.post.image || selectedPost.post.thumbnail)}
-                  alt={selectedPost.post.location || '여행지'}
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'cover'
-                  }}
-                  onError={(e) => {
-                    e.currentTarget.style.display = 'none';
-                  }}
-                />
+                {selectedPost.post.videos && selectedPost.post.videos.length > 0 ? (
+                  <video
+                    src={getDisplayImageUrl(selectedPost.post.videos[0])}
+                    controls
+                    muted
+                    playsInline
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  />
+                ) : (
+                  <img
+                    src={getDisplayImageUrl(selectedPost.post.images?.[0] || selectedPost.post.imageUrl || selectedPost.post.image || selectedPost.post.thumbnail)}
+                    alt={selectedPost.post.location || '여행지'}
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'cover'
+                    }}
+                    onError={(e) => {
+                      e.currentTarget.style.display = 'none';
+                    }}
+                  />
+                )}
               </div>
 
               {/* 내용 — 사진 아래 시트 스타일 통일 */}

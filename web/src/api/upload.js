@@ -164,21 +164,44 @@ export const uploadProfileImage = async (file) => {
   }
 };
 
-// 단일 동영상 업로드 (최대 100MB)
+// Supabase Storage에 동영상 업로드 (post-images 버킷 또는 동일 정책 사용)
+const uploadVideoToSupabase = async (file) => {
+  try {
+    if (!supabase) throw new Error('Supabase not initialized');
+    const ext = file.name?.split('.').pop() || 'mp4';
+    const fileName = `videos/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+    const { error: uploadError } = await supabase.storage
+      .from(SUPABASE_IMAGE_BUCKET)
+      .upload(fileName, file, { cacheControl: '3600', upsert: false, contentType: file.type || 'video/mp4' });
+    if (uploadError) throw uploadError;
+    const { data } = supabase.storage.from(SUPABASE_IMAGE_BUCKET).getPublicUrl(fileName);
+    if (data?.publicUrl) {
+      logger.log('✅ Supabase 동영상 업로드 성공:', data.publicUrl);
+      return { success: true, url: data.publicUrl, isTemporary: false };
+    }
+    throw new Error('No public URL');
+  } catch (e) {
+    logger.warn('Supabase 동영상 업로드 실패:', e);
+    return { success: false };
+  }
+};
+
+// 단일 동영상 업로드 (Supabase 우선, 백엔드 없으면 Blob URL)
 export const uploadVideo = async (file) => {
+  const supabaseResult = await uploadVideoToSupabase(file);
+  if (supabaseResult.success && supabaseResult.url) {
+    return supabaseResult;
+  }
   try {
     const formData = new FormData();
     formData.append('video', file);
-
     const response = await api.post('/upload/video', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
+      headers: { 'Content-Type': 'multipart/form-data' },
     });
     const data = response.data;
     return { success: true, url: data.url || data.videoUrl, ...data };
   } catch (error) {
-    logger.log('⚠️ 동영상 백엔드 없음 - Blob URL 반환');
+    logger.warn('동영상 백엔드 없음 - Blob URL 사용');
     const blobUrl = URL.createObjectURL(file);
     return { success: true, url: blobUrl, isTemporary: true };
   }

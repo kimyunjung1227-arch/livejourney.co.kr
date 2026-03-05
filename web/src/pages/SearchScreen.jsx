@@ -7,6 +7,7 @@ import { logger } from '../utils/logger';
 import { getCombinedPosts } from '../utils/mockData';
 import { getDisplayImageUrl } from '../api/upload';
 import { getWeatherByRegion } from '../api/weather';
+import PostThumbnail from '../components/PostThumbnail';
 import { useHorizontalDragScroll } from '../hooks/useHorizontalDragScroll';
 import BackButton from '../components/BackButton';
 import InterestPlacesContent from '../components/InterestPlacesContent';
@@ -891,7 +892,6 @@ const SearchScreen = () => {
               {hashtagPostResults.length > 0 ? (
               <div className="grid grid-cols-3" style={{ gap: '7px' }}>
                   {hashtagPostResults.map((post) => {
-                    const img = getDisplayImageUrl(post.images?.[0] || post.image || post.thumbnail);
                     const id = post.id || post._id;
                     const upTime = getTimeAgo(post.timestamp || post.createdAt);
                     return (
@@ -901,11 +901,7 @@ const SearchScreen = () => {
                         onClick={() => navigate(`/post/${id}`, { state: { post, allPosts: hashtagPostResults } })}
                         className="relative aspect-square rounded overflow-hidden bg-gray-200 dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-primary/50"
                       >
-                        {img ? (
-                          <img src={img} alt="" className="w-full h-full object-cover" />
-                        ) : (
-                          <span className="material-symbols-outlined text-gray-400 w-full h-full flex items-center justify-center">image</span>
-                        )}
+                        <PostThumbnail post={post} className="w-full h-full object-cover" alt="" />
                         <span className="absolute bottom-1 left-1 right-1 text-[9px] text-white bg-black/50 px-1 py-0.5 rounded truncate text-center">
                           🕐 {upTime}
                         </span>

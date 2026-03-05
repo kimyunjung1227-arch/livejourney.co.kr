@@ -273,10 +273,14 @@ const MainScreen = () => {
                 uniqueReasons.push(shuffled[0]);
             }
 
+            const firstImageUrl = (post.images && post.images.length > 0) ? post.images[0] : (post.image || post.thumbnail || '');
+            const firstVideoUrl = (post.videos && post.videos.length > 0) ? post.videos[0] : '';
             return {
                 ...post,
                 id: post.id,
-                image: getDisplayImageUrl((post.images && post.images.length > 0) ? post.images[0] : (post.image || post.thumbnail || '')),
+                image: getDisplayImageUrl(firstImageUrl || firstVideoUrl || ''),
+                thumbnailIsVideo: !firstImageUrl && !!firstVideoUrl,
+                firstVideoUrl: firstVideoUrl ? getDisplayImageUrl(firstVideoUrl) : null,
                 title: post.location,
                 time: dynamicTime,
                 content: post.note || post.content || `${post.location}의 모습`,
@@ -851,6 +855,8 @@ const MainScreen = () => {
                                                     playsInline
                                                     style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', borderRadius: '12px' }}
                                                 />
+                                            ) : post.thumbnailIsVideo && post.firstVideoUrl ? (
+                                                <video src={post.firstVideoUrl} muted playsInline preload="metadata" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', borderRadius: '12px' }} />
                                             ) : (post.images && post.images.length > 0) ? (
                                                 <img src={getDisplayImageUrl(post.images[0])} alt={post.location} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', borderRadius: '12px' }} />
                                             ) : (
@@ -945,6 +951,8 @@ const MainScreen = () => {
                                                     playsInline
                                                     style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', borderRadius: '12px' }}
                                                 />
+                                            ) : post.thumbnailIsVideo && post.firstVideoUrl ? (
+                                                <video src={post.firstVideoUrl} muted playsInline preload="metadata" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', borderRadius: '12px' }} />
                                             ) : (Array.isArray(post.images) && post.images.length > 0) || post.image || post.thumbnail ? (
                                                 <img src={getDisplayImageUrl(post.images?.[0] || post.image || post.thumbnail)} alt={post.location} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', borderRadius: '12px' }} />
                                             ) : (

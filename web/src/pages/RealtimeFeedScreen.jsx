@@ -28,15 +28,21 @@ const RealtimeFeedScreen = () => {
       });
       setCurrentUserCount(uniqueUserIds.size);
 
-      const formattedWithRaw = posts.map(post => ({
-        ...post,
-        id: post.id,
-        image: getDisplayImageUrl(post.images?.[0] || post.image || post.thumbnail || ''),
-        location: post.location,
-        time: post.timeLabel || getTimeAgo(post.timestamp || post.createdAt || post.time),
-        content: post.note || post.content || `${post.location}의 모습`,
-        likes: post.likes || 0,
-      }));
+      const formattedWithRaw = posts.map(post => {
+        const firstImage = post.images?.[0] || post.image || post.thumbnail || '';
+        const firstVideo = post.videos?.[0] || '';
+        return {
+          ...post,
+          id: post.id,
+          image: getDisplayImageUrl(firstImage || firstVideo || ''),
+          thumbnailIsVideo: !firstImage && !!firstVideo,
+          firstVideoUrl: firstVideo ? getDisplayImageUrl(firstVideo) : null,
+          location: post.location,
+          time: post.timeLabel || getTimeAgo(post.timestamp || post.createdAt || post.time),
+          content: post.note || post.content || `${post.location}의 모습`,
+          likes: post.likes || 0,
+        };
+      });
 
       setRealtimeData(formattedWithRaw);
     };
@@ -175,7 +181,15 @@ const RealtimeFeedScreen = () => {
                 >
                   {/* 이미지: 정사각형, 라운드로 분리 */}
                   <div style={{ width: '100%', paddingBottom: '125%', height: 0, position: 'relative', background: '#e5e7eb', borderRadius: '14px', overflow: 'hidden', marginBottom: '4px' }}>
-                    {post.image ? (
+                    {post.thumbnailIsVideo && post.firstVideoUrl ? (
+                      <video
+                        src={post.firstVideoUrl}
+                        muted
+                        playsInline
+                        preload="metadata"
+                        style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'block', borderRadius: '14px' }}
+                      />
+                    ) : post.image ? (
                       <img
                         src={post.image}
                         alt={post.location}

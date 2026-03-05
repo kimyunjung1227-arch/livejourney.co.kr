@@ -1641,7 +1641,7 @@ const ProfileScreen = () => {
                               >
                                 {post.videos && post.videos.length > 0 ? (
                                   <video
-                                    src={post.videos[0]}
+                                    src={getDisplayImageUrl(post.videos[0])}
                                     className="w-full h-full object-cover"
                                     muted
                                     loop
@@ -1744,7 +1744,7 @@ const ProfileScreen = () => {
                         >
                           {post.videos && post.videos.length > 0 ? (
                             <video
-                              src={post.videos[0]}
+                              src={getDisplayImageUrl(post.videos[0])}
                               className="w-full h-full object-cover"
                               muted
                               loop

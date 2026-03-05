@@ -119,6 +119,7 @@ const UploadScreen = () => {
   const [loadingAITags, setLoadingAITags] = useState(false);
   const [showBadgeModal, setShowBadgeModal] = useState(false);
   const [earnedBadge, setEarnedBadge] = useState(null);
+  const [badgeAnimationKey, setBadgeAnimationKey] = useState(0);
   const reanalysisTimerRef = useRef(null);
 
   // 업로드 가이드는 한 번 보고 나면 5번 업로드 동안은 다시 나오지 않도록 제어
@@ -1677,7 +1678,7 @@ const UploadScreen = () => {
         )}
 
         {showBadgeModal && earnedBadge && (
-          <div className="absolute inset-0 z-[200] flex items-center justify-center bg-black/70 p-4 animate-fade-in">
+          <div key={badgeAnimationKey} className="absolute inset-0 z-[200] flex items-center justify-center bg-black/70 p-4 animate-fade-in">
             <div className="w-full max-w-sm transform rounded-3xl bg-gradient-to-br from-yellow-50 to-orange-50 dark:from-zinc-800 dark:to-zinc-900 p-8 shadow-2xl border-4 border-primary animate-scale-up">
               <div className="flex justify-center mb-6">
                 <div className="relative">

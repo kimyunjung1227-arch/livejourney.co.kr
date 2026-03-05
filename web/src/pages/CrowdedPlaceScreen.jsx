@@ -8,6 +8,7 @@ import './MainScreen.css';
 import { getCombinedPosts } from '../utils/mockData';
 import { getDisplayImageUrl } from '../api/upload';
 import { computeHotPlaces, loadSearchEvents } from '../utils/hotPlaceIndex';
+import PostThumbnail from '../components/PostThumbnail';
 
 const CrowdedPlaceScreen = () => {
     const navigate = useNavigate();
@@ -123,7 +124,7 @@ const CrowdedPlaceScreen = () => {
                         {crowdedData
                             .filter((post) => activeFilter === '전체' || post.kind === activeFilter)
                             .map((post) => {
-                            const imageUrl = post.image ? getDisplayImageUrl(post.image) : null;
+                            const samplePost = post.samplePost || { image: post.image, images: post.image ? [post.image] : [], videos: [] };
                             const statusText = post.description;
                             return (
                                 <button
@@ -138,18 +139,11 @@ const CrowdedPlaceScreen = () => {
                                     }}
                                     className="group flex flex-col bg-white dark:bg-slate-800 rounded-2xl shadow-soft border border-slate-100 dark:border-slate-700 overflow-hidden text-left"
                                 >
-                                    <div className="relative w-full aspect-[16/9] bg-slate-200">
-                                        {imageUrl ? (
-                                            <img
-                                                src={imageUrl}
-                                                alt={post.location}
-                                                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                                            />
-                                        ) : (
-                                            <div className="flex h-full w-full items-center justify-center text-slate-400">
-                                                <span className="material-symbols-outlined text-2xl">image</span>
-                                            </div>
-                                        )}
+                                    <div className="relative w-full aspect-[16/9] bg-slate-200 overflow-hidden">
+                                        <PostThumbnail
+                                            post={samplePost}
+                                            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                                        />
                                         {post.rising && (
                                             <div className="absolute top-4 right-4 bg-white/90 dark:bg-slate-900/90 backdrop-blur px-3 py-1.5 rounded-full text-xs font-bold text-primary shadow-sm">
                                                 HOT

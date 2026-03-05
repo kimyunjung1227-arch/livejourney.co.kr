@@ -4,6 +4,7 @@ import BottomNavigation from '../components/BottomNavigation';
 import { getTimeAgo } from '../utils/timeUtils';
 import { getCombinedPosts } from '../utils/mockData';
 import { getDisplayImageUrl } from '../api/upload';
+import PostThumbnail from '../components/PostThumbnail';
 
 const DEFAULT_HASHTAGS = ['바다', '힐링', '맛집', '자연', '꽃', '일출', '카페', '여행', '휴양', '등산', '야경', '축제', '해변', '산', '전통', '한옥', '감귤', '벚꽃', '단풍', '도시'];
 
@@ -184,7 +185,6 @@ const HashtagScreen = () => {
               {tagPosts.length > 0 ? (
                 <div className="grid grid-cols-3 gap-2">
                   {tagPosts.map((post) => {
-                    const img = getDisplayImageUrl(post.images?.[0] || post.image || post.thumbnail);
                     const id = post.id || post._id;
                     const upTime = getTimeAgo(post.timestamp || post.createdAt);
                     return (
@@ -194,11 +194,7 @@ const HashtagScreen = () => {
                         onClick={() => navigate(`/post/${id}`, { state: { post, allPosts: tagPosts } })}
                         className="relative aspect-square rounded overflow-hidden bg-gray-200 dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-primary/50"
                       >
-                        {img ? (
-                          <img src={img} alt="" className="w-full h-full object-cover" />
-                        ) : (
-                          <span className="material-symbols-outlined text-gray-400 w-full h-full flex items-center justify-center">image</span>
-                        )}
+                        <PostThumbnail post={post} className="w-full h-full object-cover" alt="" />
                         <span className="absolute bottom-1 left-1 right-1 text-[9px] text-white bg-black/50 px-1 py-0.5 rounded truncate text-center">
                           🕐 {upTime}
                         </span>
