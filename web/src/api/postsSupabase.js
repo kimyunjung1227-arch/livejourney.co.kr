@@ -44,8 +44,16 @@ export const createPostSupabase = async (post) => {
 
     return { success: true, post: data };
   } catch (error) {
-    logger.error('Supabase createPost 실패:', error);
-    return { success: false, error: error.message };
+    logger.error('Supabase createPost 실패:', {
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+    });
+    return {
+      success: false,
+      error: error.message || error.code || 'unknown_error',
+    };
   }
 };
 
