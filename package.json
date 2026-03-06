@@ -15,7 +15,8 @@
     "install-all": "npm install && cd backend && npm install && cd ../web && npm install && cd ../mobile && npm install",
     "dev": "concurrently \"npm run backend\" \"npm run web\"",
     "build": "cd web && npm run build",
-    "start": "npm run dev"
+    "start": "npm run dev",
+    "ship": "powershell -ExecutionPolicy Bypass -File ./scripts/commit-and-deploy.ps1"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"

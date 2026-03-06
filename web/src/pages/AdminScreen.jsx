@@ -44,22 +44,31 @@ const AdminScreen = () => {
 
   const handleDeletePost = async (postId) => {
     if (!postId) return;
-    const { success } = await deletePostSupabase(postId);
+    const idStr = String(postId).trim();
+    const { success, error, hint } = await deletePostSupabase(idStr);
     if (success) {
-      setPosts((prev) => prev.filter((p) => p.id !== postId));
+      setPosts((prev) => prev.filter((p) => p && String(p.id) !== idStr));
       setDeleteConfirm((prev) => ({ ...prev, postId: null }));
-      // 메인 화면이 Supabase + localStorage를 합쳐 보여주므로, 로컬에서도 제거해야 메인에서 사라짐
+      // DB에서 삭제됐으므로 앱에서도 완전 제거: localStorage에서 제거
       try {
         const uploaded = JSON.parse(localStorage.getItem('uploadedPosts') || '[]');
-        const filtered = uploaded.filter((p) => p && p.id !== postId);
+        const filtered = uploaded.filter((p) => p && String(p.id) !== idStr);
         if (filtered.length !== uploaded.length) {
           localStorage.setItem('uploadedPosts', JSON.stringify(filtered));
         }
       } catch (_) {}
-      // 메인/피드 화면에서도 삭제된 게시물이 사라지도록 이벤트 발송
-      window.dispatchEvent(new CustomEvent('adminDeletedPost', { detail: { postId } }));
+      // 메인 재진입 시에도 제외되도록 sessionStorage에 기록
+      try {
+        const key = 'adminDeletedPostIds';
+        const raw = sessionStorage.getItem(key) || '[]';
+        const ids = JSON.parse(raw);
+        if (!ids.includes(idStr)) ids.push(idStr);
+        sessionStorage.setItem(key, JSON.stringify(ids));
+      } catch (_) {}
+      window.dispatchEvent(new CustomEvent('adminDeletedPost', { detail: { postId: idStr } }));
     } else {
-      alert('게시물 삭제에 실패했습니다.');
+      const msg = hint ? `${error}\n\n${hint}` : error || '게시물 삭제에 실패했습니다.';
+      alert(msg);
     }
   };
 

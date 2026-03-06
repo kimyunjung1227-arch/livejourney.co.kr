@@ -111,7 +111,15 @@ const MainScreen = () => {
           if (p && p.id && !byId.has(p.id)) byId.set(p.id, p);
         });
         const combined = Array.from(byId.values());
-        const allPosts = getCombinedPosts(combined);
+        // 관리자가 삭제한 게시물은 제외 (다른 탭에서 삭제했거나 이벤트를 놓친 경우)
+        let deletedIds = new Set();
+        try {
+            const raw = sessionStorage.getItem('adminDeletedPostIds') || '[]';
+            deletedIds = new Set(JSON.parse(raw));
+            sessionStorage.removeItem('adminDeletedPostIds');
+        } catch (_) {}
+        const combinedFiltered = combined.filter((p) => p && p.id && !deletedIds.has(String(p.id)));
+        const allPosts = getCombinedPosts(combinedFiltered);
 
         const posts = filterActivePosts48(allPosts); // 피드는 48시간 이내만 노출
 
@@ -401,20 +409,27 @@ const MainScreen = () => {
         loadInterestPlaces();
     }, [fetchPosts, loadInterestPlaces]);
 
-    // 관리자가 게시물 삭제 시 메인에서 즉시 제거 후 다시 불러오기
+    // 관리자가 게시물 삭제 시 메인에서 즉시 제거 후 DB 기준으로 다시 불러오기
     useEffect(() => {
         const onAdminDeletedPost = (e) => {
-            const postId = e.detail?.postId;
+            const postId = e.detail?.postId ? String(e.detail.postId) : null;
             if (postId) {
-                setRealtimeData((prev) => prev.filter((p) => p.id !== postId));
-                setCrowdedData((prev) => prev.filter((p) => p.id !== postId));
-                setRecommendedData((prev) => prev.filter((p) => p.id !== postId));
-                setAllPostsForRecommend((prev) => (Array.isArray(prev) ? prev.filter((p) => p.id !== postId) : prev));
+                setRealtimeData((prev) => prev.filter((p) => p && String(p.id) !== postId));
+                setCrowdedData((prev) => prev.filter((p) => p && String(p.id) !== postId));
+                setRecommendedData((prev) => prev.filter((p) => p && String(p.id) !== postId));
+                setAllPostsForRecommend((prev) => (Array.isArray(prev) ? prev.filter((p) => p && String(p.id) !== postId) : prev));
             }
             fetchPosts();
         };
         window.addEventListener('adminDeletedPost', onAdminDeletedPost);
         return () => window.removeEventListener('adminDeletedPost', onAdminDeletedPost);
+    }, [fetchPosts]);
+
+    // 탭/창 포커스 복귀 시 목록 다시 불러오기 (다른 탭에서 관리자가 삭제한 경우 반영)
+    useEffect(() => {
+        const onVisible = () => { fetchPosts(); };
+        document.addEventListener('visibilitychange', onVisible);
+        return () => document.removeEventListener('visibilitychange', onVisible);
     }, [fetchPosts]);
 
     // 새 알림이 생기면 메인 화면에서도 배지 갱신

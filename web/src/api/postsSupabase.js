@@ -98,13 +98,24 @@ export const deletePostSupabase = async (postId) => {
     return { success: true };
   }
   try {
-    const { error } = await supabase.from('posts').delete().eq('id', trimmed);
+    const { data, error } = await supabase
+      .from('posts')
+      .delete()
+      .eq('id', trimmed)
+      .select('id');
     if (error) {
-      logger.warn('Supabase deletePost 실패:', error.message);
-      return { success: false, error: error.message };
+      logger.warn('Supabase deletePost 실패:', error.message, error.code);
+      const isRls = error.code === '42501' || (error.message || '').toLowerCase().includes('policy');
+      return {
+        success: false,
+        error: error.message,
+        hint: isRls ? 'Supabase에서 admin_users에 본인 user_id 추가 후 posts 삭제 정책 확인' : undefined,
+      };
     }
-    logger.log('✅ Supabase 게시물 삭제 완료:', trimmed);
-    return { success: true };
+    const deleted = Array.isArray(data) && data.length > 0;
+    if (deleted) logger.log('✅ Supabase 게시물 DB 삭제 완료:', trimmed);
+    else logger.warn('deletePostSupabase: 삭제된 행 없음 (이미 없거나 RLS 권한 없음)', trimmed);
+    return { success: deleted, error: deleted ? null : '삭제된 행 없음' };
   } catch (e) {
     logger.warn('Supabase deletePost 예외:', e?.message);
     return { success: false, error: e?.message };
