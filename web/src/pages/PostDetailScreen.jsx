@@ -273,9 +273,16 @@ const PostDetailScreen = () => {
       logger.log('🔍 API에서 게시물 조회 중:', postId);
       const response = await getPost(postId);
       if (response.success && response.post) {
-        setPost(response.post);
-        setQnaList(formatQnA(response.post.questions || []));
-        setLikeCount(response.post.likesCount || 0);
+        const serverPost = response.post;
+        setPost(serverPost);
+        const serverComments = Array.isArray(serverPost.comments) ? serverPost.comments : [];
+        const qnaFormatted = formatQnA(serverPost.questions || []);
+        setComments([...serverComments, ...qnaFormatted]);
+        setLikeCount(serverPost.likesCount ?? serverPost.likes ?? 0);
+        setLiked(isPostLiked(serverPost.id));
+        setIsFavorited(isInterestPlace(serverPost.location || serverPost.placeName));
+        setAccuracyMarked(hasUserMarkedAccurate(serverPost.id));
+        setAccuracyCount(getPostAccuracyCount(serverPost.id));
       } else {
         // DB 미연결 또는 로컬 전용 게시물 → 이전 화면으로
         navigate(-1);
@@ -759,11 +766,21 @@ const PostDetailScreen = () => {
   const locationText = useMemo(() => post?.location?.name || post?.location || post?.title || '여행지', [post]);
   const detailedLocationText = useMemo(() => post?.detailedLocation || post?.placeName || null, [post]);
   const addressText = useMemo(() => post?.address || null, [post]);
-  const userName = useMemo(() => post?.user?.username || post?.user || '익명 여행자', [post]);
+  const authorDisplay = useMemo(() => {
+    if (!post) return null;
+    const pid = post.userId ?? (typeof post.user === 'object' ? post.user?.id : null) ?? post.user;
+    if (user?.id && String(pid) === String(user.id)) return user;
+    if (post.user && typeof post.user === 'object') return post.user;
+    return null;
+  }, [post, user]);
+  const userName = useMemo(
+    () => authorDisplay?.username || (typeof post?.user === 'string' ? post.user : null) || '익명 여행자',
+    [authorDisplay, post]
+  );
   const userBadge = useMemo(() => post?.user?.badges?.[0] || post?.badge || null, [post]);
   const authorAvatar = useMemo(
-    () => post?.user?.profileImage || post?.userAvatar || null,
-    [post]
+    () => authorDisplay?.profileImage || post?.userAvatar || null,
+    [authorDisplay, post]
   );
   // EXIF에서 추출한 촬영 날짜 우선 사용
   const photoDate = useMemo(() => post?.photoDate || post?.exifData?.photoDate || null, [post]);
@@ -1311,20 +1328,20 @@ const PostDetailScreen = () => {
                         />
                       ) : (
                         <div className="rounded-full h-8 w-8 flex-shrink-0 bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-[10px] font-semibold text-gray-700 dark:text-gray-100">
-                          {String(comment.user || '유저').charAt(0)}
+                          {String(comment.user?.username ?? comment.user ?? '유저').charAt(0)}
                         </div>
                       )}
                       <div className="flex flex-col flex-1">
                         <div className="bg-gray-100 dark:bg-gray-800 p-3 rounded-lg rounded-tl-none">
                           <p className="text-sm font-bold text-[#181410] dark:text-white">
-                            {comment.user}
+                            {comment.user?.username ?? comment.user ?? '유저'}
                           </p>
                           <p className="text-sm text-gray-800 dark:text-gray-300 mt-1">
                             {comment.content}
                           </p>
                         </div>
                         <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                          {getTimeAgo(comment.timestamp)}
+                          {getTimeAgo(comment.timestamp || comment.createdAt)}
                         </p>
                       </div>
                     </div>

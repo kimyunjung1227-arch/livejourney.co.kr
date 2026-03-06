@@ -7,13 +7,17 @@ const onlyPersistentUrls = (arr) => {
   return arr.filter((url) => typeof url === 'string' && url.trim().startsWith('https://'));
 };
 
-// Supabase posts 테이블에 게시물 저장 (user_id는 public.users 연동 전까지 null로 저장해 FK 오류 방지)
+const isValidUuid = (v) =>
+  typeof v === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v.trim());
+
+// Supabase posts 테이블에 게시물 저장 (user_id는 로그인 사용자 UUID일 때 저장)
 export const createPostSupabase = async (post) => {
   try {
     if (!post) return { success: false, error: 'no_post' };
 
+    const userId = post.userId ?? (post.user && typeof post.user === 'object' ? post.user.id : null);
     const payload = {
-      user_id: null,
+      user_id: isValidUuid(userId) ? userId : null,
       content: post.note || post.content || '',
       images: onlyPersistentUrls(post.images),
       videos: onlyPersistentUrls(post.videos),
@@ -119,10 +123,16 @@ export const fetchPostsSupabase = async () => {
 
     if (!data) return [];
 
-    return data.map((row) => ({
+    return data.map((row) => {
+      const uid = row.user_id;
+      const userObj =
+        uid != null
+          ? { id: uid, username: row.author_username || null, profileImage: row.author_avatar_url || null }
+          : uid;
+      return {
       id: row.id,
-      userId: row.user_id,
-      user: row.user_id,
+      userId: uid,
+      user: userObj,
       images: Array.isArray(row.images) ? row.images : [],
       videos: Array.isArray(row.videos) ? row.videos : [],
       location: row.location || '',
@@ -136,10 +146,13 @@ export const fetchPostsSupabase = async () => {
       createdAt: row.created_at || null,
       photoDate: row.captured_at || row.created_at || null,
       likes: row.likes_count || 0,
+      likeCount: row.likes_count || 0,
+      comments: Array.isArray(row.comments) ? row.comments : [],
       category: row.category || null,
       categoryName: row.category_name || null,
       thumbnail: (Array.isArray(row.images) && row.images[0]) || null,
-    }));
+    };
+    });
   } catch (error) {
     logger.warn('Supabase fetchPosts 실패 (localStorage fallback 사용):', error);
     return [];
