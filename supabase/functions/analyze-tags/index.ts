@@ -108,8 +108,10 @@ Deno.serve(async (req) => {
     const prompt =
       '이 사진을 보고 여행/장소 기준으로 (1) 카테고리와 (2) 해시태그를 아래 형식대로만 답하세요. 다른 설명 금지.\n\n' +
       'CATEGORY: 다음 중 정확히 하나만 영어로 입력 — bloom, food, scenic, landmark, waiting, general\n' +
-      '  (bloom=꽃·개화, food=맛집·음식, scenic=풍경·명소, landmark=관광지·명소, waiting=웨이팅·대기, general=일반)\n' +
-      'NAME: 위 카테고리에 맞는 한글 이름 한 줄 (예: 꽃·개화, 맛집·음식)\n' +
+      '  - bloom: 사진의 주된 피사체가 꽃·벚꽃·개화·매화 등 식물 개화일 때만 사용. 다리·강·도시·하늘만 있으면 bloom 아님.\n' +
+      '  - scenic: 다리, 강, 바다, 하늘, 도시 전경, 풍경, 자연 경치, 인물+배경 등. 꽃이 주제가 아니면 scenic.\n' +
+      '  - food=맛집·음식, landmark=관광지·명소, waiting=웨이팅·대기, general=일반\n' +
+      'NAME: 위 카테고리에 맞는 한글 이름 한 줄 (예: 풍경·명소, 꽃·개화)\n' +
       'TAGS: #태그1 #태그2 #태그3 ... 한글 위주 5~12개, 짧고 구체적으로\n\n' +
       locationText +
       exifText;

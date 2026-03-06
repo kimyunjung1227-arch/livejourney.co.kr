@@ -4,6 +4,7 @@ import { Swiper, SwiperSlide } from 'swiper/react';
 import BottomNavigation from '../components/BottomNavigation';
 import { getPost } from '../api/posts';
 import { getDisplayImageUrl } from '../api/upload';
+import { updatePostLikesSupabase } from '../api/postsSupabase';
 import { useAuth } from '../contexts/AuthContext';
 import { getWeatherByRegion } from '../api/weather';
 import { getTimeAgo } from '../utils/dateUtils';
@@ -367,7 +368,11 @@ const PostDetailScreen = () => {
       setLiked(result.isLiked);
       setLikeCount(result.newCount);
     } else {
-      // 서버에서 불러온 게시물인 경우: 화면의 낙관적 업데이트 유지
+      // Supabase 게시물: DB에 좋아요 수 반영 후 화면은 낙관적 업데이트 유지
+      const delta = optimisticLiked ? 1 : -1;
+      updatePostLikesSupabase(post.id, delta).then((res) => {
+        if (res?.success && typeof res.likesCount === 'number') setLikeCount(res.likesCount);
+      });
       setLiked(optimisticLiked);
     }
 

@@ -192,24 +192,32 @@ const detectSeason = () => {
   }
 };
 
-// 카테고리 자동 분류 (3가지)
+// 카테고리 자동 분류 (풍경 vs 개화 구분 강화)
 const detectCategory = (keywords, location, note, brightness) => {
   const keywordList = Array.from(keywords);
   const allText = `${keywordList.join(' ')} ${location} ${note}`.toLowerCase();
-  
-  // 1. 개화 상황 🌸
-  const bloomKeywords = ['꽃', '벚꽃', '개화', '봄', '매화', '진달래', '철쭉', '튤립', '유채', '수국', '코스모스', '해바라기'];
-  if (bloomKeywords.some(kw => allText.includes(kw))) {
+
+  // 풍경/명소 키워드 (다리, 강, 하늘, 도시 등) → scenic 우선
+  const scenicKeywords = ['다리', '강', '바다', '하늘', '도시', '풍경', '전경', '전망', '뷰', '경치', '자연', '산', '호수', '해변', '스카이라인'];
+  const hasScenic = scenicKeywords.some((kw) => allText.includes(kw));
+
+  // 개화: 꽃·개화가 주제일 때만 (봄/가을 같은 넓은 단어 제외)
+  const bloomKeywords = ['꽃', '벚꽃', '개화', '매화', '진달래', '철쭉', '튤립', '유채', '수국', '코스모스', '해바라기'];
+  const hasBloom = bloomKeywords.some((kw) => allText.includes(kw));
+
+  if (hasScenic && !hasBloom) {
+    return { category: 'scenic', categoryName: '추천 장소', icon: '🏞️' };
+  }
+  if (hasBloom) {
     return { category: 'bloom', categoryName: '개화 상황', icon: '🌸' };
   }
-  
-  // 2. 맛집 정보 🍜
+
+  // 맛집 정보 🍜
   const foodKeywords = ['맛집', '음식', '카페', '커피', '디저트', '레스토랑', '식당', '먹', '요리', '메뉴', '빵', '케이크'];
-  if (foodKeywords.some(kw => allText.includes(kw))) {
+  if (foodKeywords.some((kw) => allText.includes(kw))) {
     return { category: 'food', categoryName: '맛집 정보', icon: '🍜' };
   }
-  
-  // 3. 추천 장소 🏞️ (기본값)
+
   return { category: 'scenic', categoryName: '추천 장소', icon: '🏞️' };
 };
 

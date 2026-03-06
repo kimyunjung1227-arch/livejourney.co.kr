@@ -8,11 +8,13 @@ import './MainScreen.css'; // MainScreen 스타일 재사용
 import { getCombinedPosts } from '../utils/mockData';
 import { getDisplayImageUrl } from '../api/upload';
 import { fetchPostsSupabase } from '../api/postsSupabase';
+import { getWeatherByRegion } from '../api/weather';
 
 const RealtimeFeedScreen = () => {
   const navigate = useNavigate();
   const [realtimeData, setRealtimeData] = useState([]);
   const [currentUserCount, setCurrentUserCount] = useState(0);
+  const [weatherByRegion, setWeatherByRegion] = useState({});
   const contentRef = useRef(null);
   const [visibleCount, setVisibleCount] = useState(8); // 2×4 = 8개부터 시작
   const [refreshKey, setRefreshKey] = useState(0);
@@ -48,6 +50,7 @@ const RealtimeFeedScreen = () => {
           time: post.timeLabel || getTimeAgo(post.timestamp || post.createdAt || post.time),
           content: post.note || post.content || `${post.location}의 모습`,
           likes: post.likes || 0,
+          comments: post.comments ?? [],
         };
       });
 
@@ -55,6 +58,34 @@ const RealtimeFeedScreen = () => {
     };
     loadData();
   }, [refreshKey]);
+
+  // 날씨가 없는 게시물은 지역 기준으로 기온 조회
+  useEffect(() => {
+    const regions = new Set();
+    realtimeData.forEach((p) => {
+      if (p && !p.weather && (p.region || p.location)) {
+        const r = (p.region || p.location || '').trim().split(/\s+/)[0] || p.region || p.location;
+        if (r) regions.add(r);
+      }
+    });
+    if (regions.size === 0) return;
+    let cancelled = false;
+    const map = {};
+    Promise.all(
+      Array.from(regions).map(async (region) => {
+        try {
+          const res = await getWeatherByRegion(region);
+          if (!cancelled && res?.success && res.weather) return { region, weather: res.weather };
+        } catch (_) {}
+        return null;
+      })
+    ).then((results) => {
+      if (cancelled) return;
+      results.forEach((r) => { if (r) map[r.region] = r.weather; });
+      setWeatherByRegion((prev) => ({ ...prev, ...map }));
+    });
+    return () => { cancelled = true; };
+  }, [realtimeData]);
 
   // 관리자가 게시물 삭제 시 목록 다시 불러오기
   useEffect(() => {
@@ -180,8 +211,10 @@ const RealtimeFeedScreen = () => {
             }}
           >
             {displayedPosts.map((post, index) => {
-              const weather = post.weather || null;
+              const regionKey = (post.region || post.location || '').trim().split(/\s+/)[0] || post.region || post.location;
+              const weather = post.weather || weatherByRegion[regionKey] || null;
               const hasWeather = weather && (weather.icon || weather.temperature);
+              const commentCount = Array.isArray(post.comments) ? post.comments.length : 0;
               return (
                 <div
                   key={`${post.id}-${index}`}
@@ -232,6 +265,7 @@ const RealtimeFeedScreen = () => {
                     )}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px', flexShrink: 0, fontSize: '11px', color: '#6b7280' }}>
                       <span>{post.time}</span>
+                      <span>♥ {post.likes ?? 0} · 💬 {commentCount}</span>
                       {hasWeather && (weather.icon || weather.temperature) && (
                         <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                           {weather.icon && <span>{weather.icon}</span>}

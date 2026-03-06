@@ -14,6 +14,7 @@ import { getCombinedPosts } from '../utils/mockData';
 import { fetchPostsSupabase } from '../api/postsSupabase';
 import { getDisplayImageUrl } from '../api/upload';
 import { getPostAccuracyCount } from '../utils/socialInteractions';
+import { getWeatherByRegion } from '../api/weather';
 
 const MainScreen = () => {
     const navigate = useNavigate();
@@ -23,6 +24,7 @@ const MainScreen = () => {
     const [realtimeData, setRealtimeData] = useState([]);
     const [crowdedData, setCrowdedData] = useState([]);
     const [recommendedData, setRecommendedData] = useState([]);
+    const [weatherByRegion, setWeatherByRegion] = useState({});
     const [allPostsForRecommend, setAllPostsForRecommend] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
@@ -297,6 +299,7 @@ const MainScreen = () => {
                 time: dynamicTime,
                 content: post.note || post.content || `${post.location}의 모습`,
                 likes: post.likes || 0,
+                comments: post.comments ?? [],
                 weather: post.weather || null,
                 surgeIndicator,
                 surgePercent,
@@ -431,6 +434,34 @@ const MainScreen = () => {
         document.addEventListener('visibilitychange', onVisible);
         return () => document.removeEventListener('visibilitychange', onVisible);
     }, [fetchPosts]);
+
+    // 게시물에 날씨가 없을 때 지역 기준으로 기온 조회 (카드에 기온 표시용)
+    useEffect(() => {
+        const regions = new Set();
+        [...realtimeData, ...crowdedData].forEach((p) => {
+            if (p && !p.weather && (p.region || p.location)) {
+                const r = (p.region || p.location || '').trim().split(/\s+/)[0] || p.region || p.location;
+                if (r) regions.add(r);
+            }
+        });
+        if (regions.size === 0) return;
+        let cancelled = false;
+        const map = {};
+        Promise.all(
+            Array.from(regions).map(async (region) => {
+                try {
+                    const res = await getWeatherByRegion(region);
+                    if (!cancelled && res?.success && res.weather) return { region, weather: res.weather };
+                } catch (_) {}
+                return null;
+            })
+        ).then((results) => {
+            if (cancelled) return;
+            results.forEach((r) => { if (r) map[r.region] = r.weather; });
+            setWeatherByRegion((prev) => ({ ...prev, ...map }));
+        });
+        return () => { cancelled = true; };
+    }, [realtimeData, crowdedData]);
 
     // 새 알림이 생기면 메인 화면에서도 배지 갱신
     useEffect(() => {
@@ -767,8 +798,11 @@ const MainScreen = () => {
                             
                             // 동영상이 없을 때만 이미지 사용
                             const firstImage = firstVideo ? null : getDisplayImageUrl(Array.isArray(post.images) && post.images.length > 0 ? post.images[0] : (post.image || post.thumbnail || ''));
-                            const weather = post.weather || null;
+                            const regionKey = (post.region || post.location || '').trim().split(/\s+/)[0] || post.region || post.location;
+                            const weather = post.weather || weatherByRegion[regionKey] || null;
                             const hasWeather = weather && (weather.icon || weather.temperature);
+                            const likeCount = post.likes ?? 0;
+                            const commentCount = Array.isArray(post.comments) ? post.comments.length : 0;
                             return (
                                 <div
                                     key={post.id}
@@ -831,6 +865,10 @@ const MainScreen = () => {
                                                 {post.content || post.note}
                                             </div>
                                         )}
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '6px', fontSize: '12px', color: '#6b7280' }}>
+                                            <span>♥ {likeCount}</span>
+                                            <span>💬 {commentCount}</span>
+                                        </div>
                                     </div>
                                 </div>
                             );

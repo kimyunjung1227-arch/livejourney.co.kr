@@ -981,7 +981,7 @@ const UploadScreen = () => {
                 alert(
                   'Supabase 게시물 저장이 거부되었습니다.\n\n' +
                   '해결: Supabase 대시보드 → SQL Editor → New query\n' +
-                  '프로젝트 내 web/supabase-posts-한번에-수정.sql 파일 내용을 붙여넣고 Run 하세요.'
+                  '프로젝트 내 web/supabase-setup.sql 파일 내용을 붙여넣고 Run 하세요.'
                 );
               }
             }

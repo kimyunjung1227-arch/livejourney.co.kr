@@ -75,7 +75,7 @@ export const createPostSupabase = async (post) => {
         success: false,
         error: 'rls_forbidden',
         code: code || 403,
-        hint: 'Supabase SQL Editor에서 web/supabase-posts-한번에-수정.sql 내용 실행하세요.',
+        hint: 'Supabase SQL Editor에서 web/supabase-setup.sql 내용 실행하세요.',
       };
     }
 
@@ -119,6 +119,39 @@ export const deletePostSupabase = async (postId) => {
   } catch (e) {
     logger.warn('Supabase deletePost 예외:', e?.message);
     return { success: false, error: e?.message };
+  }
+};
+
+// Supabase 게시물 좋아요 수 갱신 (토글 시 호출)
+export const updatePostLikesSupabase = async (postId, delta) => {
+  if (!postId || typeof postId !== 'string') return { success: false };
+  const trimmed = postId.trim();
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trimmed);
+  if (!isUuid) return { success: false };
+  try {
+    const { data: row, error: fetchErr } = await supabase
+      .from('posts')
+      .select('likes_count')
+      .eq('id', trimmed)
+      .single();
+    if (fetchErr || row == null) {
+      logger.warn('updatePostLikesSupabase: fetch 실패', fetchErr?.message);
+      return { success: false };
+    }
+    const current = Number(row.likes_count) || 0;
+    const newCount = Math.max(0, current + delta);
+    const { error: updateErr } = await supabase
+      .from('posts')
+      .update({ likes_count: newCount })
+      .eq('id', trimmed);
+    if (updateErr) {
+      logger.warn('updatePostLikesSupabase: update 실패', updateErr.message);
+      return { success: false };
+    }
+    return { success: true, likesCount: newCount };
+  } catch (e) {
+    logger.warn('updatePostLikesSupabase 예외:', e?.message);
+    return { success: false };
   }
 };
 

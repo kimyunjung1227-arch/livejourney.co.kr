@@ -66,6 +66,11 @@ CREATE POLICY allow_authenticated_post_delete ON public.posts
     OR auth.uid() = user_id
   );
 
+-- posts: 좋아요 수 갱신용 UPDATE 허용
+DROP POLICY IF EXISTS allow_post_likes_update ON public.posts;
+CREATE POLICY allow_post_likes_update ON public.posts
+  FOR UPDATE USING (true) WITH CHECK (true);
+
 -- 참고: 관리자 지정은 Supabase 대시보드 SQL Editor에서
 -- INSERT INTO public.admin_users (user_id) VALUES ('로그인한 사용자 UUID');
 -- 로 추가할 수 있습니다. 또는 앱에서 VITE_ADMIN_EMAILS 환경변수로 이메일 지정 가능합니다.
