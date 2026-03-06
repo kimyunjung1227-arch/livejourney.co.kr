@@ -15,6 +15,7 @@ const RealtimeFeedScreen = () => {
   const [currentUserCount, setCurrentUserCount] = useState(0);
   const contentRef = useRef(null);
   const [visibleCount, setVisibleCount] = useState(8); // 2×4 = 8개부터 시작
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     const loadData = async () => {
@@ -53,6 +54,13 @@ const RealtimeFeedScreen = () => {
       setRealtimeData(formattedWithRaw);
     };
     loadData();
+  }, [refreshKey]);
+
+  // 관리자가 게시물 삭제 시 목록 다시 불러오기
+  useEffect(() => {
+    const handler = () => setRefreshKey((k) => k + 1);
+    window.addEventListener('adminDeletedPost', handler);
+    return () => window.removeEventListener('adminDeletedPost', handler);
   }, []);
 
   // 데이터가 바뀌면 처음부터 다시 8개 노출

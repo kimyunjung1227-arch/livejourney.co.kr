@@ -401,6 +401,13 @@ const MainScreen = () => {
         loadInterestPlaces();
     }, [fetchPosts, loadInterestPlaces]);
 
+    // 관리자가 게시물 삭제 시 메인/피드 데이터 다시 불러오기
+    useEffect(() => {
+        const onAdminDeletedPost = () => { fetchPosts(); };
+        window.addEventListener('adminDeletedPost', onAdminDeletedPost);
+        return () => window.removeEventListener('adminDeletedPost', onAdminDeletedPost);
+    }, [fetchPosts]);
+
     // 새 알림이 생기면 메인 화면에서도 배지 갱신
     useEffect(() => {
         const onCountChange = () => setUnreadNotificationCount(getUnreadCount());

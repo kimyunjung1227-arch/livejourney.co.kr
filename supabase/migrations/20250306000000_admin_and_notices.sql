@@ -56,6 +56,16 @@ CREATE TRIGGER notices_updated_at
   BEFORE UPDATE ON public.notices
   FOR EACH ROW EXECUTE PROCEDURE public.set_notices_updated_at();
 
+-- posts 테이블: 로그인한 관리자 또는 작성자만 삭제 가능 (admin_users 생성 후 적용)
+ALTER TABLE public.posts ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS allow_authenticated_post_delete ON public.posts;
+CREATE POLICY allow_authenticated_post_delete ON public.posts
+  FOR DELETE TO authenticated
+  USING (
+    auth.uid() IN (SELECT user_id FROM public.admin_users)
+    OR auth.uid() = user_id
+  );
+
 -- 참고: 관리자 지정은 Supabase 대시보드 SQL Editor에서
 -- INSERT INTO public.admin_users (user_id) VALUES ('로그인한 사용자 UUID');
 -- 로 추가할 수 있습니다. 또는 앱에서 VITE_ADMIN_EMAILS 환경변수로 이메일 지정 가능합니다.

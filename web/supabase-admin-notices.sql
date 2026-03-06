@@ -1,6 +1,6 @@
 -- ============================================================
 -- 관리자 + 공지사항 테이블 생성
--- Supabase 대시보드 → SQL Editor에서 이 스크립트 전체 실행
+-- Supabase 대시보드 → SQL Editor에서 이 파일 전체를 복사해 한 번에 실행하세요.
 -- ============================================================
 
 -- 1) 관리자 계정 테이블
@@ -60,6 +60,16 @@ DROP TRIGGER IF EXISTS notices_updated_at ON public.notices;
 CREATE TRIGGER notices_updated_at
   BEFORE UPDATE ON public.notices
   FOR EACH ROW EXECUTE PROCEDURE public.set_notices_updated_at();
+
+-- 8) posts 테이블: 로그인한 관리자 또는 작성자가 삭제 가능 (위 1~7번 실행 후 적용)
+ALTER TABLE public.posts ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS allow_authenticated_post_delete ON public.posts;
+CREATE POLICY allow_authenticated_post_delete ON public.posts
+  FOR DELETE TO authenticated
+  USING (
+    auth.uid() IN (SELECT user_id FROM public.admin_users)
+    OR auth.uid() = user_id
+  );
 
 -- ============================================================
 -- 관리자 추가 방법 (둘 중 하나 선택)

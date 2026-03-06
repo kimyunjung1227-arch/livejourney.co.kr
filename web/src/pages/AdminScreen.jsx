@@ -47,7 +47,9 @@ const AdminScreen = () => {
     const { success } = await deletePostSupabase(postId);
     if (success) {
       setPosts((prev) => prev.filter((p) => p.id !== postId));
-      setDeleteConfirm({ ...deleteConfirm, postId: null });
+      setDeleteConfirm((prev) => ({ ...prev, postId: null }));
+      // 메인/피드 화면에서도 삭제된 게시물이 사라지도록 이벤트 발송
+      window.dispatchEvent(new CustomEvent('adminDeletedPost', { detail: { postId } }));
     } else {
       alert('게시물 삭제에 실패했습니다.');
     }
