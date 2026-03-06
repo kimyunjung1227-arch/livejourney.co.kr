@@ -401,9 +401,18 @@ const MainScreen = () => {
         loadInterestPlaces();
     }, [fetchPosts, loadInterestPlaces]);
 
-    // 관리자가 게시물 삭제 시 메인/피드 데이터 다시 불러오기
+    // 관리자가 게시물 삭제 시 메인에서 즉시 제거 후 다시 불러오기
     useEffect(() => {
-        const onAdminDeletedPost = () => { fetchPosts(); };
+        const onAdminDeletedPost = (e) => {
+            const postId = e.detail?.postId;
+            if (postId) {
+                setRealtimeData((prev) => prev.filter((p) => p.id !== postId));
+                setCrowdedData((prev) => prev.filter((p) => p.id !== postId));
+                setRecommendedData((prev) => prev.filter((p) => p.id !== postId));
+                setAllPostsForRecommend((prev) => (Array.isArray(prev) ? prev.filter((p) => p.id !== postId) : prev));
+            }
+            fetchPosts();
+        };
         window.addEventListener('adminDeletedPost', onAdminDeletedPost);
         return () => window.removeEventListener('adminDeletedPost', onAdminDeletedPost);
     }, [fetchPosts]);

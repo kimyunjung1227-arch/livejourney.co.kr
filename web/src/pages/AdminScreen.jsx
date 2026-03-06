@@ -48,6 +48,14 @@ const AdminScreen = () => {
     if (success) {
       setPosts((prev) => prev.filter((p) => p.id !== postId));
       setDeleteConfirm((prev) => ({ ...prev, postId: null }));
+      // 메인 화면이 Supabase + localStorage를 합쳐 보여주므로, 로컬에서도 제거해야 메인에서 사라짐
+      try {
+        const uploaded = JSON.parse(localStorage.getItem('uploadedPosts') || '[]');
+        const filtered = uploaded.filter((p) => p && p.id !== postId);
+        if (filtered.length !== uploaded.length) {
+          localStorage.setItem('uploadedPosts', JSON.stringify(filtered));
+        }
+      } catch (_) {}
       // 메인/피드 화면에서도 삭제된 게시물이 사라지도록 이벤트 발송
       window.dispatchEvent(new CustomEvent('adminDeletedPost', { detail: { postId } }));
     } else {
