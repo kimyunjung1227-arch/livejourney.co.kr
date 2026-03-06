@@ -2,6 +2,7 @@ import React, { useEffect, Suspense, lazy } from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './contexts/AuthContext'
 import ProtectedRoute from './components/ProtectedRoute'
+import AdminRoute from './components/AdminRoute'
 import { initStatusBar } from './utils/statusBar'
 import SosAlertBanner from './components/SosAlertBanner'
 import { cleanLegacyUploadedPosts } from './utils/localStorageManager'
@@ -51,6 +52,7 @@ const RealtimeFeedScreen = lazy(() => import('./pages/RealtimeFeedScreen'))
 const CrowdedPlaceScreen = lazy(() => import('./pages/CrowdedPlaceScreen'))
 const ChatScreen = lazy(() => import('./pages/ChatScreen'))
 const ChatWriteScreen = lazy(() => import('./pages/ChatWriteScreen'))
+const AdminScreen = lazy(() => import('./pages/AdminScreen'))
 
 function App() {
   // StatusBar 초기화 (앱 시작 시 한 번만)
@@ -130,6 +132,7 @@ function App() {
                 <Route path="/account-delete/confirm" element={<ProtectedRoute><AccountDeleteConfirmScreen /></ProtectedRoute>} />
                 <Route path="/settings" element={<ProtectedRoute><SettingsScreen /></ProtectedRoute>} />
                 <Route path="/feed-update-frequency" element={<ProtectedRoute><FeedUpdateFrequencyScreen /></ProtectedRoute>} />
+                <Route path="/admin" element={<ProtectedRoute><AdminRoute><AdminScreen /></AdminRoute></ProtectedRoute>} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </Suspense>

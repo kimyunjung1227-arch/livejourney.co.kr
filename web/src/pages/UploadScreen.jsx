@@ -253,9 +253,12 @@ const UploadScreen = () => {
         }
       }
 
-      if (analysisResult.success && analysisResult.tags && analysisResult.tags.length > 0) {
+      const hasTags = analysisResult.tags && analysisResult.tags.length > 0;
+      const hasCategory = analysisResult.category && analysisResult.categoryName;
+
+      if ((analysisResult.success || hasCategory) && (hasTags || hasCategory)) {
         // 5개로 제한
-        const limitedTags = analysisResult.tags.slice(0, 5);
+        const limitedTags = (analysisResult.tags || []).slice(0, 5);
 
         // 현재 등록된 태그 목록 가져오기 (# 제거하여 비교)
         const existingTags = formData.tags.map(tag =>
@@ -302,12 +305,20 @@ const UploadScreen = () => {
         setAutoTags(dedupeHashtags(hashtagged));
         setFormData(prev => ({
           ...prev,
-          aiCategory: analysisResult.category,
-          aiCategoryName: analysisResult.categoryName,
-          aiCategoryIcon: analysisResult.categoryIcon
+          aiCategory: analysisResult.category ?? prev.aiCategory ?? 'scenic',
+          aiCategoryName: analysisResult.categoryName ?? prev.aiCategoryName ?? '추천 장소',
+          aiCategoryIcon: analysisResult.categoryIcon ?? prev.aiCategoryIcon ?? '📍'
         }));
 
       } else {
+        if (hasCategory) {
+          setFormData(prev => ({
+            ...prev,
+            aiCategory: analysisResult.category ?? prev.aiCategory ?? 'scenic',
+            aiCategoryName: analysisResult.categoryName ?? prev.aiCategoryName ?? '추천 장소',
+            aiCategoryIcon: analysisResult.categoryIcon ?? prev.aiCategoryIcon ?? '📍'
+          }));
+        }
         // 분석 실패 시 날씨 중심 기본 태그 제공 (5개)
         const existingTags = formData.tags.map(tag =>
           tag.startsWith('#') ? tag.substring(1).toLowerCase() : tag.toLowerCase()
@@ -341,12 +352,14 @@ const UploadScreen = () => {
         ).filter(tag => isWeatherTag(tag));
         setAutoTags(dedupeHashtags(fallbackDeduped).slice(0, 5));
 
-        setFormData(prev => ({
-          ...prev,
-          aiCategory: 'scenic',
-          aiCategoryName: '추천 장소',
-          aiCategoryIcon: '📍'
-        }));
+        if (!hasCategory) {
+          setFormData(prev => ({
+            ...prev,
+            aiCategory: 'scenic',
+            aiCategoryName: '추천 장소',
+            aiCategoryIcon: '📍'
+          }));
+        }
       }
 
     } catch (error) {
@@ -860,13 +873,17 @@ const UploadScreen = () => {
             images: finalImages,
             videos: finalVideos,
             location: formData.location,
-            tags: formData.tags,
+            tags: Array.isArray(formData.tags) ? formData.tags : [],
             note: formData.note,
             timestamp: photoTimestamp,
             createdAt: backendPost?.createdAt || getCurrentTimestamp(),
             photoDate: formData.photoDate || null, // EXIF에서 추출한 촬영 날짜
             timeLabel: getTimeAgo(new Date(photoTimestamp)),
-            user: username,
+            user: {
+              id: currentUserId,
+              username,
+              profileImage: currentUser?.profileImage || null
+            },
             likes: backendPost?.likesCount || 0,
             isNew: true,
             isLocal: false,
@@ -1472,6 +1489,15 @@ const UploadScreen = () => {
               )}
 
 
+              {formData.aiCategoryName && (
+                <div className="mt-3 flex items-center gap-2">
+                  <span className="text-xs text-gray-500">AI 분류</span>
+                  <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary border border-primary/20 py-1 px-2.5 text-xs font-medium">
+                    {formData.aiCategoryIcon && <span>{formData.aiCategoryIcon}</span>}
+                    {formData.aiCategoryName}
+                  </span>
+                </div>
+              )}
               {!loadingAITags && autoTags.length > 0 && (
                 <div className="mt-3">
                   <p className="text-xs text-gray-500 mb-1.5">추천 태그</p>

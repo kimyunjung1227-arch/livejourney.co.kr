@@ -8,6 +8,7 @@ import { getLandmarksByRegion } from '../utils/regionLandmarks';
 import { logger } from '../utils/logger';
 import { getCombinedPosts } from '../utils/mockData';
 import { getDisplayImageUrl } from '../api/upload';
+import { fetchPostsSupabase } from '../api/postsSupabase';
 import { getRegionDefaultImage } from '../utils/regionDefaultImages';
 import { useHorizontalDragScroll } from '../hooks/useHorizontalDragScroll';
 
@@ -57,10 +58,15 @@ const RegionDetailScreen = () => {
     return 999999; // 알 수 없는 경우 맨 뒤로
   }, []);
 
-  // 지역 데이터 로드 (useCallback)
-  const loadRegionData = useCallback(() => {
+  // 지역 데이터 로드 (useCallback) — Supabase + 로컬 병합 후 사용자 업로드 사진 연동
+  const loadRegionData = useCallback(async () => {
     const localPosts = JSON.parse(localStorage.getItem('uploadedPosts') || '[]');
-    const combinedPosts = getCombinedPosts(Array.isArray(localPosts) ? localPosts : []);
+    const supabasePosts = await fetchPostsSupabase();
+    const byId = new Map();
+    [...(Array.isArray(supabasePosts) ? supabasePosts : []), ...(Array.isArray(localPosts) ? localPosts : [])].forEach((p) => {
+      if (p && p.id && !byId.has(p.id)) byId.set(p.id, p);
+    });
+    const combinedPosts = getCombinedPosts(Array.from(byId.values()));
 
     // 7일 이내 게시물 필터링
     const recentPosts = filterActivePosts48(combinedPosts);
@@ -148,7 +154,7 @@ const RegionDetailScreen = () => {
     logger.log('📊 지역 게시물 로드:', {
       total: formattedPosts.length
     });
-  }, [region.name, timeToMinutes, selectedLandmarks]);
+  }, [region.name, regionName, timeToMinutes, selectedLandmarks, focusLocation]);
 
   // 필터에 따른 게시물 필터링 및 표시
   useEffect(() => {

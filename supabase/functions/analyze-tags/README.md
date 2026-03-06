@@ -1,6 +1,6 @@
 # Edge Function: analyze-tags (Google Gemini)
 
-이미지를 **Google Gemini**(gemini-1.5-flash)로 분석해 여행/장소 해시태그를 생성합니다.  
+이미지를 **Google Gemini**(gemini-1.5-flash)로 분석해 **해시태그**와 **카테고리**(꽃·개화, 맛집, 풍경, 관광지, 웨이팅, 일반)를 자동 분류합니다.  
 **API 키는 Supabase Secrets에만 저장**하므로 프론트에는 노출되지 않습니다.
 
 ## 배포 및 API 키 설정

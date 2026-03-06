@@ -1,12 +1,74 @@
 /**
  * AI 기반 해시태그 생성
- * 1순위: Supabase Edge Function (OpenAI Vision, API 키는 Supabase Secrets에 설정)
+ * 1순위: Supabase Edge Function (API 키는 Supabase Secrets에 설정)
  * 2순위: 기존 백엔드 /upload/analyze-tags
  * 실패 시: null 반환 → 로컬 이미지/위치 기반 태그로 폴백
+ *
+ * ⚠️ Edge Function OOM 방지: 5MB+ 원본은 리사이즈 후 전송 (최대 1024px, JPEG 0.7)
  */
 import api from './axios';
 import { logger } from '../utils/logger';
 import { supabase } from '../utils/supabaseClient';
+
+const MAX_WIDTH_AI = 1024;
+const JPEG_QUALITY = 0.7;
+const MAX_SIZE_BEFORE_RESIZE = 800 * 1024;
+
+/** 이미지를 AI 분석용으로 리사이즈·압축 (Edge Function OOM 방지, 1MB 미만 목표) */
+const resizeImageForAI = (file) => {
+  return new Promise((resolve, reject) => {
+    if (!file || !file.type.startsWith('image/')) {
+      resolve(file);
+      return;
+    }
+    if (file.size <= MAX_SIZE_BEFORE_RESIZE) {
+      resolve(file);
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        if (width <= MAX_WIDTH_AI && height <= MAX_WIDTH_AI && file.size <= MAX_SIZE_BEFORE_RESIZE) {
+          resolve(file);
+          return;
+        }
+        if (width > MAX_WIDTH_AI || height > MAX_WIDTH_AI) {
+          const scale = MAX_WIDTH_AI / Math.max(width, height);
+          width = Math.round(width * scale);
+          height = Math.round(height * scale);
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(file);
+          return;
+        }
+        ctx.drawImage(img, 0, 0, width, height);
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              resolve(file);
+              return;
+            }
+            const resized = new File([blob], file.name, { type: 'image/jpeg' });
+            logger.log('📐 AI용 이미지 리사이즈:', `${(file.size / 1024).toFixed(0)}KB → ${(resized.size / 1024).toFixed(0)}KB`);
+            resolve(resized);
+          },
+          'image/jpeg',
+          JPEG_QUALITY
+        );
+      };
+      img.onerror = () => resolve(file);
+      img.src = e.target?.result ?? '';
+    };
+    reader.onerror = () => resolve(file);
+    reader.readAsDataURL(file);
+  });
+};
 
 const fileToBase64 = (file) =>
   new Promise((resolve, reject) => {
@@ -26,8 +88,9 @@ const fileToBase64 = (file) =>
 const generateAITagsViaSupabase = async (imageFile, location = '', exifData = null) => {
   if (!supabase) return null;
   try {
-    const imageBase64 = await fileToBase64(imageFile);
-    const mimeType = imageFile.type || 'image/jpeg';
+    const resized = await resizeImageForAI(imageFile);
+    const imageBase64 = await fileToBase64(resized);
+    const mimeType = resized.type || 'image/jpeg';
     const { data, error } = await supabase.functions.invoke('analyze-tags', {
       body: { imageBase64, mimeType, location, exifData: exifData || undefined },
     });
@@ -35,13 +98,17 @@ const generateAITagsViaSupabase = async (imageFile, location = '', exifData = nu
       logger.warn('Supabase AI 태그 Edge Function 오류:', error.message);
       return null;
     }
-    if (data && data.success && Array.isArray(data.tags) && data.tags.length > 0) {
-      logger.log('✅ Supabase AI 태그 생성 성공:', data.tags?.length, '개');
+    if (data && (data.success || data.category)) {
+      const hasTags = Array.isArray(data.tags) && data.tags.length > 0;
+      logger.log('✅ Supabase AI 응답:', hasTags ? `${data.tags.length}개 태그` : '태그 없음', data.category ? `카테고리 ${data.category}` : '');
       return {
-        success: true,
-        tags: data.tags,
+        success: !!data.success,
+        tags: Array.isArray(data.tags) ? data.tags : [],
         caption: data.caption || null,
         method: data.method || 'supabase-edge-gemini',
+        category: data.category || null,
+        categoryName: data.categoryName || null,
+        categoryIcon: data.categoryIcon || null,
       };
     }
     return null;

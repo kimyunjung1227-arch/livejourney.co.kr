@@ -7,6 +7,7 @@ import './MainScreen.css'; // MainScreen 스타일 재사용
 
 import { getCombinedPosts } from '../utils/mockData';
 import { getDisplayImageUrl } from '../api/upload';
+import { fetchPostsSupabase } from '../api/postsSupabase';
 
 const RealtimeFeedScreen = () => {
   const navigate = useNavigate();
@@ -16,9 +17,14 @@ const RealtimeFeedScreen = () => {
   const [visibleCount, setVisibleCount] = useState(8); // 2×4 = 8개부터 시작
 
   useEffect(() => {
-    const loadData = () => {
+    const loadData = async () => {
       const localPosts = JSON.parse(localStorage.getItem('uploadedPosts') || '[]');
-      const allPosts = getCombinedPosts(Array.isArray(localPosts) ? localPosts : []);
+      const supabasePosts = await fetchPostsSupabase();
+      const byId = new Map();
+      [...(Array.isArray(supabasePosts) ? supabasePosts : []), ...(Array.isArray(localPosts) ? localPosts : [])].forEach((p) => {
+        if (p && p.id && !byId.has(p.id)) byId.set(p.id, p);
+      });
+      const allPosts = getCombinedPosts(Array.from(byId.values()));
       const posts = filterActivePosts48(allPosts);
 
       const uniqueUserIds = new Set();

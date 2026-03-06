@@ -7,6 +7,7 @@ import './MainScreen.css';
 
 import { getCombinedPosts } from '../utils/mockData';
 import { getDisplayImageUrl } from '../api/upload';
+import { fetchPostsSupabase } from '../api/postsSupabase';
 import { computeHotPlaces, loadSearchEvents } from '../utils/hotPlaceIndex';
 import PostThumbnail from '../components/PostThumbnail';
 
@@ -17,9 +18,14 @@ const CrowdedPlaceScreen = () => {
     const contentRef = useRef(null);
 
     useEffect(() => {
-        const loadData = () => {
+        const loadData = async () => {
             const localPosts = JSON.parse(localStorage.getItem('uploadedPosts') || '[]');
-            const allPosts = getCombinedPosts(Array.isArray(localPosts) ? localPosts : []);
+            const supabasePosts = await fetchPostsSupabase();
+            const byId = new Map();
+            [...(Array.isArray(supabasePosts) ? supabasePosts : []), ...(Array.isArray(localPosts) ? localPosts : [])].forEach((p) => {
+                if (p && p.id && !byId.has(p.id)) byId.set(p.id, p);
+            });
+            const allPosts = getCombinedPosts(Array.from(byId.values()));
             const recentPosts = filterActivePosts48(allPosts); // 48시간 이내만 핫플 후보
             const searchEvents = loadSearchEvents(60 * 24); // 최근 24시간 검색 로그
 

@@ -105,8 +105,12 @@ const MainScreen = () => {
         // Supabase에서 실제 게시물 불러오기 (실패 시 빈 배열)
         const supabasePosts = await fetchPostsSupabase();
 
-        // Supabase 데이터 + 로컬 업로드 데이터 결합
-        const combined = [...supabasePosts, ...(Array.isArray(localPosts) ? localPosts : [])];
+        // Supabase + 로컬 결합 후 id 기준 중복 제거 (같은 게시물이 피드에 2번 나오는 것 방지)
+        const byId = new Map();
+        [...(Array.isArray(supabasePosts) ? supabasePosts : []), ...(Array.isArray(localPosts) ? localPosts : [])].forEach((p) => {
+          if (p && p.id && !byId.has(p.id)) byId.set(p.id, p);
+        });
+        const combined = Array.from(byId.values());
         const allPosts = getCombinedPosts(combined);
 
         const posts = filterActivePosts48(allPosts); // 피드는 48시간 이내만 노출

@@ -1,15 +1,32 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import BottomNavigation from '../components/BottomNavigation';
+import { fetchNotices } from '../api/noticesSupabase';
 
 const NoticesScreen = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const fromMain = location.state?.fromMain === true;
   const [selectedNotice, setSelectedNotice] = useState(null);
+  const [dynamicNotices, setDynamicNotices] = useState([]);
 
-  // 공지사항 데이터 (LiveJourney 앱 기반)
-  const notices = [
+  useEffect(() => {
+    fetchNotices().then((list) => {
+      const formatted = (list || []).map((n) => ({
+        id: n.id,
+        title: n.title,
+        date: n.created_at ? new Date(n.created_at).toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' }) : '',
+        isNew: n.created_at ? (Date.now() - new Date(n.created_at).getTime() < 7 * 24 * 60 * 60 * 1000) : false,
+        category: n.category || '공지',
+        content: n.content || '',
+        is_pinned: !!n.is_pinned,
+      }));
+      setDynamicNotices(formatted);
+    });
+  }, []);
+
+  // 공지사항 데이터 (관리자 작성 공지 + 가이드 등 정적 콘텐츠)
+  const staticNotices = [
     {
       id: 1,
       title: '🎯 LiveJourney 완전 가이드',
@@ -474,6 +491,9 @@ LiveJourney는 **과거의 정보가 아닌, 지금 이 순간의 여정(Journey
     }
   ];
 
+  // 관리자 작성 공지를 상단에, 그 다음 정적 가이드
+  const notices = [...dynamicNotices, ...staticNotices];
+
   const handleNoticeClick = (notice) => {
     setSelectedNotice(notice);
   };
@@ -505,10 +525,15 @@ LiveJourney는 **과거의 정보가 아닌, 지금 이 순간의 여정(Journey
                 className="flex items-center border-b border-border-light dark:border-border-dark px-4 py-4 hover:bg-surface-subtle-light dark:hover:bg-surface-subtle-dark transition-colors cursor-pointer"
               >
                 <div className="flex-grow text-left">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <p className="text-base font-bold leading-normal text-black dark:text-white">
                       {notice.title}
                     </p>
+                    {notice.is_pinned && (
+                      <span className="inline-block rounded bg-amber-500 text-white px-1.5 py-0.5 text-xs font-bold">
+                        상단고정
+                      </span>
+                    )}
                     {notice.isNew && (
                       <span className="inline-block rounded bg-red-500 text-white px-1.5 py-0.5 text-xs font-bold">
                         NEW

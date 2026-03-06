@@ -309,25 +309,35 @@ export const analyzeImageForTags = async (imageFile, location = '', existingNote
       const aiResult = await generateAITags(imageFile, location, exifData);
       logger.debug('  API 호출 결과:', aiResult);
       
-      if (aiResult && aiResult.success && aiResult.tags && aiResult.tags.length > 0) {
-        logger.log('✅ 멀티모달 AI 태그 생성 성공!');
-        logger.debug('  생성된 태그:', aiResult.tags);
+      if (aiResult && (aiResult.success || aiResult.category) && (Array.isArray(aiResult.tags) ? aiResult.tags.length : 0) >= 0) {
+        const hasTags = Array.isArray(aiResult.tags) && aiResult.tags.length > 0;
+        if (hasTags) {
+          logger.log('✅ 멀티모달 AI 태그 생성 성공!');
+          logger.debug('  생성된 태그:', aiResult.tags);
+        }
+        if (aiResult.category) {
+          logger.log('✅ AI 카테고리 적용:', aiResult.category, aiResult.categoryName);
+        }
         logger.debug('  이미지 묘사:', aiResult.caption?.substring(0, 100) + '...');
-        
-        // 카테고리 자동 분류
-        const categoryResult = detectCategory(new Set(aiResult.tags), location, existingNote, { brightness: 0.5 });
-        
+
+        const fallbackCategory = aiResult.category && aiResult.categoryName && aiResult.categoryIcon
+          ? null
+          : detectCategory(new Set(aiResult.tags || []), location, existingNote, { brightness: 0.5 });
+        const category = aiResult.category || fallbackCategory?.category || 'scenic';
+        const categoryName = aiResult.categoryName || fallbackCategory?.categoryName || '추천 장소';
+        const categoryIcon = aiResult.categoryIcon || fallbackCategory?.icon || '📍';
+
         return {
-          success: true,
-          tags: aiResult.tags.slice(0, 10), // 최대 10개
-          category: categoryResult.category,
-          categoryName: categoryResult.categoryName,
-          categoryIcon: categoryResult.icon,
+          success: !!aiResult.success || hasTags || !!aiResult.category,
+          tags: Array.isArray(aiResult.tags) ? aiResult.tags.slice(0, 10) : [],
+          category,
+          categoryName,
+          categoryIcon,
           caption: aiResult.caption,
-          method: 'multimodal-ai'
+          method: aiResult.method || 'multimodal-ai'
         };
       } else {
-        logger.debug('AI 태그 없음 → 이미지/위치 기반 태그로 진행');
+        logger.debug('AI 태그/카테고리 없음 → 이미지/위치 기반 태그로 진행');
       }
     } catch (aiError) {
       logger.debug('AI 호출 실패, 로컬 분석 사용:', aiError.message);
