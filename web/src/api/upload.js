@@ -39,8 +39,8 @@ const fileToBase64 = (file) => {
   });
 };
 
-// Supabase Storage 에 이미지 업로드 후 public URL 반환
-const uploadImageToSupabase = async (file) => {
+// Supabase Storage 에 이미지 업로드 후 public URL 반환 (실패 시 1회 재시도)
+const uploadImageToSupabase = async (file, retry = false) => {
   try {
     if (!supabase) {
       throw new Error('Supabase client not initialized');
@@ -82,7 +82,12 @@ const uploadImageToSupabase = async (file) => {
       storage: 'supabase',
     };
   } catch (error) {
-    logger.warn('Supabase Storage 이미지 업로드 실패 (백엔드/Blob으로 fallback):', error);
+    if (!retry) {
+      logger.warn('Supabase Storage 1차 실패, 재시도...', error?.message);
+      await new Promise((r) => setTimeout(r, 500));
+      return uploadImageToSupabase(file, true);
+    }
+    logger.warn('Supabase Storage 이미지 업로드 실패 (백엔드/Blob fallback):', error?.message);
     return { success: false, error };
   }
 };

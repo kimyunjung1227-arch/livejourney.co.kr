@@ -93,6 +93,19 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 이제 어떤 페이지에서도 `import { supabase } from '../utils/supabaseClient';` 로 Supabase 인스턴스를 사용할 수 있습니다.
 
+### 3.4 사진 저장용 Storage 버킷 (필수)
+
+업로드한 **사진/동영상**을 Supabase에 저장하려면 Storage 버킷을 만들어야 합니다.
+
+1. Supabase 대시보드 → **Storage** → **New bucket**
+2. 버킷 이름: **`post-images`** (코드에서 사용하는 이름과 동일해야 함)
+3. **Public bucket** 체크 (업로드된 이미지 URL로 접근 가능하도록)
+4. **Create bucket** 후, 버킷 설정에서 **Policies** 추가:
+   - **Allow public read**: `SELECT` 정책으로 `true` (또는 공개 읽기)
+   - **Allow upload**: `INSERT` 정책으로 인증된 사용자 또는 anon 허용 (테스트 시 anon 허용 가능)
+
+이렇게 하면 앱에서 업로드한 사진이 Supabase Storage에 저장되고, 게시물의 `images` 배열에 https URL이 들어가 새로고침 후에도 보입니다.
+
 ---
 
 ## 4. 예시: Supabase에서 게시물 불러오기

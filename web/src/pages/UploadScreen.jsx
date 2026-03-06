@@ -810,12 +810,17 @@ const UploadScreen = () => {
             ? uploadedVideoUrls
             : (formData.videos && formData.videos.length > 0 ? formData.videos : []);
 
-          logger.log('📸 최종 이미지/동영상 (백엔드):', {
+          const supabaseImageCount = (finalImages || []).filter((u) => typeof u === 'string' && u.startsWith('https://')).length;
+          logger.log('📸 최종 이미지/동영상:', {
             images: finalImages.length,
             videos: finalVideos.length,
+            supabase저장된사진수: supabaseImageCount,
             imageUrls: finalImages,
             videoUrls: finalVideos
           });
+          if (supabaseImageCount > 0) {
+            logger.log('✅ 사진이 Supabase Storage에 저장되었습니다.');
+          }
 
           if (finalImages.length === 0 && finalVideos.length === 0) {
             logger.error('❌ 이미지 또는 동영상이 없습니다!');
@@ -932,8 +937,15 @@ const UploadScreen = () => {
               logger.log('✅ Supabase 게시물 저장 완료:', { supabasePostId: result.post?.id });
             } else {
               logger.warn('Supabase 게시물 저장 실패:', result?.error, result?.code);
-              if (result?.error === 'user_id_not_null' && result?.hint) {
-                logger.warn('💡 해결: Supabase SQL Editor에서 실행 →', result.hint);
+              if (result?.error === 'user_id_not_null') {
+                const sql = 'ALTER TABLE posts ALTER COLUMN user_id DROP NOT NULL;';
+                logger.warn('💡 해결: Supabase SQL Editor에서 실행 →', sql);
+                alert(
+                  'Supabase에 저장하려면 한 번만 설정해 주세요.\n\n' +
+                  '1. Supabase 대시보드 → SQL Editor → New query\n' +
+                  '2. 아래 문장 붙여넣고 Run\n\n' +
+                  sql
+                );
               }
             }
           } catch (err) {
