@@ -14,7 +14,7 @@ import { logger } from '../utils/logger';
 import { getDisplayImageUrl } from '../api/upload';
 import api from '../api/axios';
 import { cleanLegacyUploadedPosts } from '../utils/localStorageManager';
-import { deletePostSupabase } from '../api/postsSupabase';
+import { deletePostSupabase, fetchPostsByUserIdSupabase } from '../api/postsSupabase';
 
 // HTML 문자열(template literal)로 src/alt를 주입할 때 속성 안전 처리
 const escapeHtmlAttr = (value) => {
@@ -247,28 +247,38 @@ const ProfileScreen = () => {
       setRepresentativeBadge(repBadge);
     }
 
-    // 목업/테스트 게시물 흔적 제거 후 내 게시물만 로드
+    // 목업/테스트 게시물 흔적 제거 후 내 게시물 로드 (Supabase + localStorage 병합 → 로그아웃 후 재로그인해도 기록 유지)
     cleanLegacyUploadedPosts();
     const uploadedPosts = JSON.parse(localStorage.getItem('uploadedPosts') || '[]');
-    const userPosts = uploadedPosts.filter(post => post.userId === userId);
-    const userPostsWithCoords = userPosts.filter(p => getPostCoordinates(p));
+    const localUserPosts = uploadedPosts.filter(post => post.userId === userId);
 
-    logger.log('📊 프로필 화면 - 내 게시물 로드 (영구 보관)');
-    logger.debug('  전체 게시물:', uploadedPosts.length);
-    logger.debug('  내 게시물 (모두):', userPosts.length);
-    logger.debug('  사용자 ID:', userId);
-
-    // 실제 내가 올린 게시물만 사용 (목업 데이터 제거)
-    setMyPosts(userPostsWithCoords);
-    setFilteredPosts(userPostsWithCoords);
-
-    // 사용 가능한 날짜 목록 추출 (내 게시물이 있을 때만)
-    const dates = [...new Set(
-      userPostsWithCoords
-        .map(post => getPostDateKey(post))
-        .filter(Boolean)
-    )].sort((a, b) => (parseDateKeyLocal(b)?.getTime() || 0) - (parseDateKeyLocal(a)?.getTime() || 0));
-    setAvailableDates(dates);
+    const loadMergedMyPosts = async () => {
+      const fromSupabase = userId
+        ? await fetchPostsByUserIdSupabase(userId)
+        : [];
+      const byId = new Map();
+      fromSupabase.forEach(p => byId.set(p.id, { ...p }));
+      localUserPosts.forEach(p => {
+        if (!byId.has(p.id)) byId.set(p.id, { ...p });
+      });
+      const merged = [...byId.values()].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+      // 좌표 없으면 지역명으로 보강 (지도 표시용)
+      const enriched = merged.map(p => {
+        if (getPostCoordinates(p)) return p;
+        const name = p.detailedLocation || (typeof p.location === 'string' ? p.location : '') || p.placeName;
+        const coords = name ? getCoordinatesByLocation(name) : null;
+        return coords ? { ...p, coordinates: coords } : p;
+      });
+      logger.log('📊 프로필 화면 - 내 게시물 로드 (Supabase + 로컬 병합)');
+      logger.debug('  Supabase:', fromSupabase.length, '로컬(내것):', localUserPosts.length, '병합:', enriched.length, '사용자 ID:', userId);
+      setMyPosts(enriched);
+      setFilteredPosts(enriched);
+      const dates = [...new Set(
+        enriched.map(post => getPostDateKey(post)).filter(Boolean)
+      )].sort((a, b) => (parseDateKeyLocal(b)?.getTime() || 0) - (parseDateKeyLocal(a)?.getTime() || 0));
+      setAvailableDates(dates);
+    };
+    loadMergedMyPosts();
 
     // 알림 개수 업데이트
     setUnreadNotificationCount(getUnreadCount());
@@ -278,47 +288,44 @@ const ProfileScreen = () => {
       setUnreadNotificationCount(getUnreadCount());
     };
 
-    // 게시물 업데이트 이벤트 리스너
+    // 게시물 업데이트 이벤트 리스너 (Supabase + localStorage 병합으로 갱신)
     const handlePostsUpdate = () => {
       logger.log('🔄 프로필 화면 - 게시물 업데이트 이벤트 수신');
-      setTimeout(() => {
+      const previousPostsCount = myPosts.length;
+      setTimeout(async () => {
         const updatedPosts = JSON.parse(localStorage.getItem('uploadedPosts') || '[]');
-        // 프로필에서는 필터링 없이 모든 내 게시물 표시
-        const updatedUserPosts = updatedPosts.filter(post => {
+        const updatedLocalUserPosts = updatedPosts.filter(post => {
           const postUserId = post.userId ||
             (typeof post.user === 'string' ? post.user : post.user?.id) ||
             post.user;
           return postUserId === userId;
         });
-        const updatedUserPostsWithCoords = updatedUserPosts.filter(p => getPostCoordinates(p));
-        logger.debug('🔄 게시물 업데이트 (영구 보관):', {
-          전체게시물: updatedPosts.length,
-          내게시물: updatedUserPosts.length,
-          사용자ID: userId
+        const fromSupabase = userId ? await fetchPostsByUserIdSupabase(userId) : [];
+        const byId = new Map();
+        fromSupabase.forEach(p => byId.set(p.id, { ...p }));
+        updatedLocalUserPosts.forEach(p => { if (!byId.has(p.id)) byId.set(p.id, { ...p }); });
+        const merged = [...byId.values()].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+        const enriched = merged.map(p => {
+          if (getPostCoordinates(p)) return p;
+          const name = p.detailedLocation || (typeof p.location === 'string' ? p.location : '') || p.placeName;
+          const coords = name ? getCoordinatesByLocation(name) : null;
+          return coords ? { ...p, coordinates: coords } : p;
         });
+        logger.debug('🔄 게시물 업데이트 (Supabase+로컬 병합):', { Supabase: fromSupabase.length, 로컬: updatedLocalUserPosts.length, 병합: enriched.length });
+        setMyPosts(enriched);
 
-        const previousPostsCount = myPosts.length;
-        setMyPosts(updatedUserPostsWithCoords);
-
-        // 사용 가능한 날짜 목록 업데이트
         const dates = [...new Set(
-          updatedUserPostsWithCoords
-            .map(post => getPostDateKey(post))
-            .filter(Boolean)
+          enriched.map(post => getPostDateKey(post)).filter(Boolean)
         )].sort((a, b) => (parseDateKeyLocal(b)?.getTime() || 0) - (parseDateKeyLocal(a)?.getTime() || 0));
         setAvailableDates(dates);
 
-        // 새 게시물이 추가되면 해당 날짜로 자동 선택 (선택된 날짜가 없을 때만)
-        if (updatedUserPostsWithCoords.length > previousPostsCount && !selectedDate && activeTab === 'map') {
-          const newPost = updatedUserPostsWithCoords.find(p => !myPosts.find(op => op.id === p.id));
+        if (enriched.length > previousPostsCount && !selectedDate && activeTab === 'map') {
+          const newPost = enriched.find(p => !myPosts.find(op => op.id === p.id));
           if (newPost) {
             const dateStr = getPostDateKey(newPost);
-            if (dates.includes(dateStr)) {
-              setSelectedDate(dateStr);
-            }
+            if (dates.includes(dateStr)) setSelectedDate(dateStr);
           }
         }
-
       }, 100);
     };
 

@@ -242,6 +242,58 @@ export const addCommentToPostSupabase = async (postId, commentPayload) => {
   }
 };
 
+// Supabase에서 특정 사용자(user_id)가 올린 게시물만 조회 (프로필 기록용, 로그아웃 후 재로그인해도 유지)
+export const fetchPostsByUserIdSupabase = async (userId) => {
+  if (!userId || typeof userId !== 'string') return [];
+  const trimmed = userId.trim();
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trimmed);
+  if (!isUuid) return [];
+  try {
+    const { data, error } = await supabase
+      .from('posts')
+      .select('*')
+      .eq('user_id', trimmed)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    if (!data) return [];
+
+    return data.map((row) => {
+      const uid = row.user_id;
+      const userObj =
+        uid != null
+          ? { id: uid, username: row.author_username || null, profileImage: row.author_avatar_url || null }
+          : uid;
+      return {
+        id: row.id,
+        userId: uid,
+        user: userObj,
+        images: Array.isArray(row.images) ? row.images : [],
+        videos: Array.isArray(row.videos) ? row.videos : [],
+        location: row.location || '',
+        detailedLocation: row.detailed_location || '',
+        placeName: row.place_name || '',
+        region: row.region || '',
+        tags: Array.isArray(row.tags) ? row.tags : [],
+        note: row.content || '',
+        content: row.content || '',
+        timestamp: row.created_at ? new Date(row.created_at).getTime() : null,
+        createdAt: row.created_at || null,
+        photoDate: row.captured_at || row.created_at || null,
+        likes: Number(row.likes_count) || 0,
+        likeCount: Number(row.likes_count) || 0,
+        comments: Array.isArray(row.comments) ? row.comments : [],
+        category: row.category || null,
+        categoryName: row.category_name || null,
+        thumbnail: (Array.isArray(row.images) && row.images[0]) || null,
+      };
+    });
+  } catch (error) {
+    logger.warn('Supabase fetchPostsByUserId 실패:', error?.message);
+    return [];
+  }
+};
+
 // Supabase에서 게시물 목록 읽기
 export const fetchPostsSupabase = async () => {
   try {
