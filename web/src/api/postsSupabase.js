@@ -92,7 +92,7 @@ export const createPostSupabase = async (post) => {
   }
 };
 
-// Supabase 게시물 수정 (작성자만 수정 가능하도록 호출 전에 권한 검사)
+// Supabase 게시물 수정 (작성자만 수정 가능하도록 호출 전에 권한 검사, 사진·내용 포함)
 export const updatePostSupabase = async (postId, updates) => {
   if (!postId || typeof postId !== 'string' || !updates || typeof updates !== 'object') return { success: false };
   const trimmed = postId.trim();
@@ -106,6 +106,8 @@ export const updatePostSupabase = async (postId, updates) => {
     if (updates.place_name !== undefined) payload.place_name = updates.place_name;
     if (updates.region !== undefined) payload.region = updates.region;
     if (Array.isArray(updates.tags)) payload.tags = updates.tags.map((t) => (typeof t === 'string' ? t.replace(/^#+/, '') : String(t || '')));
+    if (Array.isArray(updates.images)) payload.images = onlyPersistentUrls(updates.images);
+    if (Array.isArray(updates.videos)) payload.videos = onlyPersistentUrls(updates.videos);
     if (Object.keys(payload).length === 0) return { success: true };
     const { data, error } = await supabase.from('posts').update(payload).eq('id', trimmed).select('*').single();
     if (error) throw error;

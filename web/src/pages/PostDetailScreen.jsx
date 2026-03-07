@@ -3,7 +3,7 @@ import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import { Swiper, SwiperSlide } from 'swiper/react';
 import BottomNavigation from '../components/BottomNavigation';
 import { getPost } from '../api/posts';
-import { getDisplayImageUrl } from '../api/upload';
+import { getDisplayImageUrl, uploadImage } from '../api/upload';
 import { updatePostLikesSupabase, fetchPostByIdSupabase, addCommentToPostSupabase, updateCommentsInPostSupabase, updatePostSupabase } from '../api/postsSupabase';
 import { useAuth } from '../contexts/AuthContext';
 import { getWeatherByRegion } from '../api/weather';
@@ -141,6 +141,9 @@ const PostDetailScreen = () => {
   const [isEditingPost, setIsEditingPost] = useState(false);
   const [editPostNote, setEditPostNote] = useState('');
   const [editPostLocation, setEditPostLocation] = useState('');
+  const [editPostImages, setEditPostImages] = useState([]);
+  const [editPostUploading, setEditPostUploading] = useState(false);
+  const editPostImageInputRef = useRef(null);
   const [isFollowAuthor, setIsFollowAuthor] = useState(false);
   const [accuracyMarked, setAccuracyMarked] = useState(false);
   const [accuracyCount, setAccuracyCount] = useState(0);
@@ -582,6 +585,7 @@ const PostDetailScreen = () => {
     setIsEditingPost(true);
     setEditPostNote(post?.note || post?.content || '');
     setEditPostLocation(post?.location || post?.detailedLocation || post?.placeName || '');
+    setEditPostImages(Array.isArray(post?.images) ? [...post.images] : typeof post?.images === 'string' ? [post.images] : []);
   }, [post]);
 
   const handleSavePostEdit = useCallback(async () => {
@@ -591,7 +595,8 @@ const PostDetailScreen = () => {
         content: editPostNote.trim(),
         location: editPostLocation.trim() || null,
         detailed_location: editPostLocation.trim() || null,
-        place_name: editPostLocation.trim() || null
+        place_name: editPostLocation.trim() || null,
+        images: editPostImages
       });
       if (res?.success && res.post) {
         setPost((prev) => ({
@@ -600,7 +605,8 @@ const PostDetailScreen = () => {
           content: res.post.content,
           location: res.post.location,
           detailedLocation: res.post.detailed_location,
-          placeName: res.post.place_name
+          placeName: res.post.place_name,
+          images: res.post.images ?? editPostImages
         }));
         setIsEditingPost(false);
       }
@@ -614,20 +620,50 @@ const PostDetailScreen = () => {
           content: editPostNote.trim(),
           location: editPostLocation.trim(),
           detailedLocation: editPostLocation.trim(),
-          placeName: editPostLocation.trim()
+          placeName: editPostLocation.trim(),
+          images: editPostImages
         };
         localStorage.setItem('uploadedPosts', JSON.stringify(uploaded));
-        setPost((prev) => ({ ...prev, note: editPostNote.trim(), content: editPostNote.trim(), location: editPostLocation.trim(), detailedLocation: editPostLocation.trim(), placeName: editPostLocation.trim() }));
+        setPost((prev) => ({
+          ...prev,
+          note: editPostNote.trim(),
+          content: editPostNote.trim(),
+          location: editPostLocation.trim(),
+          detailedLocation: editPostLocation.trim(),
+          placeName: editPostLocation.trim(),
+          images: editPostImages
+        }));
         window.dispatchEvent(new Event('postsUpdated'));
       }
       setIsEditingPost(false);
     }
-  }, [post, isSupabasePost, isPostAuthor, editPostNote, editPostLocation]);
+  }, [post, isSupabasePost, isPostAuthor, editPostNote, editPostLocation, editPostImages]);
 
   const handleCancelEditPost = useCallback(() => {
     setIsEditingPost(false);
     setEditPostNote('');
     setEditPostLocation('');
+    setEditPostImages([]);
+  }, []);
+
+  const handleRemoveEditPostImage = useCallback((index) => {
+    setEditPostImages((prev) => prev.filter((_, i) => i !== index));
+  }, []);
+
+  const handleAddEditPostImage = useCallback(async (e) => {
+    const file = e?.target?.files?.[0];
+    if (!file || !file.type.startsWith('image/')) return;
+    setEditPostUploading(true);
+    try {
+      const res = await uploadImage(file);
+      const url = res?.url;
+      if (url && (url.startsWith('http') || url.startsWith('https'))) {
+        setEditPostImages((prev) => [...prev, url]);
+      }
+    } finally {
+      setEditPostUploading(false);
+      e.target.value = '';
+    }
   }, []);
 
   // 게시물 변경 (상하/좌우 스와이프 모두 지원)
@@ -1363,6 +1399,37 @@ const PostDetailScreen = () => {
                   rows={4}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-[#181410] dark:text-white text-sm resize-none"
                 />
+                <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">사진</label>
+                <div className="flex flex-wrap gap-2 items-center">
+                  {editPostImages.map((url, idx) => (
+                    <div key={idx} className="relative group">
+                      <img src={getDisplayImageUrl(url)} alt="" className="w-20 h-20 object-cover rounded-lg border border-gray-200 dark:border-gray-600" />
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveEditPostImage(idx)}
+                        className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-red-500 text-white flex items-center justify-center text-sm hover:bg-red-600"
+                        aria-label="삭제"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                  <input
+                    ref={editPostImageInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleAddEditPostImage}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => editPostImageInputRef.current?.click()}
+                    disabled={editPostUploading}
+                    className="w-20 h-20 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 flex items-center justify-center text-gray-400 dark:text-gray-500 hover:border-primary hover:text-primary transition-colors text-2xl"
+                  >
+                    {editPostUploading ? '…' : '+'}
+                  </button>
+                </div>
                 <div className="flex gap-2">
                   <button type="button" onClick={handleSavePostEdit} className="px-4 py-2 rounded-lg text-sm font-semibold bg-primary text-white">저장</button>
                   <button type="button" onClick={handleCancelEditPost} className="px-4 py-2 rounded-lg text-sm font-semibold bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300">취소</button>
@@ -1540,31 +1607,33 @@ const PostDetailScreen = () => {
                           </div>
                         )}
                         <div className="flex flex-col flex-1">
-                          <div className="bg-gray-100 dark:bg-gray-800 p-3 rounded-lg rounded-tl-none">
-                            <p className="text-sm font-bold text-[#181410] dark:text-white">
-                              {comment.user?.username ?? comment.user ?? '유저'}
-                            </p>
-                            {isEditing ? (
-                              <div className="mt-2 flex flex-col gap-2">
-                                <input
-                                  type="text"
-                                  value={editCommentText}
-                                  onChange={(e) => setEditCommentText(e.target.value)}
-                                  className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-[#181410] dark:text-white"
-                                  autoFocus
-                                />
-                                <div className="flex gap-2">
-                                  <button type="button" onClick={handleSaveEditComment} className="text-xs font-semibold text-primary">저장</button>
-                                  <button type="button" onClick={handleCancelEditComment} className="text-xs font-semibold text-gray-500">취소</button>
+                          <div className="bg-gray-100 dark:bg-gray-800 p-3 rounded-lg rounded-tl-none flex items-start justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-bold text-[#181410] dark:text-white">
+                                {comment.user?.username ?? comment.user ?? '유저'}
+                              </p>
+                              {isEditing ? (
+                                <div className="mt-2 flex flex-col gap-2">
+                                  <input
+                                    type="text"
+                                    value={editCommentText}
+                                    onChange={(e) => setEditCommentText(e.target.value)}
+                                    className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-[#181410] dark:text-white"
+                                    autoFocus
+                                  />
+                                  <div className="flex gap-2">
+                                    <button type="button" onClick={handleSaveEditComment} className="text-xs font-semibold text-primary">저장</button>
+                                    <button type="button" onClick={handleCancelEditComment} className="text-xs font-semibold text-gray-500">취소</button>
+                                  </div>
                                 </div>
-                              </div>
-                            ) : (
-                              <p className="text-sm text-gray-800 dark:text-gray-300 mt-1">{comment.content ?? comment.text ?? ''}</p>
-                            )}
+                              ) : (
+                                <p className="text-sm text-gray-800 dark:text-gray-300 mt-1">{comment.content ?? comment.text ?? ''}</p>
+                              )}
+                            </div>
                             {!isEditing && canEditComment && (
-                              <div className="flex gap-2 mt-2">
-                                <button type="button" onClick={() => handleStartEditComment(comment)} className="text-xs text-gray-500 hover:text-primary">수정</button>
-                                <button type="button" onClick={() => handleDeleteComment(comment.id)} className="text-xs text-gray-500 hover:text-red-500">삭제</button>
+                              <div className="flex gap-1 flex-shrink-0">
+                                <button type="button" onClick={() => handleStartEditComment(comment)} className="text-[11px] text-gray-400 dark:text-gray-500 hover:text-primary dark:hover:text-primary">수정</button>
+                                <button type="button" onClick={() => handleDeleteComment(comment.id)} className="text-[11px] text-gray-400 dark:text-gray-500 hover:text-red-500">삭제</button>
                               </div>
                             )}
                           </div>
