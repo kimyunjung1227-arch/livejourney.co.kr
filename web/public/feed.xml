@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>라이브저니 | 실시간 여행 정보 공유 &amp; 여행 필수 커뮤니티</title>
+    <link>https://livejourney.co.kr</link>
+    <description>여행 실패를 줄여주는 여행자 필수 어플, 라이브저니. 정보의 시차를 없애고 실시간의 진실을 연결합니다.</description>
+    <language>ko</language>
+    <lastBuildDate>Thu, 06 Mar 2025 12:00:00 +0900</lastBuildDate>
+    <atom:link href="https://livejourney.co.kr/feed.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>라이브저니 - 실시간 여행 정보 공유</title>
+      <link>https://livejourney.co.kr</link>
+      <description>정보의 시차를 없애고 실시간의 진실을 연결하여 여행 실패를 줄여줍니다. 실시간 피드, 혼잡도, 지도로 여행을 더 스마트하게.</description>
+      <pubDate>Thu, 06 Mar 2025 12:00:00 +0900</pubDate>
+      <guid isPermaLink="true">https://livejourney.co.kr</guid>
+    </item>
+  </channel>
+</rss>
