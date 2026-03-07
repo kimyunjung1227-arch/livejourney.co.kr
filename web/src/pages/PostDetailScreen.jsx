@@ -4,11 +4,11 @@ import { Swiper, SwiperSlide } from 'swiper/react';
 import BottomNavigation from '../components/BottomNavigation';
 import { getPost } from '../api/posts';
 import { getDisplayImageUrl } from '../api/upload';
-import { updatePostLikesSupabase, fetchPostByIdSupabase, addCommentToPostSupabase } from '../api/postsSupabase';
+import { updatePostLikesSupabase, fetchPostByIdSupabase, addCommentToPostSupabase, updateCommentsInPostSupabase, updatePostSupabase } from '../api/postsSupabase';
 import { useAuth } from '../contexts/AuthContext';
 import { getWeatherByRegion } from '../api/weather';
 import { getTimeAgo } from '../utils/dateUtils';
-import { toggleLike, isPostLiked, addComment, getPostAccuracyCount, hasUserMarkedAccurate, toggleAccuracyFeedback } from '../utils/socialInteractions';
+import { toggleLike, isPostLiked, addComment, deleteCommentFromPost, updateCommentInPost, getPostAccuracyCount, hasUserMarkedAccurate, toggleAccuracyFeedback } from '../utils/socialInteractions';
 import { toggleInterestPlace, isInterestPlace } from '../utils/interestPlaces';
 import { getEarnedBadgesForUser } from '../utils/badgeSystem';
 import { getTrustScore, getTrustGrade } from '../utils/trustIndex';
@@ -136,7 +136,12 @@ const PostDetailScreen = () => {
   const [representativeBadge, setRepresentativeBadge] = useState(null);
   const [userBadges, setUserBadges] = useState([]);
   const [showHeartAnimation, setShowHeartAnimation] = useState(false);
-  const [isCommentSectionOpen, setIsCommentSectionOpen] = useState(false);
+  const [isCommentSectionOpen, setIsCommentSectionOpen] = useState(true);
+  const [editingCommentId, setEditingCommentId] = useState(null);
+  const [editCommentText, setEditCommentText] = useState('');
+  const [isEditingPost, setIsEditingPost] = useState(false);
+  const [editPostNote, setEditPostNote] = useState('');
+  const [editPostLocation, setEditPostLocation] = useState('');
   const [isFollowAuthor, setIsFollowAuthor] = useState(false);
   const [accuracyMarked, setAccuracyMarked] = useState(false);
   const [accuracyCount, setAccuracyCount] = useState(0);
@@ -477,7 +482,7 @@ const PostDetailScreen = () => {
     const userId = user?.id || null;
     const newComment = {
       id: `comment-${Date.now()}`,
-      user: username,
+      user: typeof user === 'object' && user ? { username, id: userId, profileImage: user?.profileImage || null } : username,
       userId,
       content: text,
       timestamp: new Date().toISOString(),
@@ -507,6 +512,105 @@ const PostDetailScreen = () => {
 
     setCommentText('');
   }, [post, commentText, user]);
+
+  const isSupabasePost = post && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(post.id || '').trim());
+  const isPostAuthor = post && user && String(post.userId || post.user?.id || post.user) === String(user.id);
+
+  const handleDeleteComment = useCallback(async (commentId) => {
+    if (!post || !commentId) return;
+    if (!window.confirm('이 댓글을 삭제할까요?')) return;
+    if (isSupabasePost) {
+      const next = comments.filter((c) => c.id !== commentId);
+      const res = await updateCommentsInPostSupabase(post.id, next);
+      if (res?.success) {
+        setComments(res.comments);
+        window.dispatchEvent(new CustomEvent('postCommentsUpdated', { detail: { postId: post.id, comments: res.comments } }));
+      }
+    } else {
+      const next = deleteCommentFromPost(post.id, commentId);
+      setComments(next);
+    }
+  }, [post, comments, isSupabasePost]);
+
+  const handleStartEditComment = useCallback((comment) => {
+    setEditingCommentId(comment.id);
+    setEditCommentText(comment.content || '');
+  }, []);
+
+  const handleSaveEditComment = useCallback(async () => {
+    if (!post || !editingCommentId || editCommentText.trim() === '') return;
+    const text = editCommentText.trim();
+    if (isSupabasePost) {
+      const next = comments.map((c) => (c.id === editingCommentId ? { ...c, content: text } : c));
+      const res = await updateCommentsInPostSupabase(post.id, next);
+      if (res?.success) {
+        setComments(res.comments);
+        window.dispatchEvent(new CustomEvent('postCommentsUpdated', { detail: { postId: post.id, comments: res.comments } }));
+      }
+    } else {
+      const next = updateCommentInPost(post.id, editingCommentId, text);
+      setComments(next);
+    }
+    setEditingCommentId(null);
+    setEditCommentText('');
+  }, [post, comments, editingCommentId, editCommentText, isSupabasePost]);
+
+  const handleCancelEditComment = useCallback(() => {
+    setEditingCommentId(null);
+    setEditCommentText('');
+  }, []);
+
+  const handleStartEditPost = useCallback(() => {
+    setIsEditingPost(true);
+    setEditPostNote(post?.note || post?.content || '');
+    setEditPostLocation(post?.location || post?.detailedLocation || post?.placeName || '');
+  }, [post]);
+
+  const handleSavePostEdit = useCallback(async () => {
+    if (!post || !isPostAuthor) return;
+    if (isSupabasePost) {
+      const res = await updatePostSupabase(post.id, {
+        content: editPostNote.trim(),
+        location: editPostLocation.trim() || null,
+        detailed_location: editPostLocation.trim() || null,
+        place_name: editPostLocation.trim() || null
+      });
+      if (res?.success && res.post) {
+        setPost((prev) => ({
+          ...prev,
+          note: res.post.content,
+          content: res.post.content,
+          location: res.post.location,
+          detailedLocation: res.post.detailed_location,
+          placeName: res.post.place_name
+        }));
+        setIsEditingPost(false);
+      }
+    } else {
+      const uploaded = JSON.parse(localStorage.getItem('uploadedPosts') || '[]');
+      const idx = uploaded.findIndex((p) => p.id === post.id);
+      if (idx !== -1) {
+        uploaded[idx] = {
+          ...uploaded[idx],
+          note: editPostNote.trim(),
+          content: editPostNote.trim(),
+          location: editPostLocation.trim(),
+          detailedLocation: editPostLocation.trim(),
+          placeName: editPostLocation.trim()
+        };
+        localStorage.setItem('uploadedPosts', JSON.stringify(uploaded));
+        setPost((prev) => ({ ...prev, note: editPostNote.trim(), content: editPostNote.trim(), location: editPostLocation.trim(), detailedLocation: editPostLocation.trim(), placeName: editPostLocation.trim() }));
+        window.dispatchEvent(new Event('postsUpdated'));
+      }
+      setIsEditingPost(false);
+    }
+  }, [post, isSupabasePost, isPostAuthor, editPostNote, editPostLocation]);
+
+  const handleCancelEditPost = useCallback(() => {
+    setIsEditingPost(false);
+    setEditPostNote('');
+    setEditPostLocation('');
+  }, []);
 
   // 게시물 변경 (상하/좌우 스와이프 모두 지원)
   const changePost = useCallback((direction) => {
@@ -1160,6 +1264,9 @@ const PostDetailScreen = () => {
               <span className="material-symbols-outlined text-gray-500 dark:text-gray-400 text-2xl flex-shrink-0">location_on</span>
               <div className="flex-1">
                 <div className="flex items-center flex-wrap gap-2 mb-2">
+                  {isPostAuthor && !isEditingPost && (
+                    <button type="button" onClick={handleStartEditPost} className="ml-auto text-xs font-semibold text-primary hover:underline">게시물 수정</button>
+                  )}
                   <p className="text-base font-bold text-zinc-900 dark:text-zinc-100">
                     {verifiedLocation || detailedLocationText || locationText}
                   </p>
@@ -1217,21 +1324,46 @@ const PostDetailScreen = () => {
               </div>
             </div>
 
-            {/* 📝 작성자 노트 */}
-            <div className="flex items-start gap-3 mb-4">
-              <span className="material-symbols-outlined text-gray-500 dark:text-gray-400 text-2xl flex-shrink-0">edit_note</span>
-              <div className="flex-1">
-                {(post?.note || post?.content) ? (
-                  <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">
-                    {post.note || post.content}
-                  </p>
-                ) : (
-                  <p className="text-sm text-gray-400 dark:text-gray-500">
-                    작성자가 남긴 노트가 없습니다
-                  </p>
-                )}
+            {/* 📝 작성자 노트 (또는 수정 폼) */}
+            {isEditingPost ? (
+              <div className="flex flex-col gap-3 mb-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-xl">
+                <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">위치</label>
+                <input
+                  type="text"
+                  value={editPostLocation}
+                  onChange={(e) => setEditPostLocation(e.target.value)}
+                  placeholder="위치"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-[#181410] dark:text-white text-sm"
+                />
+                <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">내용</label>
+                <textarea
+                  value={editPostNote}
+                  onChange={(e) => setEditPostNote(e.target.value)}
+                  placeholder="내용을 입력하세요"
+                  rows={4}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-[#181410] dark:text-white text-sm resize-none"
+                />
+                <div className="flex gap-2">
+                  <button type="button" onClick={handleSavePostEdit} className="px-4 py-2 rounded-lg text-sm font-semibold bg-primary text-white">저장</button>
+                  <button type="button" onClick={handleCancelEditPost} className="px-4 py-2 rounded-lg text-sm font-semibold bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300">취소</button>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="flex items-start gap-3 mb-4">
+                <span className="material-symbols-outlined text-gray-500 dark:text-gray-400 text-2xl flex-shrink-0">edit_note</span>
+                <div className="flex-1">
+                  {(post?.note || post?.content) ? (
+                    <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">
+                      {post.note || post.content}
+                    </p>
+                  ) : (
+                    <p className="text-sm text-gray-400 dark:text-gray-500">
+                      작성자가 남긴 노트가 없습니다
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* 🏷️ 해시태그 */}
               <div className="flex items-start gap-3 mb-4">
@@ -1376,33 +1508,60 @@ const PostDetailScreen = () => {
               {/* 댓글 목록 */}
               {comments.length > 0 && (
                 <div className="flex flex-col gap-3 mt-2">
-                  {comments.map((comment) => (
-                    <div key={comment.id} className="flex gap-3">
-                      {comment.avatar ? (
-                        <div
-                          className="bg-center bg-no-repeat aspect-square bg-cover rounded-full h-8 w-8 flex-shrink-0"
-                          style={{ backgroundImage: `url("${comment.avatar}")` }}
-                        />
-                      ) : (
-                        <div className="rounded-full h-8 w-8 flex-shrink-0 bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-[10px] font-semibold text-gray-700 dark:text-gray-100">
-                          {String(comment.user?.username ?? comment.user ?? '유저').charAt(0)}
+                  {comments.map((comment) => {
+                    const commentAuthorId = comment.userId || (comment.user && typeof comment.user === 'object' ? comment.user.id : null);
+                    const canEditComment = user && (String(commentAuthorId) === String(user.id));
+                    const isEditing = editingCommentId === comment.id;
+                    return (
+                      <div key={comment.id} className="flex gap-3">
+                        {comment.avatar ? (
+                          <div
+                            className="bg-center bg-no-repeat aspect-square bg-cover rounded-full h-8 w-8 flex-shrink-0"
+                            style={{ backgroundImage: `url("${comment.avatar}")` }}
+                          />
+                        ) : (
+                          <div className="rounded-full h-8 w-8 flex-shrink-0 bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-[10px] font-semibold text-gray-700 dark:text-gray-100">
+                            {String(comment.user?.username ?? comment.user ?? '유저').charAt(0)}
+                          </div>
+                        )}
+                        <div className="flex flex-col flex-1">
+                          <div className="bg-gray-100 dark:bg-gray-800 p-3 rounded-lg rounded-tl-none">
+                            <p className="text-sm font-bold text-[#181410] dark:text-white">
+                              {comment.user?.username ?? comment.user ?? '유저'}
+                            </p>
+                            {isEditing ? (
+                              <div className="mt-2 flex flex-col gap-2">
+                                <input
+                                  type="text"
+                                  value={editCommentText}
+                                  onChange={(e) => setEditCommentText(e.target.value)}
+                                  className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-[#181410] dark:text-white"
+                                  autoFocus
+                                />
+                                <div className="flex gap-2">
+                                  <button type="button" onClick={handleSaveEditComment} className="text-xs font-semibold text-primary">저장</button>
+                                  <button type="button" onClick={handleCancelEditComment} className="text-xs font-semibold text-gray-500">취소</button>
+                                </div>
+                              </div>
+                            ) : (
+                              <p className="text-sm text-gray-800 dark:text-gray-300 mt-1">{comment.content}</p>
+                            )}
+                            {!isEditing && canEditComment && (
+                              <div className="flex gap-2 mt-2">
+                                <button type="button" onClick={() => handleStartEditComment(comment)} className="text-xs text-gray-500 hover:text-primary">수정</button>
+                                <button type="button" onClick={() => handleDeleteComment(comment.id)} className="text-xs text-gray-500 hover:text-red-500">삭제</button>
+                              </div>
+                            )}
+                          </div>
+                          {!isEditing && (
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                              {getTimeAgo(comment.timestamp || comment.createdAt)}
+                            </p>
+                          )}
                         </div>
-                      )}
-                      <div className="flex flex-col flex-1">
-                        <div className="bg-gray-100 dark:bg-gray-800 p-3 rounded-lg rounded-tl-none">
-                          <p className="text-sm font-bold text-[#181410] dark:text-white">
-                            {comment.user?.username ?? comment.user ?? '유저'}
-                          </p>
-                          <p className="text-sm text-gray-800 dark:text-gray-300 mt-1">
-                            {comment.content}
-                          </p>
-                        </div>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                          {getTimeAgo(comment.timestamp || comment.createdAt)}
-                        </p>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
 

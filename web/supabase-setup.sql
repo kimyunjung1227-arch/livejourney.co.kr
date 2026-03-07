@@ -1,8 +1,8 @@
 -- ============================================================
 -- Supabase 한 번에 설정
 -- Supabase 대시보드 → SQL Editor에서 이 파일 전체를 복사해 Run 하세요.
--- (게시물 저장 오류, RLS, 관리자·공지·좋아요·댓글 추적까지 모두 포함)
--- ※ 좋아요/댓글이 쌓이지 않으면 이 스크립트를 한 번 더 실행해 주세요.
+-- (게시물 저장 오류, RLS, Storage 사진 업로드, 관리자·공지·좋아요·댓글 추적까지 모두 포함)
+-- ※ 사진이 안 올라가면: Storage → New bucket → 이름 'post-images', Public 체크 후 생성하고 이 스크립트 다시 실행.
 -- ============================================================
 
 -- --------------------------------------------------------------
@@ -134,6 +134,18 @@ CREATE POLICY user_badges_select_own ON public.user_badges
 DROP POLICY IF EXISTS user_badges_insert_own ON public.user_badges;
 CREATE POLICY user_badges_insert_own ON public.user_badges
   FOR INSERT WITH CHECK (true);
+
+-- --------------------------------------------------------------
+-- 6) Storage (post-images) — 사진/동영상 업로드·다른 사용자에게 보이기
+--    ※ 버킷이 없으면 대시보드 Storage → New bucket → 이름 'post-images', Public 체크 후 생성
+-- --------------------------------------------------------------
+DROP POLICY IF EXISTS allow_public_upload_post_images ON storage.objects;
+CREATE POLICY allow_public_upload_post_images ON storage.objects
+  FOR INSERT WITH CHECK (bucket_id = 'post-images');
+
+DROP POLICY IF EXISTS allow_public_read_post_images ON storage.objects;
+CREATE POLICY allow_public_read_post_images ON storage.objects
+  FOR SELECT USING (bucket_id = 'post-images');
 
 -- ============================================================
 -- 관리자 추가 방법 (둘 중 하나 선택)

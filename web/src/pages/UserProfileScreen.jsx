@@ -8,7 +8,7 @@ import { follow, unfollow, isFollowing, getFollowerCount, getFollowingCount } fr
 import { logger } from '../utils/logger';
 import { getDisplayImageUrl } from '../api/upload';
 import { getPosts } from '../api/posts';
-import { fetchPostsByUserIdSupabase } from '../api/postsSupabase';
+import { fetchPostsByUserIdSupabase, fetchPostsSupabase } from '../api/postsSupabase';
 import { getTrustScore, getTrustGrade } from '../utils/trustIndex';
 import api from '../api/axios';
 
@@ -141,10 +141,16 @@ const UserProfileScreen = () => {
     const merge = async () => {
       const byId = new Map();
       // 1) Supabase에서 해당 사용자 게시물 조회 (다른 사용자 프로필에서도 사진 나오도록)
+      let supabasePosts = [];
       try {
-        const supabasePosts = await fetchPostsByUserIdSupabase(userId);
+        supabasePosts = await fetchPostsByUserIdSupabase(userId);
+        // user_id가 UUID가 아니면 빈 배열이 올 수 있음 → 전체 조회 후 클라이언트에서 필터
+        if (!supabasePosts || supabasePosts.length === 0) {
+          const all = await fetchPostsSupabase();
+          const forUser = (all || []).filter(p => getPostUserId(p) === String(userId));
+          supabasePosts = forUser;
+        }
         (supabasePosts || []).forEach(p => { if (p && p.id) byId.set(p.id, p); });
-        // Supabase에서 가져온 게시물이 있으면 작성자 정보로 사용자 정보 보강 (다른 사용자 이름/프로필 사진 표시)
         if (supabasePosts && supabasePosts.length > 0) {
           const first = supabasePosts[0];
           const u = first.user && typeof first.user === 'object' ? first.user : {};

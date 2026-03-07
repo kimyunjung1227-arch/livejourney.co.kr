@@ -983,6 +983,8 @@ const UploadScreen = () => {
           }
           if (!supabaseSaved) {
             logger.warn('💡 게시물은 이 기기 localStorage에만 저장되었습니다. Supabase RLS 또는 user_id 컬럼(nullable)을 확인해 주세요.');
+          } else if (supabaseSaved && supabaseImageCount === 0 && (finalImages.length > 0 || finalVideos.length > 0)) {
+            logger.warn('💡 게시물은 저장됐으나 사진/동영상이 서버에 올라가지 않았습니다. Supabase Storage 버킷(post-images) 및 정책을 확인하세요.');
           }
 
           setUploadProgress(100);

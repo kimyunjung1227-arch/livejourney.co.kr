@@ -92,6 +92,30 @@ export const createPostSupabase = async (post) => {
   }
 };
 
+// Supabase 게시물 수정 (작성자만 수정 가능하도록 호출 전에 권한 검사)
+export const updatePostSupabase = async (postId, updates) => {
+  if (!postId || typeof postId !== 'string' || !updates || typeof updates !== 'object') return { success: false };
+  const trimmed = postId.trim();
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trimmed);
+  if (!isUuid) return { success: false };
+  try {
+    const payload = {};
+    if (updates.content !== undefined) payload.content = updates.content;
+    if (updates.location !== undefined) payload.location = updates.location;
+    if (updates.detailed_location !== undefined) payload.detailed_location = updates.detailed_location;
+    if (updates.place_name !== undefined) payload.place_name = updates.place_name;
+    if (updates.region !== undefined) payload.region = updates.region;
+    if (Array.isArray(updates.tags)) payload.tags = updates.tags.map((t) => (typeof t === 'string' ? t.replace(/^#+/, '') : String(t || '')));
+    if (Object.keys(payload).length === 0) return { success: true };
+    const { data, error } = await supabase.from('posts').update(payload).eq('id', trimmed).select('*').single();
+    if (error) throw error;
+    return { success: true, post: data };
+  } catch (e) {
+    logger.warn('updatePostSupabase 예외:', e?.message);
+    return { success: false };
+  }
+};
+
 // Supabase posts 테이블에서 게시물 삭제 (프로필에서 사진 삭제 시 호출)
 export const deletePostSupabase = async (postId) => {
   if (!postId || typeof postId !== 'string') return { success: false, error: 'no_post_id' };
@@ -242,6 +266,25 @@ export const addCommentToPostSupabase = async (postId, commentPayload) => {
     return { success: true, comments: next };
   } catch (e) {
     logger.warn('addCommentToPostSupabase 예외:', e?.message);
+    return { success: false, comments: [] };
+  }
+};
+
+// Supabase 게시물 댓글 목록 일괄 갱신 (수정·삭제 후 호출)
+export const updateCommentsInPostSupabase = async (postId, commentsArray) => {
+  if (!postId || typeof postId !== 'string' || !Array.isArray(commentsArray)) return { success: false, comments: [] };
+  const trimmed = postId.trim();
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trimmed);
+  if (!isUuid) return { success: false, comments: [] };
+  try {
+    const { error } = await supabase
+      .from('posts')
+      .update({ comments: commentsArray })
+      .eq('id', trimmed);
+    if (error) throw error;
+    return { success: true, comments: commentsArray };
+  } catch (e) {
+    logger.warn('updateCommentsInPostSupabase 예외:', e?.message);
     return { success: false, comments: [] };
   }
 };

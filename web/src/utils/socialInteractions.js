@@ -185,11 +185,11 @@ export const addComment = (postId, comment, username = '익명', userId = null) 
 
   const newComment = {
     id: `comment-${Date.now()}`,
-    user: username,
+    user: { username, id: userId },
     userId: userId,
     content: comment,
     timestamp: new Date().toISOString(),
-    avatar: `https://i.pravatar.cc/150?img=${Math.floor(Math.random() * 70)}`
+    avatar: null
   };
 
   targetPosts[postIndex] = {
@@ -203,6 +203,32 @@ export const addComment = (postId, comment, username = '익명', userId = null) 
   window.dispatchEvent(new CustomEvent('postsUpdated', { detail: { postId, comments: targetPosts[postIndex].comments } }));
 
   return targetPosts[postIndex].comments || [];
+};
+
+// 댓글 삭제 (localStorage 게시물용)
+export const deleteCommentFromPost = (postId, commentId) => {
+  const posts = JSON.parse(localStorage.getItem('uploadedPosts') || '[]');
+  const idx = posts.findIndex((p) => p.id === postId);
+  if (idx === -1) return [];
+  const nextComments = (posts[idx].comments || []).filter((c) => c.id !== commentId);
+  posts[idx] = { ...posts[idx], comments: nextComments };
+  localStorage.setItem('uploadedPosts', JSON.stringify(posts));
+  window.dispatchEvent(new CustomEvent('postsUpdated', { detail: { postId, comments: nextComments } }));
+  return nextComments;
+};
+
+// 댓글 수정 (localStorage 게시물용)
+export const updateCommentInPost = (postId, commentId, newContent) => {
+  const posts = JSON.parse(localStorage.getItem('uploadedPosts') || '[]');
+  const idx = posts.findIndex((p) => p.id === postId);
+  if (idx === -1) return [];
+  const nextComments = (posts[idx].comments || []).map((c) =>
+    c.id === commentId ? { ...c, content: newContent } : c
+  );
+  posts[idx] = { ...posts[idx], comments: nextComments };
+  localStorage.setItem('uploadedPosts', JSON.stringify(posts));
+  window.dispatchEvent(new CustomEvent('postsUpdated', { detail: { postId, comments: nextComments } }));
+  return nextComments;
 };
 
 // 북마크 토글
