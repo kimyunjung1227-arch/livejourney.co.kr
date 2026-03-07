@@ -1021,11 +1021,11 @@ const MainScreen = () => {
                 ) : (
                 <div style={{ padding: '0 16px 20px', background: '#ffffff', minHeight: '100%' }}>
 
-                        {/* 실시간 급상승 핫플 — 한 화면에 보이도록 상단 여백 최소화 */}
+                        {/* 실시간 급상승 핫플 — 참고 디자인: 4:3 카드, 위치 뱃지 좌하단, 좋아요/댓글 우하단 */}
                         <div style={{ marginBottom: '0', paddingTop: '0', paddingBottom: '20px', background: '#ffffff' }}>
                             <div style={{ padding: '0 0 8px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#ffffff' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                    <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 600, color: '#374151' }}>실시간 핫플</h3>
+                                    <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 600, color: '#374151' }}>실시간 급상승 핫플 🔥</h3>
                                 </div>
                                 <button
                                     onClick={() => navigate('/crowded-place')}
@@ -1035,11 +1035,10 @@ const MainScreen = () => {
                                     <span className="material-symbols-outlined" style={{ fontSize: 16 }}>chevron_right</span>
                                 </button>
                             </div>
-                            {/* 가로 스크롤 슬라이더 */}
                             <div
                                 style={{
                                     display: 'flex',
-                                    gap: '7px',
+                                    gap: '10px',
                                     paddingBottom: '4px',
                                     background: '#ffffff',
                                     overflowX: 'auto',
@@ -1057,28 +1056,29 @@ const MainScreen = () => {
                                             ? '지금 ' + String(post.reasonTags[0]).replace(/#/g, '').replace(/_/g, ' ')
                                             : '';
                                     return (
-                                    <div key={post.id}
+                                    <div
+                                        key={post.id}
                                         onClick={withDragCheck(() => navigate(`/post/${post.id}`, { state: { post, allPosts: crowdedData } }))}
                                         style={{
                                             cursor: 'pointer',
                                             display: 'flex',
                                             flexDirection: 'column',
-                                            alignItems: 'stretch',
-                                            minWidth: '32%',
-                                            maxWidth: '32%',
+                                            minWidth: '42%',
+                                            maxWidth: '42%',
                                             flexShrink: 0,
-                                            overflow: 'visible'
+                                            overflow: 'hidden',
+                                            borderRadius: '16px',
+                                            background: '#fff',
+                                            boxShadow: '0 4px 12px rgba(0,0,0,0.06)',
+                                            border: '1px solid #f1f5f9'
                                         }}
                                     >
-                                        <div style={{ width: '100%', aspectRatio: '1', borderRadius: '12px', overflow: 'hidden', background: '#eee', position: 'relative', marginBottom: '4px' }}>
+                                        <div style={{ width: '100%', aspectRatio: '4/3', overflow: 'hidden', background: '#eee', position: 'relative' }}>
                                             {(Array.isArray(post.videos) && post.videos.length > 0) ? (
                                                 <video
                                                     ref={(el) => {
-                                                        if (el) {
-                                                            videoRefs.current.set(`crowded-${post.id}`, el);
-                                                        } else {
-                                                            videoRefs.current.delete(`crowded-${post.id}`);
-                                                        }
+                                                        if (el) videoRefs.current.set(`crowded-${post.id}`, el);
+                                                        else videoRefs.current.delete(`crowded-${post.id}`);
                                                     }}
                                                     data-video-id={`crowded-${post.id}`}
                                                     src={getDisplayImageUrl(post.videos[0])}
@@ -1086,41 +1086,40 @@ const MainScreen = () => {
                                                     muted
                                                     loop
                                                     playsInline
-                                                    style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', borderRadius: '12px' }}
+                                                    style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
                                                 />
                                             ) : post.thumbnailIsVideo && post.firstVideoUrl ? (
-                                                <video src={post.firstVideoUrl} muted playsInline preload="metadata" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', borderRadius: '12px' }} />
+                                                <video src={post.firstVideoUrl} muted playsInline preload="metadata" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                                             ) : (Array.isArray(post.images) && post.images.length > 0) || post.image || post.thumbnail ? (
-                                                <img src={getDisplayImageUrl(post.images?.[0] || post.image || post.thumbnail)} alt={post.location} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', borderRadius: '12px' }} />
+                                                <img src={getDisplayImageUrl(post.images?.[0] || post.image || post.thumbnail)} alt={post.location} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                                             ) : (
-                                                <div style={{ width: '100%', height: '100%', background: '#e5e7eb', borderRadius: '12px' }} />
+                                                <div style={{ width: '100%', height: '100%', background: '#e5e7eb' }} />
                                             )}
-                                            {/* 좋아요·댓글 — 이미지 우하단 반투명 pill (앱 디자인 통일) */}
-                                            <div style={{ position: 'absolute', bottom: '6px', right: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', background: 'rgba(15,23,42,0.6)', color: '#fff', padding: '3px 7px', borderRadius: '9999px', fontSize: '10px', fontWeight: 600 }}>
+                                            <div style={{ position: 'absolute', bottom: '8px', left: '8px', background: 'rgba(0,0,0,0.4)', color: '#fff', fontSize: '11px', padding: '4px 8px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '4px', maxWidth: '85%' }}>
+                                                <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>location_on</span>
+                                                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{post.location || '장소'}</span>
+                                            </div>
+                                            <div style={{ position: 'absolute', bottom: '8px', right: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '2px', background: 'rgba(15,23,42,0.6)', color: '#fff', padding: '3px 6px', borderRadius: '9999px', fontSize: '10px', fontWeight: 600 }}>
                                                     <span className="material-symbols-outlined" style={{ fontSize: '12px', fontVariationSettings: "'FILL' 1" }}>favorite</span>
                                                     {Number(post.likes ?? post.likeCount ?? 0) || 0}
                                                 </span>
-                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', background: 'rgba(15,23,42,0.6)', color: '#fff', padding: '3px 7px', borderRadius: '9999px', fontSize: '10px', fontWeight: 600 }}>
+                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '2px', background: 'rgba(15,23,42,0.6)', color: '#fff', padding: '3px 6px', borderRadius: '9999px', fontSize: '10px', fontWeight: 600 }}>
                                                     <span className="material-symbols-outlined" style={{ fontSize: '12px' }}>chat_bubble</span>
                                                     {Array.isArray(post.comments) ? post.comments.length : 0}
                                                 </span>
                                             </div>
                                         </div>
-                                        <div style={{ padding: '4px 8px 8px' }}>
-                                            {/* 지역/장소 정보 먼저 노출 */}
-                                            <div style={{ fontSize: '12px', fontWeight: 700, color: '#111827', letterSpacing: '-0.3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        <div style={{ padding: '10px 10px 12px' }}>
+                                            <div style={{ fontSize: '13px', fontWeight: 700, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                                 {post.location}
                                             </div>
-                                            {/* 그 아래에 상황 설명 */}
                                             {situationText && (
-                                                <p style={{ margin: '3px 0 0 0', fontSize: '11px', color: '#4b5563', lineHeight: 1.35, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', minHeight: '2.7em' }}>
+                                                <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#4b5563', lineHeight: 1.35, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
                                                     {situationText}
                                                 </p>
                                             )}
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px', flexWrap: 'wrap' }}>
-                                                <span style={{ fontSize: '10px', color: '#6b7280' }}>{post.time || post.captureLabel || ''}</span>
-                                            </div>
+                                            <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '4px' }}>{post.time || post.captureLabel || ''}</div>
                                         </div>
                                     </div>
                                     );
