@@ -169,7 +169,6 @@ const CrowdedPlaceScreen = () => {
     }, []);
 
     const filteredPosts = crowdedData.filter((post) => matchFilter(post, activeFilter));
-    const visiblePosts = filteredPosts.slice(0, 3); // 지금 실시간 핫플 TOP 3
 
     return (
         <div className="screen-layout bg-background-light dark:bg-background-dark min-h-screen flex flex-col">
@@ -190,10 +189,10 @@ const CrowdedPlaceScreen = () => {
 
             {/* 컨텐츠 */}
             <div ref={contentRef} className="screen-content flex-1 overflow-y-auto">
-                {/* 상단 타이틀 — 지금 실시간 핫플 TOP 3 */}
+                {/* 상단 타이틀 — 실시간 급상승 핫플 피드 */}
                 <section className="px-5 pt-4 pb-1">
                     <h2 className="text-xl font-bold leading-tight text-text-main dark:text-white">
-                        지금 실시간 핫플 TOP 3 🔥
+                        실시간 급상승 핫플 🔥
                     </h2>
                     <p className="text-text-sub dark:text-slate-400 text-xs mt-1">지금 가장 핫한 장소를 확인해보세요</p>
                 </section>
@@ -220,8 +219,8 @@ const CrowdedPlaceScreen = () => {
                     })}
                 </div>
 
-                {/* 피드 — 세로 리스트, 4:3 카드, 상위 3개만 노출 (TOP 3) */}
-                {visiblePosts.length === 0 ? (
+                {/* 피드 — 세로 리스트, 4:3 카드, 랭킹은 3위까지 표시하되 피드는 계속 노출 */}
+                {filteredPosts.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-16 px-6 text-center text-slate-400 dark:text-slate-500">
                         <span className="material-symbols-outlined text-5xl mb-3">local_fire_department</span>
                         <p className="text-sm mb-1">아직 실시간 핫플 게시물이 없어요</p>
@@ -229,7 +228,7 @@ const CrowdedPlaceScreen = () => {
                     </div>
                 ) : (
                     <div className="flex flex-col gap-3 px-4 pb-16">
-                        {visiblePosts.map((post) => {
+                        {filteredPosts.map((post) => {
                             const likeCount = Number(post.likes ?? post.likeCount ?? 0) || 0;
                             const commentCount = Array.isArray(post.comments) ? post.comments.length : 0;
                             const uploadCount = Math.min(99, commentCount + 1);

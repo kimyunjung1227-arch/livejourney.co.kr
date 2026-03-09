@@ -128,6 +128,7 @@ const MainScreen = () => {
         // 1) 기본은 최근 24시간 이내 게시물만 사용해 실시간성을 극대화
         // 2) 24시간 이내 게시물이 너무 적을 때만 최근 3일(72시간) 이내 게시물로 보완
         const recent24h = filterRecentPosts(allPosts, 2, 24);
+        let posts = [];
         if (recent24h.length >= 40) {
             // 실시간성이 충분히 확보되면 24시간 이내 게시물만 사용
             posts = recent24h;
@@ -141,7 +142,8 @@ const MainScreen = () => {
                     merged.push(p);
                 }
             });
-            posts = merged;
+            // 그래도 게시물이 너무 적으면, 전체 72시간 이내 게시물이라도 사용
+            posts = merged.length > 0 ? merged : recent72h;
         }
 
         // 촬영 시간 라벨 포맷터 (가볍게: "2/10 14:30")
