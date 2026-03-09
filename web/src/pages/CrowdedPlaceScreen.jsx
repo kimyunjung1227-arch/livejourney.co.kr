@@ -178,16 +178,12 @@ const CrowdedPlaceScreen = () => {
 
             {/* 컨텐츠 */}
             <div ref={contentRef} className="screen-content flex-1 overflow-y-auto">
-                {/* 상단 타이틀 — 이미지와 동일: 실시간 급상승 핫플 🔥, 지금 가장 핫한 장소를 확인해보세요 */}
-                <section className="px-5 pt-6 pb-2">
-                    <div className="flex items-center gap-2 mb-1">
-                        <span className="inline-flex h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]" />
-                        <span className="text-emerald-500 font-bold text-xs uppercase tracking-wider">Live Now</span>
-                    </div>
-                    <h2 className="text-2xl font-bold leading-tight text-text-main dark:text-white">
+                {/* 상단 타이틀 — LIVE NOW 배지는 제거, 타이틀 폰트는 한 단계 축소 */}
+                <section className="px-5 pt-4 pb-1">
+                    <h2 className="text-xl font-bold leading-tight text-text-main dark:text-white">
                         실시간 급상승 핫플 🔥
                     </h2>
-                    <p className="text-text-sub dark:text-slate-400 text-sm mt-1">지금 가장 핫한 장소를 확인해보세요</p>
+                    <p className="text-text-sub dark:text-slate-400 text-xs mt-1">지금 가장 핫한 장소를 확인해보세요</p>
                 </section>
 
                 {/* 필터 — 전체(선택 시 진한 배경), 카페/맛집/명소 + 아이콘 */}
@@ -220,7 +216,7 @@ const CrowdedPlaceScreen = () => {
                         <p className="text-xs text-slate-400 dark:text-slate-500">좋아요가 쌓이거나 최근 게시물이 생기면 이곳에 표시돼요.</p>
                     </div>
                 ) : (
-                    <div className="flex flex-col gap-6 px-5 pb-24">
+                    <div className="flex flex-col gap-3 px-4 pb-20">
                         {crowdedData.filter((post) => matchFilter(post, activeFilter)).map((post) => {
                             const likeCount = Number(post.likes ?? post.likeCount ?? 0) || 0;
                             const commentCount = Array.isArray(post.comments) ? post.comments.length : 0;
@@ -237,10 +233,10 @@ const CrowdedPlaceScreen = () => {
                                 <div
                                     key={post.id}
                                     onClick={() => navigate(`/post/${post.id}`, { state: { post, allPosts: crowdedData } })}
-                                    className="group flex flex-col bg-white dark:bg-slate-800 rounded-2xl shadow-md border border-slate-100 dark:border-slate-700 overflow-hidden cursor-pointer"
+                                    className="group flex flex-col bg-white dark:bg-slate-800 rounded-xl shadow-md border border-slate-100 dark:border-slate-700 overflow-hidden cursor-pointer"
                                 >
-                                    {/* 사진 영역: 사이즈 그대로 4:3, 랭크·위치 뱃지·사진 왼쪽 위치(가볍게)·좋아요/댓글 */}
-                                    <div className="relative w-full aspect-[4/3] bg-slate-200 overflow-hidden">
+                                {/* 사진 영역: 높이를 줄여 상위 3위까지 한 화면에 보이도록 압축 */}
+                                    <div className="relative w-full aspect-[4/2] bg-slate-200 overflow-hidden">
                                         {rank != null && rank <= 3 && (
                                             <div className="absolute top-3 left-3 z-10 w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center text-sm font-bold shadow-md">
                                                 {rank}
@@ -277,20 +273,20 @@ const CrowdedPlaceScreen = () => {
                                             </span>
                                         </div>
                                     </div>
-                                    <div className="p-4">
+                                    <div className="p-3">
                                         {impactLabel && (
                                             <p className="text-xs text-primary font-medium mb-1">{impactLabel}</p>
                                         )}
                                         <div className="flex justify-between items-start gap-2">
                                             <div className="min-w-0 flex-1">
-                                                <h3 className="text-lg font-bold text-text-main dark:text-white truncate">{title}</h3>
-                                                <p className="text-sm text-text-sub dark:text-slate-400 mt-0.5 line-clamp-2">{desc}</p>
+                                                <h3 className="text-base font-bold text-text-main dark:text-white truncate">{title}</h3>
+                                                <p className="text-xs text-text-sub dark:text-slate-400 mt-0.5 line-clamp-2">{desc}</p>
                                             </div>
                                             <button type="button" className="text-slate-400 hover:text-primary transition-colors p-1 flex-shrink-0" onClick={(e) => handleBookmark(e, post)} aria-label="저장">
                                                 <span className="material-symbols-outlined" style={isBookmarked ? { fontVariationSettings: "'FILL' 1" } : undefined}>bookmark</span>
                                             </button>
                                         </div>
-                                        <div className="mt-2 flex flex-col gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+                                        <div className="mt-1.5 flex flex-col gap-1 text-[11px] text-slate-500 dark:text-slate-400">
                                             <div className="flex items-center gap-1.5">
                                                 <span className="inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse flex-shrink-0" />
                                                 <span>현재 <strong className="text-text-main dark:text-slate-300">{viewingCount}명</strong>이 이 사진을 보고 있어요</span>
