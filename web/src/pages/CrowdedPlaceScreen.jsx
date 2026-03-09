@@ -48,6 +48,7 @@ const CrowdedPlaceScreen = () => {
     const [activeFilter, setActiveFilter] = useState('전체');
     const [refreshKey, setRefreshKey] = useState(0);
     const [bookmarkRefresh, setBookmarkRefresh] = useState(0);
+    const [feedbackIndex, setFeedbackIndex] = useState(0);
     const contentRef = useRef(null);
 
     const handleLike = (e, post) => {
@@ -159,6 +160,17 @@ const CrowdedPlaceScreen = () => {
         loadData();
     }, [refreshKey]);
 
+    // 하단 설명 문구를 하나로 합쳐 순차적으로 보여주기 위한 인덱스 (공통)
+    useEffect(() => {
+        const id = setInterval(() => {
+            setFeedbackIndex((prev) => (prev + 1) % 3);
+        }, 3000);
+        return () => clearInterval(id);
+    }, []);
+
+    const filteredPosts = crowdedData.filter((post) => matchFilter(post, activeFilter));
+    const visiblePosts = filteredPosts.slice(0, 3); // 지금 실시간 핫플 TOP 3
+
     return (
         <div className="screen-layout bg-background-light dark:bg-background-dark min-h-screen flex flex-col">
             {/* 헤더 */}
@@ -178,16 +190,16 @@ const CrowdedPlaceScreen = () => {
 
             {/* 컨텐츠 */}
             <div ref={contentRef} className="screen-content flex-1 overflow-y-auto">
-                {/* 상단 타이틀 — LIVE NOW 배지는 제거, 타이틀 폰트는 한 단계 축소 */}
+                {/* 상단 타이틀 — 지금 실시간 핫플 TOP 3 */}
                 <section className="px-5 pt-4 pb-1">
                     <h2 className="text-xl font-bold leading-tight text-text-main dark:text-white">
-                        실시간 급상승 핫플 🔥
+                        지금 실시간 핫플 TOP 3 🔥
                     </h2>
                     <p className="text-text-sub dark:text-slate-400 text-xs mt-1">지금 가장 핫한 장소를 확인해보세요</p>
                 </section>
 
-                {/* 필터 — 전체(선택 시 진한 배경), 카페/맛집/명소 + 아이콘 */}
-                <div className="flex gap-2 overflow-x-auto px-5 py-4 scrollbar-hide">
+                {/* 필터 — 칩 사이즈를 줄여 상단 영역 압축 */}
+                <div className="flex gap-1.5 overflow-x-auto px-5 py-3 scrollbar-hide">
                     {FILTERS.map((f) => {
                         const isActive = activeFilter === f.id;
                         return (
@@ -195,29 +207,29 @@ const CrowdedPlaceScreen = () => {
                                 key={f.id}
                                 type="button"
                                 onClick={() => setActiveFilter(f.id)}
-                                className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+                                className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
                                     isActive
                                         ? 'bg-primary text-white shadow-md shadow-primary/20'
                                         : 'bg-slate-100 dark:bg-slate-800 text-text-sub dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
                                 }`}
                             >
-                                {f.icon && <span className="material-symbols-outlined text-lg">{f.icon}</span>}
+                                {f.icon && <span className="material-symbols-outlined text-base">{f.icon}</span>}
                                 {f.label}
                             </button>
                         );
                     })}
                 </div>
 
-                {/* 피드 — 참고 HTML처럼 세로 리스트, 4:3 카드, 위치 뱃지 좌하단, 좋아요 우하단 */}
-                {crowdedData.filter((post) => matchFilter(post, activeFilter)).length === 0 ? (
+                {/* 피드 — 세로 리스트, 4:3 카드, 상위 3개만 노출 (TOP 3) */}
+                {visiblePosts.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-16 px-6 text-center text-slate-400 dark:text-slate-500">
                         <span className="material-symbols-outlined text-5xl mb-3">local_fire_department</span>
                         <p className="text-sm mb-1">아직 실시간 핫플 게시물이 없어요</p>
                         <p className="text-xs text-slate-400 dark:text-slate-500">좋아요가 쌓이거나 최근 게시물이 생기면 이곳에 표시돼요.</p>
                     </div>
                 ) : (
-                    <div className="flex flex-col gap-3 px-4 pb-20">
-                        {crowdedData.filter((post) => matchFilter(post, activeFilter)).map((post) => {
+                    <div className="flex flex-col gap-3 px-4 pb-16">
+                        {visiblePosts.map((post) => {
                             const likeCount = Number(post.likes ?? post.likeCount ?? 0) || 0;
                             const commentCount = Array.isArray(post.comments) ? post.comments.length : 0;
                             const uploadCount = Math.min(99, commentCount + 1);
@@ -233,10 +245,10 @@ const CrowdedPlaceScreen = () => {
                                 <div
                                     key={post.id}
                                     onClick={() => navigate(`/post/${post.id}`, { state: { post, allPosts: crowdedData } })}
-                                    className="group flex flex-col bg-white dark:bg-slate-800 rounded-xl shadow-md border border-slate-100 dark:border-slate-700 overflow-hidden cursor-pointer"
+                                    className="group flex flex-col bg-white dark:bg-slate-800 rounded-2xl shadow-md border border-slate-100 dark:border-slate-700 overflow-hidden cursor-pointer"
                                 >
-                                {/* 사진 영역: 높이를 줄여 상위 3위까지 한 화면에 보이도록 압축 */}
-                                    <div className="relative w-full aspect-[4/2] bg-slate-200 overflow-hidden">
+                                    {/* 사진 영역: 4:3 비율 유지 (메인과 동일 구조) */}
+                                    <div className="relative w-full aspect-[4/3] bg-slate-200 overflow-hidden">
                                         {rank != null && rank <= 3 && (
                                             <div className="absolute top-3 left-3 z-10 w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center text-sm font-bold shadow-md">
                                                 {rank}
@@ -273,7 +285,7 @@ const CrowdedPlaceScreen = () => {
                                             </span>
                                         </div>
                                     </div>
-                                    <div className="p-3">
+                                    <div className="p-3 pb-2">
                                         {impactLabel && (
                                             <p className="text-xs text-primary font-medium mb-1">{impactLabel}</p>
                                         )}
@@ -286,33 +298,36 @@ const CrowdedPlaceScreen = () => {
                                                 <span className="material-symbols-outlined" style={isBookmarked ? { fontVariationSettings: "'FILL' 1" } : undefined}>bookmark</span>
                                             </button>
                                         </div>
-                                        <div className="mt-1.5 flex flex-col gap-1 text-[11px] text-slate-500 dark:text-slate-400">
-                                            <div className="flex items-center gap-1.5">
+                                        {/* 하단 설명 시트: 한 줄 메시지로 통합, 순차적으로 문구 변경 */}
+                                        <div className="mt-1 flex items-center justify-between gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+                                            <div className="flex items-center gap-1.5 min-w-0">
                                                 <span className="inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse flex-shrink-0" />
-                                                <span>현재 <strong className="text-text-main dark:text-slate-300">{viewingCount}명</strong>이 이 사진을 보고 있어요</span>
+                                                <span className="truncate">
+                                                    {feedbackIndex === 0 && (
+                                                        <>현재 <strong className="text-text-main dark:text-slate-300">{viewingCount}명</strong>이 이 사진을 보고 있어요</>
+                                                    )}
+                                                    {feedbackIndex === 1 && (
+                                                        <>지금 <strong className="text-text-main dark:text-slate-300">{uploadCount}명</strong>이 이 장소를 올렸어요</>
+                                                    )}
+                                                    {feedbackIndex === 2 && (
+                                                        <>좋아요 <strong className="text-text-main dark:text-slate-300">{likeCount}개</strong>가 모인 실시간 정보예요</>
+                                                    )}
+                                                </span>
                                             </div>
-                                            <div className="flex items-center justify-between gap-2">
-                                                <div className="flex items-center gap-2 min-w-0">
-                                                    <div className="flex -space-x-2">
-                                                        {avatars.length > 0 ? (
-                                                            avatars.map((url, i) => (
-                                                                <div key={i} className="w-6 h-6 rounded-full border-2 border-white dark:border-slate-800 bg-slate-200 bg-cover bg-center flex-shrink-0" style={{ backgroundImage: `url(${url})` }} />
-                                                            ))
-                                                        ) : (
-                                                            [0, 1, 2].map((i) => (
-                                                                <div key={i} className="w-6 h-6 rounded-full border-2 border-white dark:border-slate-800 bg-primary/20 flex items-center justify-center text-primary text-[9px] font-bold flex-shrink-0">
-                                                                    {String(post.location || '?').charAt(0)}
-                                                                </div>
-                                                            ))
-                                                        )}
-                                                    </div>
-                                                    <span className="text-text-sub dark:text-slate-400 truncate">지금 {uploadCount}명이 사진을 올렸어요</span>
-                                                </div>
-                                                <button type="button" className="flex items-center gap-1 text-slate-500 dark:text-slate-400 hover:text-primary transition-colors flex-shrink-0" onClick={(e) => handleLike(e, post)} aria-label="좋아요">
-                                                    <span className="material-symbols-outlined text-base" style={isPostLiked(post.id) ? { fontVariationSettings: "'FILL' 1" } : undefined}>favorite</span>
-                                                    <span className="text-sm font-semibold">{likeCount}</span>
-                                                </button>
-                                            </div>
+                                            <button
+                                                type="button"
+                                                className="flex items-center gap-1 text-slate-500 dark:text-slate-400 hover:text-primary transition-colors flex-shrink-0"
+                                                onClick={(e) => handleLike(e, post)}
+                                                aria-label="좋아요"
+                                            >
+                                                <span
+                                                    className="material-symbols-outlined text-base"
+                                                    style={isPostLiked(post.id) ? { fontVariationSettings: "'FILL' 1" } : undefined}
+                                                >
+                                                    favorite
+                                                </span>
+                                                <span className="text-sm font-semibold">{likeCount}</span>
+                                            </button>
                                         </div>
                                     </div>
                                 </div>
