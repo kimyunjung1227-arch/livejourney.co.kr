@@ -59,6 +59,13 @@ export const toggleLike = (postId) => {
   const updatedPost = updatedPosts.find(p => p.id === postId);
   const newLikeCount = updatedPost?.likes || 0;
 
+  // 좋아요 수 변경 이벤트 전파 (메인/실시간 피드 등에서 동기화)
+  try {
+    window.dispatchEvent(new CustomEvent('postLikeUpdated', { detail: { postId, likesCount: newLikeCount } }));
+  } catch {
+    // window가 없는 환경에서는 무시
+  }
+
   // 좋아요가 증가했고, 내 게시물인 경우 알림 발송 및 뱃지 체크
   if (!isLiked && isMyPost && newLikeCount > oldLikes) {
     // 내 게시물이 도움되었습니다 알림 (앱 내부 + 브라우저 푸시)
