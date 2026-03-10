@@ -931,7 +931,7 @@ const MainScreen = () => {
                                                 {post.location || '어딘가의 지금'}
                                             </div>
                                             <span style={{ fontSize: '11px', color: '#6b7280', flexShrink: 0 }}>
-                                                {post.captureLabel || post.time}
+                                                {post.time}
                                             </span>
                                         </div>
                                         {(post.content || post.note) && (
