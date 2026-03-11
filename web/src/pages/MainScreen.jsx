@@ -1093,9 +1093,9 @@ const MainScreen = () => {
                                             flexShrink: 0,
                                             overflow: 'hidden',
                                             borderRadius: '16px',
-                                            background: '#fff',
-                                            boxShadow: '0 4px 12px rgba(0,0,0,0.06)',
-                                            border: '1px solid #f1f5f9'
+                                            background: '#ffffff',
+                                            boxShadow: '0 4px 12px rgba(15,23,42,0.06)',
+                                            border: '1px solid #e5e7eb'
                                         }}
                                     >
                                         <div style={{ width: '100%', aspectRatio: '4/3', overflow: 'hidden', background: '#eee', position: 'relative' }}>
@@ -1126,7 +1126,7 @@ const MainScreen = () => {
                                                 {post.location}
                                             </div>
                                             {situationText && (
-                                                <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#4b5563', lineHeight: 1.35, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                                                <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#4b5563', lineHeight: 1.35, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                                     {situationText}
                                                 </p>
                                             )}
