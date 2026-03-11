@@ -1071,6 +1071,15 @@ const MainScreen = () => {
                                         : (post.reasonTags && post.reasonTags[0])
                                             ? '지금 ' + String(post.reasonTags[0]).replace(/#/g, '').replace(/_/g, ' ')
                                             : '';
+
+                                    // 핫플 해시태그 (최대 3개) - reasonTags 우선, 없으면 분위기/열기/뷰 중심 기본 태그
+                                    const rawTags = Array.isArray(post.reasonTags) && post.reasonTags.length > 0
+                                        ? post.reasonTags
+                                        : ['분위기 깡패', '뷰맛집', '열기 가득', '줄서있는 곳'];
+                                    const hotTags = rawTags
+                                        .map((t) => String(t).replace(/#/g, '').replace(/_/g, ' ').trim())
+                                        .filter(Boolean)
+                                        .slice(0, 3);
                                     return (
                                     <div
                                         key={post.id}
@@ -1120,6 +1129,27 @@ const MainScreen = () => {
                                                 <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#4b5563', lineHeight: 1.35, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
                                                     {situationText}
                                                 </p>
+                                            )}
+                                            {hotTags.length > 0 && (
+                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '6px' }}>
+                                                    {hotTags.map((tag, i) => (
+                                                        <span
+                                                            key={`${post.id}-tag-${i}`}
+                                                            style={{
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                padding: '3px 7px',
+                                                                borderRadius: '9999px',
+                                                                background: '#f1f5f9',
+                                                                color: '#0f172a',
+                                                                fontSize: '11px',
+                                                                fontWeight: 600,
+                                                            }}
+                                                        >
+                                                            #{tag}
+                                                        </span>
+                                                    ))}
+                                                </div>
                                             )}
                                             <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '4px' }}>{post.time || post.captureLabel || ''}</div>
                                         </div>
@@ -1186,11 +1216,16 @@ const MainScreen = () => {
                             </div>
                             <div
                                 style={{
-                                    display: 'grid',
-                                    gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                                    display: 'flex',
                                     gap: '10px',
-                                    padding: '0 0 16px 0'
+                                    padding: '0 0 16px 0',
+                                    overflowX: 'auto',
+                                    scrollbarWidth: 'none',
+                                    WebkitOverflowScrolling: 'touch',
+                                    cursor: 'grab'
                                 }}
+                                className="hide-scrollbar"
+                                onMouseDown={handleDragStart}
                             >
                                 {recommendedData.map((item, idx) => {
                                     const regionPosts = allPostsForRecommend.filter(p =>
@@ -1209,7 +1244,15 @@ const MainScreen = () => {
                                         <div
                                             key={idx}
                                             onClick={withDragCheck(() => navigate(`/region/${item.regionName}`))}
-                                            style={{ cursor: 'pointer', overflow: 'hidden', borderRadius: '14px', background: '#f9fafb', boxShadow: '0 2px 8px rgba(15,23,42,0.06)' }}
+                                            style={{
+                                                minWidth: '74%',
+                                                width: '74%',
+                                                cursor: 'pointer',
+                                                overflow: 'hidden',
+                                                borderRadius: '14px',
+                                                background: '#f9fafb',
+                                                boxShadow: '0 2px 8px rgba(15,23,42,0.06)'
+                                            }}
                                         >
                                             <div style={{ width: '100%', height: '160px', overflow: 'hidden', borderTopLeftRadius: '14px', borderTopRightRadius: '14px', background: '#e5e7eb' }}>
                                                 <img

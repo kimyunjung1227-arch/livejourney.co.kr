@@ -57,8 +57,9 @@ export const sendBrowserNotification = (title, options = {}) => {
   }
 
   const defaultOptions = {
-    icon: '/favicon.svg',
-    badge: '/favicon.svg',
+    // 아이콘/배지 제거 → 브라우저 기본 스타일만 사용
+    icon: undefined,
+    badge: undefined,
     tag: 'livejourney-notification',
     requireInteraction: false,
     ...options
@@ -107,8 +108,6 @@ export const notifyLikeMilestone = async (postId, newLikeCount, postLocation) =>
       `🎉 ${milestone}명 달성!`,
       {
         body: `"${postLocation}" 사진이 ${milestone}명에게 도움이 되었습니다!`,
-        icon: '/favicon.svg',
-        badge: '/favicon.svg',
         tag: `like-milestone-${postId}-${milestone}`,
         link: `/post/${postId}`
       }
@@ -133,8 +132,6 @@ export const notifyTotalLikesMilestone = async (totalLikes, previousTotal) => {
       `🌟 대단해요! ${milestone.toLocaleString()}명 달성!`,
       {
         body: `현재 내 사진이 ${milestone.toLocaleString()}명에게 도움이 되었습니다!`,
-        icon: '/favicon.svg',
-        badge: '/favicon.svg',
         tag: `total-likes-milestone-${milestone}`,
         link: '/profile'
       }
@@ -159,8 +156,6 @@ export const notifyNewLike = async (postId, postLocation, likeCount) => {
     '💚 내 게시물이 도움되었습니다!',
     {
       body: `"${postLocation}" 사진이 ${likeCount}명에게 도움이 되었습니다!`,
-      icon: '/favicon.svg',
-      badge: '/favicon.svg',
       tag: `new-like-${postId}`,
       link: `/post/${postId}`
     }
@@ -176,8 +171,6 @@ export const notifyPostHelped = async (postId, postLocation, likeCount) => {
       '💚 내 게시물이 도움되었습니다!',
       {
         body: `"${postLocation}" 사진이 ${likeCount}명에게 도움이 되었습니다!`,
-        icon: '/favicon.svg',
-        badge: '/favicon.svg',
         tag: `post-helped-${postId}`,
         link: `/post/${postId}`
       }
