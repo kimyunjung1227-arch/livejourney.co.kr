@@ -15,6 +15,7 @@ import { fetchPostsSupabase } from '../api/postsSupabase';
 import { getDisplayImageUrl } from '../api/upload';
 import { getPostAccuracyCount } from '../utils/socialInteractions';
 import { getWeatherByRegion } from '../api/weather';
+import { MAGAZINE_TOPICS } from '../utils/magazinesConfig';
 
 const MainScreen = () => {
     const navigate = useNavigate();
@@ -1214,7 +1215,7 @@ const MainScreen = () => {
                                 })}
                             </div>
                         </div>
-                        {/* 여행 매거진 (추천 여행지 하단) */}
+                        {/* 여행 매거진 (추천 여행지 하단) - 주제형 큐레이션 */}
                         <div style={{ marginBottom: '24px', background: '#ffffff' }}>
                             <div style={{ padding: '0 0 10px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: '#374151' }}>여행 매거진</h3>
@@ -1227,73 +1228,43 @@ const MainScreen = () => {
                                     <span className="material-symbols-outlined" style={{ fontSize: 16 }}>chevron_right</span>
                                 </button>
                             </div>
-                            {magazines.length === 0 ? (
-                                <div style={{ padding: '16px 0 4px 0', color: '#94a3b8', fontSize: '13px' }}>
-                                    <p style={{ margin: 0 }}>준비 중인 여행 매거진입니다. 곧 업데이트될 예정이에요.</p>
-                                </div>
-                            ) : (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingBottom: 4 }}>
-                                    {magazines.map((mag) => {
-                                        const createdDate = mag.createdAt
-                                            ? new Date(mag.createdAt).toLocaleDateString('ko-KR', {
-                                                month: 'short',
-                                                day: 'numeric',
-                                            })
-                                            : null;
-                                        return (
-                                            <button
-                                                key={mag.id}
-                                                type="button"
-                                                onClick={() => navigate(`/magazine/${mag.id}`, { state: { magazine: mag } })}
-                                                style={{
-                                                    width: '100%',
-                                                    display: 'flex',
-                                                    alignItems: 'stretch',
-                                                    borderRadius: 16,
-                                                    border: '1px solid #e5e7eb',
-                                                    background: '#ffffff',
-                                                    padding: 8,
-                                                    cursor: 'pointer',
-                                                    boxShadow: '0 2px 6px rgba(15,23,42,0.03)',
-                                                }}
-                                            >
-                                                <div style={{ width: 64, height: 64, borderRadius: 12, overflow: 'hidden', background: '#e5e7eb', flexShrink: 0 }}>
-                                                    {mag.coverImage ? (
-                                                        <img
-                                                            src={mag.coverImage}
-                                                            alt={mag.title}
-                                                            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                                                        />
-                                                    ) : (
-                                                        <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24 }}>
-                                                            📚
-                                                        </div>
-                                                    )}
-                                                </div>
-                                                <div style={{ flex: 1, minWidth: 0, paddingLeft: 10, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                                                    <div>
-                                                        <p style={{ margin: 0, fontSize: 11, fontWeight: 600, color: '#0ea5e9' }}>
-                                                            {mag.regionName ? `${mag.regionName} 여행` : '여행 매거진'}
-                                                        </p>
-                                                        <p style={{ margin: '2px 0 0 0', fontSize: 14, fontWeight: 700, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                            {mag.title}
-                                                        </p>
-                                                        {mag.summary && (
-                                                            <p style={{ margin: '2px 0 0 0', fontSize: 12, color: '#6b7280', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                                {mag.summary}
-                                                            </p>
-                                                        )}
-                                                    </div>
-                                                    <div style={{ marginTop: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11, color: '#9ca3af' }}>
-                                                        <span>{mag.author || '나의 기록'}</span>
-                                                        {createdDate && <span>{createdDate}</span>}
-                                                    </div>
-                                                </div>
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            )}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingBottom: 4 }}>
+                                {MAGAZINE_TOPICS.map((topic) => (
+                                    <button
+                                        key={topic.id}
+                                        type="button"
+                                        onClick={() => navigate(`/magazine/${topic.id}`)}
+                                        style={{
+                                            width: '100%',
+                                            display: 'flex',
+                                            alignItems: 'stretch',
+                                            borderRadius: 16,
+                                            border: '1px solid #e5e7eb',
+                                            background: '#ffffff',
+                                            padding: 10,
+                                            cursor: 'pointer',
+                                            boxShadow: '0 2px 6px rgba(15,23,42,0.03)',
+                                        }}
+                                    >
+                                        <div style={{ width: 56, height: 56, borderRadius: 999, overflow: 'hidden', background: '#eef2ff', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26 }}>
+                                            {topic.emoji || '📚'}
+                                        </div>
+                                        <div style={{ flex: 1, minWidth: 0, paddingLeft: 10, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                                            <p style={{ margin: 0, fontSize: 11, fontWeight: 600, color: '#4f46e5' }}>
+                                                테마 매거진
+                                            </p>
+                                            <p style={{ margin: '2px 0 0 0', fontSize: 14, fontWeight: 700, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                {topic.title}
+                                            </p>
+                                            {topic.description && (
+                                                <p style={{ margin: '2px 0 0 0', fontSize: 12, color: '#6b7280', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                    {topic.description}
+                                                </p>
+                                            )}
+                                        </div>
+                                    </button>
+                                ))}
+                            </div>
                         </div>
                     </div>
                 )}
