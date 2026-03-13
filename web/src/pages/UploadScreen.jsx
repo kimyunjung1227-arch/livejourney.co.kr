@@ -177,7 +177,8 @@ const UploadScreen = () => {
 
             if (roadAddress) {
               const parts = roadAddress.address_name.split(' ');
-              locationName = parts.slice(0, 3).join(' ')
+              // 시까지만 노출되도록, 첫 번째(도/광역시)는 제거하고 다음 2개만 사용
+              locationName = parts.slice(1, 3).join(' ')
                 .replace('특별시', '')
                 .replace('광역시', '')
                 .replace('특별자치시', '')
@@ -186,7 +187,7 @@ const UploadScreen = () => {
               detailedAddress = roadAddress.address_name;
             } else {
               const parts = address.address_name.split(' ');
-              locationName = parts.slice(0, 3).join(' ')
+              locationName = parts.slice(1, 3).join(' ')
                 .replace('특별시', '')
                 .replace('광역시', '')
                 .replace('특별자치시', '')

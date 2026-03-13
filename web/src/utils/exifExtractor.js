@@ -200,7 +200,8 @@ export const convertGpsToAddress = async (lat, lng) => {
           
           if (roadAddress) {
             const parts = roadAddress.address_name.split(' ');
-            locationName = parts.slice(0, 3).join(' ')
+            // 업로드 화면과 동일하게, 도/광역시는 빼고 시·구/동까지만 노출
+            locationName = parts.slice(1, 3).join(' ')
               .replace('특별시', '')
               .replace('광역시', '')
               .replace('특별자치시', '')
@@ -208,7 +209,7 @@ export const convertGpsToAddress = async (lat, lng) => {
               .trim();
           } else if (address) {
             const parts = address.address_name.split(' ');
-            locationName = parts.slice(0, 3).join(' ')
+            locationName = parts.slice(1, 3).join(' ')
               .replace('특별시', '')
               .replace('광역시', '')
               .replace('특별자치시', '')
