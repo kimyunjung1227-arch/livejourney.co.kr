@@ -258,6 +258,23 @@ const RegionDetailScreen = () => {
     };
   }, [loadRegionData, fetchWeatherData, region.name]);
 
+  // 좋아요 변경 이벤트 수신해서 지역 상세 화면에서도 즉시 반영
+  useEffect(() => {
+    const onPostLikeUpdated = (e) => {
+      const { postId, likesCount } = e.detail || {};
+      if (!postId || typeof likesCount !== 'number') return;
+      const id = String(postId);
+      setAllRegionPosts((prev) =>
+        prev.map((p) => (p && String(p.id) === id ? { ...p, likes: likesCount } : p))
+      );
+      setRealtimePhotos((prev) =>
+        prev.map((p) => (p && String(p.id) === id ? { ...p, likes: likesCount } : p))
+      );
+    };
+    window.addEventListener('postLikeUpdated', onPostLikeUpdated);
+    return () => window.removeEventListener('postLikeUpdated', onPostLikeUpdated);
+  }, []);
+
   return (
     <div className="screen-layout bg-white dark:bg-background-dark relative h-screen overflow-hidden">
       <div className="screen-content relative bg-white dark:bg-background-dark">

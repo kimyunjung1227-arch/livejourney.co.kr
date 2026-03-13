@@ -177,29 +177,10 @@ const generateAITagsViaBackend = async (imageFile, location = '', exifData = nul
  * 이미지 파일 → AI 태그 생성 (Supabase Edge Function 우선, 실패 시 백엔드 → null이면 로컬 분석)
  */
 export const generateAITags = async (imageFile, location = '', exifData = null) => {
-  try {
-    logger.log('📤 AI 태그 생성 시도 (Supabase Edge Function 우선)');
-    logger.log('  이미지:', imageFile?.name, imageFile?.size, 'bytes');
-    logger.log('  위치:', location);
-
-    const supabaseResult = await generateAITagsViaSupabase(imageFile, location, exifData);
-    if (supabaseResult) return supabaseResult;
-
-    try {
-      const backendResult = await generateAITagsViaBackend(imageFile, location, exifData);
-      if (backendResult) return backendResult;
-    } catch (_) {
-      logger.warn('⚠️ AI 태그 API 사용 불가(백엔드 미연결) → 로컬 태그 사용');
-    }
-
-    return null;
-  } catch (error) {
-    const isNetworkError = error?.code === 'ERR_NETWORK' || error?.message === 'Network Error';
-    if (isNetworkError) {
-      logger.warn('⚠️ AI 태그 API 사용 불가 → 로컬 태그 사용');
-    } else {
-      logger.warn('❌ AI 태그 생성 실패:', error?.message);
-    }
-    return null;
-  }
+  // 현재 환경에서는 Supabase Edge Function / 백엔드 API 대신
+  // 클라이언트 측 로컬 분석(색상·위치·노트 기반)을 기본으로 사용합니다.
+  // → 네트워크 502 오류 없이 항상 태그가 생성되도록 하기 위해,
+  //    여기서는 null을 반환하여 aiImageAnalyzer의 로컬 분석으로 폴백시킵니다.
+  logger.log('🤖 원격 AI 태그 호출 생략 → 로컬 이미지 분석 사용');
+  return null;
 };
