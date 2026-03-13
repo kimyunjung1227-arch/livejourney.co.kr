@@ -14,7 +14,7 @@ import { createPostSupabase, getMergedMyPostsForStats } from '../api/postsSupaba
 import { getCurrentTimestamp, getTimeAgo } from '../utils/timeUtils';
 import { getBadgeCongratulationMessage, getBadgeDifficultyEffects } from '../utils/badgeMessages';
 import { logger } from '../utils/logger';
-import { extractExifData, convertGpsToAddress } from '../utils/exifExtractor';
+import { extractExifData, convertGpsToAddress, formatExifDate } from '../utils/exifExtractor';
 import { useHorizontalDragScroll } from '../hooks/useHorizontalDragScroll';
 
 const UploadScreen = () => {
@@ -408,25 +408,49 @@ const UploadScreen = () => {
 
     const MAX_SIZE = 50 * 1024 * 1024;
     const MAX_VIDEO_SIZE = 100 * 1024 * 1024; // 동영상은 100MB까지
+    const MAX_DIFF_MS = 48 * 60 * 60 * 1000; // 48시간
 
     const imageFiles = [];
     const videoFiles = [];
+    const rejectedOldImages = [];
 
-    files.forEach(file => {
+    for (const file of files) {
       const isVideo = file.type.startsWith('video/');
       const maxSize = isVideo ? MAX_VIDEO_SIZE : MAX_SIZE;
 
       if (file.size > maxSize) {
         alert(`${file.name}은(는) ${isVideo ? '100MB' : '50MB'}를 초과합니다`);
-        return;
+        continue;
       }
 
       if (isVideo) {
         videoFiles.push(file);
       } else {
+        try {
+          const exif = await extractExifData(file);
+          if (exif?.photoTimestamp) {
+            const now = Date.now();
+            const diff = now - exif.photoTimestamp;
+            if (diff > MAX_DIFF_MS) {
+              rejectedOldImages.push(file.name);
+              continue;
+            }
+          }
+        } catch (error) {
+          logger.warn('EXIF 검사 중 오류 (무시):', error);
+        }
         imageFiles.push(file);
       }
-    });
+    }
+
+    if (rejectedOldImages.length > 0 && imageFiles.length === 0 && videoFiles.length === 0) {
+      alert(`48시간 이내에 촬영한 사진만 업로드할 수 있어요.\n\n제외된 파일: ${rejectedOldImages.join(', ')}`);
+      return;
+    }
+
+    if (rejectedOldImages.length > 0 && imageFiles.length > 0) {
+      alert(`48시간이 지난 사진은 업로드에서 제외했어요.\n\n제외된 파일: ${rejectedOldImages.join(', ')}`);
+    }
 
     const imageUrls = imageFiles.map(file => URL.createObjectURL(file));
     const videoUrls = videoFiles.map(file => URL.createObjectURL(file));
@@ -1314,13 +1338,41 @@ const UploadScreen = () => {
                 </button>
               ) : (
                 <div className="space-y-3">
-                  {/* 개수 요약 */}
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-700 dark:text-gray-300 px-1">
-                    {formData.images.length > 0 && (
-                      <span>사진 {formData.images.length}장</span>
-                    )}
-                    {formData.videos.length > 0 && (
-                      <span>동영상 {formData.videos.length}개</span>
+                  {/* 개수 요약 + 촬영 시간 */}
+                  <div className="flex flex-col gap-1 px-1 text-sm text-gray-700 dark:text-gray-300">
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                      {formData.images.length > 0 && (
+                        <span>사진 {formData.images.length}장</span>
+                      )}
+                      {formData.videos.length > 0 && (
+                        <span>동영상 {formData.videos.length}개</span>
+                      )}
+                    </div>
+                    {formData.photoDate && (
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        {(() => {
+                          const formatted = formatExifDate(formData.photoDate);
+                          const dateObj = new Date(formData.photoDate);
+                          const timeText = isNaN(dateObj.getTime())
+                            ? ''
+                            : dateObj.toLocaleString('ko-KR', {
+                                month: '2-digit',
+                                day: '2-digit',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              });
+                          return (
+                            <>
+                              <span className="mr-1 text-[11px] font-medium text-teal-600">
+                                EXIF 기준 촬영 시간
+                              </span>
+                              <span>
+                                {formatted ? `${formatted} · ${timeText}` : timeText}
+                              </span>
+                            </>
+                          );
+                        })()}
+                      </div>
                     )}
                   </div>
 

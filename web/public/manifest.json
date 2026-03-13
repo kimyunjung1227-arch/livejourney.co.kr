@@ -9,15 +9,10 @@
   "orientation": "portrait",
   "icons": [
     {
-      "src": "logo.svg",
-      "sizes": "any",
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1 1'/>",
+      "sizes": "1x1",
       "type": "image/svg+xml",
       "purpose": "any maskable"
-    },
-    {
-      "src": "favicon.svg",
-      "sizes": "512x512",
-      "type": "image/svg+xml"
     }
   ]
 }
