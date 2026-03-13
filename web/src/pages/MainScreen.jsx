@@ -27,6 +27,7 @@ const MainScreen = () => {
     const [recommendedData, setRecommendedData] = useState([]);
     const [weatherByRegion, setWeatherByRegion] = useState({});
     const [allPostsForRecommend, setAllPostsForRecommend] = useState([]);
+    const [magazines, setMagazines] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
@@ -394,6 +395,25 @@ const MainScreen = () => {
         setInterestPlaces(places);
     }, []);
 
+    // 로컬에 저장된 여행 매거진 불러오기 (최신 3개)
+    useEffect(() => {
+        try {
+            const raw = localStorage.getItem('magazines');
+            if (!raw) {
+                setMagazines([]);
+                return;
+            }
+            const list = JSON.parse(raw);
+            if (!Array.isArray(list)) {
+                setMagazines([]);
+                return;
+            }
+            setMagazines(list.slice(0, 3));
+        } catch {
+            setMagazines([]);
+        }
+    }, []);
+
     const filteredInterestPosts = useMemo(() => {
         if (!selectedInterest) return [];
         const allPosts = [...realtimeData, ...crowdedData, ...recommendedData];
@@ -624,83 +644,7 @@ const MainScreen = () => {
                     </button>
                 </div>
 
-                {/* 상단 배너 - 여행 매거진 진입 버튼 포함 */}
-                {(() => {
-                    const BANNER_SLIDES = [
-                        { type: 'hotplace', title: '실시간 핫플 보기', subtitle: '지금 붐비는 스팟을 한눈에', icon: '🌏', bg: '#26C6DA', path: '/realtime-feed' },
-                        { type: 'magazine', title: '여행 매거진', subtitle: '여행 동선·팁 모아보기', icon: '📚', bg: '#059669', path: '/magazine' },
-                    ];
-                    const BANNER_H = 72;
-                    return (
-                        <div style={{ padding: '8px 16px 4px', background: '#ffffff' }}>
-                            <div
-                                style={{
-                                    width: '100%',
-                                    height: BANNER_H,
-                                    borderRadius: 10,
-                                    overflow: 'hidden',
-                                    position: 'relative',
-                                    boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-                                }}
-                            >
-                                <div
-                                    style={{
-                                        width: '100%',
-                                        height: '100%',
-                                        overflowX: 'auto',
-                                        overflowY: 'hidden',
-                                        scrollbarWidth: 'none',
-                                        cursor: 'grab',
-                                        scrollSnapType: 'x mandatory',
-                                        scrollBehavior: 'smooth',
-                                        WebkitOverflowScrolling: 'touch',
-                                        display: 'flex',
-                                    }}
-                                    className="hide-scrollbar"
-                                    onMouseDown={handleDragStart}
-                                >
-                                    {BANNER_SLIDES.map((banner) => (
-                                        <button
-                                            key={banner.type}
-                                            type="button"
-                                            onClick={withDragCheck(() => navigate(banner.path))}
-                                            style={{
-                                                flex: '0 0 100%',
-                                                width: '100%',
-                                                minWidth: '100%',
-                                                height: BANNER_H,
-                                                boxSizing: 'border-box',
-                                                margin: 0,
-                                                borderRadius: 0,
-                                                border: 'none',
-                                                background: banner.bg,
-                                                padding: '0 16px',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'space-between',
-                                                gap: 12,
-                                                cursor: 'pointer',
-                                                scrollSnapAlign: 'start',
-                                                scrollSnapStop: 'always',
-                                            }}
-                                        >
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                                                <div style={{ width: 44, height: 44, borderRadius: 8, background: 'rgba(255,255,255,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>
-                                                    {banner.icon}
-                                                </div>
-                                                <div style={{ textAlign: 'left' }}>
-                                                    <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', marginBottom: 2 }}>{banner.title}</div>
-                                                    <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.9)' }}>{banner.subtitle}</div>
-                                                </div>
-                                            </div>
-                                            <span className="material-symbols-outlined" style={{ fontSize: 20, color: '#fff' }}>chevron_right</span>
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                        </div>
-                    );
-                })()}
+                {/* 상단 배너는 현재 사용하지 않음 */}
 
                 {/* 관심 지역/장소 — 라벨 없이 원형 목록만 */}
                 <div style={{ padding: '4px 16px 8px', background: '#ffffff' }}>
@@ -1269,6 +1213,95 @@ const MainScreen = () => {
                                     );
                                 })}
                             </div>
+                        </div>
+                        {/* 여행 매거진 (추천 여행지 하단) */}
+                        <div style={{ marginBottom: '24px', background: '#ffffff' }}>
+                            <div style={{ padding: '0 0 10px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: '#374151' }}>여행 매거진</h3>
+                                <button
+                                    type="button"
+                                    onClick={() => navigate('/magazine')}
+                                    className="border-none bg-transparent text-primary hover:text-primary-dark dark:hover:text-primary-soft text-sm font-semibold cursor-pointer py-1.5 px-2.5 min-h-[36px] flex items-center gap-1"
+                                >
+                                    <span>더보기</span>
+                                    <span className="material-symbols-outlined" style={{ fontSize: 16 }}>chevron_right</span>
+                                </button>
+                            </div>
+                            {magazines.length === 0 ? (
+                                <div style={{ padding: '16px 0 4px 0', color: '#94a3b8', fontSize: '13px' }}>
+                                    <p style={{ margin: 0 }}>아직 작성된 매거진이 없어요.</p>
+                                    <button
+                                        type="button"
+                                        onClick={() => navigate('/magazine/write')}
+                                        className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-[12px] font-semibold text-white shadow-sm hover:bg-primary-dark"
+                                    >
+                                        <span className="material-symbols-outlined" style={{ fontSize: 16 }}>edit</span>
+                                        <span>첫 매거진 쓰기</span>
+                                    </button>
+                                </div>
+                            ) : (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingBottom: 4 }}>
+                                    {magazines.map((mag) => {
+                                        const createdDate = mag.createdAt
+                                            ? new Date(mag.createdAt).toLocaleDateString('ko-KR', {
+                                                month: 'short',
+                                                day: 'numeric',
+                                            })
+                                            : null;
+                                        return (
+                                            <button
+                                                key={mag.id}
+                                                type="button"
+                                                onClick={() => navigate(`/magazine/${mag.id}`, { state: { magazine: mag } })}
+                                                style={{
+                                                    width: '100%',
+                                                    display: 'flex',
+                                                    alignItems: 'stretch',
+                                                    borderRadius: 16,
+                                                    border: '1px solid #e5e7eb',
+                                                    background: '#ffffff',
+                                                    padding: 8,
+                                                    cursor: 'pointer',
+                                                    boxShadow: '0 2px 6px rgba(15,23,42,0.03)',
+                                                }}
+                                            >
+                                                <div style={{ width: 64, height: 64, borderRadius: 12, overflow: 'hidden', background: '#e5e7eb', flexShrink: 0 }}>
+                                                    {mag.coverImage ? (
+                                                        <img
+                                                            src={mag.coverImage}
+                                                            alt={mag.title}
+                                                            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                                                        />
+                                                    ) : (
+                                                        <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24 }}>
+                                                            📚
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div style={{ flex: 1, minWidth: 0, paddingLeft: 10, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                                                    <div>
+                                                        <p style={{ margin: 0, fontSize: 11, fontWeight: 600, color: '#0ea5e9' }}>
+                                                            {mag.regionName ? `${mag.regionName} 여행` : '여행 매거진'}
+                                                        </p>
+                                                        <p style={{ margin: '2px 0 0 0', fontSize: 14, fontWeight: 700, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                            {mag.title}
+                                                        </p>
+                                                        {mag.summary && (
+                                                            <p style={{ margin: '2px 0 0 0', fontSize: 12, color: '#6b7280', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                                {mag.summary}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                    <div style={{ marginTop: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11, color: '#9ca3af' }}>
+                                                        <span>{mag.author || '나의 기록'}</span>
+                                                        {createdDate && <span>{createdDate}</span>}
+                                                    </div>
+                                                </div>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            )}
                         </div>
                     </div>
                 )}
