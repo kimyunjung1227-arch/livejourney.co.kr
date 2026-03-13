@@ -1,7 +1,9 @@
 // 여행 매거진 구성 설정
-// 지금은 태그/키워드 기반으로 사용자 피드를 큐레이션하는 주제형 매거진만 사용합니다.
+// 태그/키워드 기반으로 사용자 피드를 큐레이션하는 주제형 매거진.
 
-export const MAGAZINE_TOPICS = [
+const STORAGE_KEY = 'magazine_topics';
+
+const DEFAULT_TOPICS = [
   {
     id: 'hydrangea-full-bloom',
     title: '현재 만개한 수국을 볼 수 있는 장소',
@@ -14,6 +16,27 @@ export const MAGAZINE_TOPICS = [
   },
 ];
 
+export const loadMagazineTopics = () => {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return DEFAULT_TOPICS;
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed) || parsed.length === 0) return DEFAULT_TOPICS;
+    return parsed;
+  } catch {
+    return DEFAULT_TOPICS;
+  }
+};
+
+export const saveMagazineTopics = (topics) => {
+  try {
+    if (!Array.isArray(topics)) return;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(topics));
+  } catch {
+    // ignore
+  }
+};
+
 export const getMagazineTopicById = (id) =>
-  MAGAZINE_TOPICS.find((m) => String(m.id) === String(id)) || null;
+  loadMagazineTopics().find((m) => String(m.id) === String(id)) || null;
 

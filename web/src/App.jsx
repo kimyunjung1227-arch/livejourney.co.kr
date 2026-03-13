@@ -16,6 +16,7 @@ const MainScreen = lazy(() => import('./pages/MainScreen'))
 const MagazineListScreen = lazy(() => import('./pages/MagazineListScreen'))
 const MagazineDetailScreen = lazy(() => import('./pages/MagazineDetailScreen'))
 const MagazineWriteScreen = lazy(() => import('./pages/MagazineWriteScreen'))
+const MagazineAdminScreen = lazy(() => import('./pages/MagazineAdminScreen'))
 const SearchScreen = lazy(() => import('./pages/SearchScreen'))
 const HashtagScreen = lazy(() => import('./pages/HashtagScreen'))
 const DetailScreen = lazy(() => import('./pages/DetailScreen'))
@@ -146,6 +147,16 @@ function App() {
                 <Route path="/settings" element={<ProtectedRoute><SettingsScreen /></ProtectedRoute>} />
                 <Route path="/feed-update-frequency" element={<ProtectedRoute><FeedUpdateFrequencyScreen /></ProtectedRoute>} />
                 <Route path="/admin" element={<ProtectedRoute><AdminRoute><AdminScreen /></AdminRoute></ProtectedRoute>} />
+                <Route
+                  path="/admin/magazines"
+                  element={
+                    <ProtectedRoute>
+                      <AdminRoute>
+                        <MagazineAdminScreen />
+                      </AdminRoute>
+                    </ProtectedRoute>
+                  }
+                />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </Suspense>

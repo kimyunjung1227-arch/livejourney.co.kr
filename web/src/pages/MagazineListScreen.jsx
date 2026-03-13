@@ -1,14 +1,14 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import BottomNavigation from '../components/BottomNavigation';
-import { MAGAZINE_TOPICS } from '../utils/magazinesConfig';
+import { loadMagazineTopics } from '../utils/magazinesConfig';
 
 const MagazineListScreen = () => {
   const navigate = useNavigate();
   const [magazines, setMagazines] = useState([]);
 
   useEffect(() => {
-    setMagazines(MAGAZINE_TOPICS);
+    setMagazines(loadMagazineTopics());
   }, []);
 
   const handleCardClick = useCallback(

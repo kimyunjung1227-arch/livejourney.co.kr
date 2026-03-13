@@ -15,7 +15,7 @@ import { fetchPostsSupabase } from '../api/postsSupabase';
 import { getDisplayImageUrl } from '../api/upload';
 import { getPostAccuracyCount } from '../utils/socialInteractions';
 import { getWeatherByRegion } from '../api/weather';
-import { MAGAZINE_TOPICS } from '../utils/magazinesConfig';
+import { loadMagazineTopics } from '../utils/magazinesConfig';
 
 const MainScreen = () => {
     const navigate = useNavigate();
@@ -28,7 +28,7 @@ const MainScreen = () => {
     const [recommendedData, setRecommendedData] = useState([]);
     const [weatherByRegion, setWeatherByRegion] = useState({});
     const [allPostsForRecommend, setAllPostsForRecommend] = useState([]);
-    const [magazines, setMagazines] = useState([]);
+    const [magazineTopics, setMagazineTopics] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
@@ -394,6 +394,10 @@ const MainScreen = () => {
     const loadInterestPlaces = useCallback(() => {
         const places = getInterestPlaces();
         setInterestPlaces(places);
+    }, []);
+
+    useEffect(() => {
+        setMagazineTopics(loadMagazineTopics());
     }, []);
 
     // 로컬에 저장된 여행 매거진 불러오기 (최신 3개)
@@ -1229,7 +1233,7 @@ const MainScreen = () => {
                                 </button>
                             </div>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingBottom: 4 }}>
-                                {MAGAZINE_TOPICS.map((topic) => (
+                                {magazineTopics.map((topic) => (
                                     <button
                                         key={topic.id}
                                         type="button"
