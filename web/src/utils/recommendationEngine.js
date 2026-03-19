@@ -231,26 +231,26 @@ export const getRecommendedRegions = (posts, recommendationType = 'blooming') =>
 export const RECOMMENDATION_TYPES = [
   {
     id: 'active',
-    name: '🔥 활발한 지역',
-    description: '최근 업로드가 많은 곳',
+    name: '🔥 지금 북적이는 곳',
+    description: '지금 이 순간 활동이 가장 활발한 곳',
     icon: '🔥'
   },
   {
     id: 'blooming',
-    name: '🌸 개화 정보',
-    description: '개화상태 80% 이상인 곳',
+    name: '🌸 오늘 개화 현황',
+    description: '오늘 개화 상태가 좋은 곳',
     icon: '🌸'
   },
   {
     id: 'popular',
-    name: '⭐ 인기 지역',
-    description: '좋아요가 많은 곳',
+    name: '⭐ 방금 올라온 장소',
+    description: '방금(최근) 업로드된 장소',
     icon: '⭐'
   },
   {
     id: 'food',
-    name: '🍜 맛집 정보',
-    description: '맛집 정보가 많은 곳',
+    name: '🍲 실시간 웨이팅 현황',
+    description: '실시간 웨이팅이 있는 곳',
     icon: '🍜'
   },
   {
