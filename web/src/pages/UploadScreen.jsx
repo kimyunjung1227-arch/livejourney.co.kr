@@ -414,7 +414,6 @@ const UploadScreen = () => {
     const imageFiles = [];
     const videoFiles = [];
     const rejectedOldImages = [];
-    const rejectedNoExifImages = [];
 
     for (const file of files) {
       const isVideo = file.type.startsWith('video/');
@@ -430,20 +429,17 @@ const UploadScreen = () => {
       } else {
         try {
           const exif = await extractExifData(file);
-          if (!exif?.photoTimestamp) {
-            rejectedNoExifImages.push(file.name);
-            continue;
-          }
-          const now = Date.now();
-          const diff = now - exif.photoTimestamp;
-          if (diff > MAX_DIFF_MS) {
-            rejectedOldImages.push(file.name);
-            continue;
+          if (exif?.photoTimestamp) {
+            const now = Date.now();
+            const diff = now - exif.photoTimestamp;
+            if (diff > MAX_DIFF_MS) {
+              rejectedOldImages.push(file.name);
+              continue;
+            }
           }
         } catch (error) {
           logger.warn('EXIF 검사 중 오류 (무시):', error);
-          rejectedNoExifImages.push(file.name);
-          continue;
+          // EXIF를 읽지 못해도, 일단 최근 사진일 수 있으므로 업로드는 허용
         }
         imageFiles.push(file);
       }
@@ -454,17 +450,8 @@ const UploadScreen = () => {
       return;
     }
 
-    if (rejectedNoExifImages.length > 0 && imageFiles.length === 0 && videoFiles.length === 0) {
-      alert(`촬영 메타데이터(EXIF)가 없는 사진은 업로드할 수 없어요.\n\n제외된 파일: ${rejectedNoExifImages.join(', ')}`);
-      return;
-    }
-
     if (rejectedOldImages.length > 0 && imageFiles.length > 0) {
       alert(`48시간이 지난 사진은 업로드에서 제외했어요.\n\n제외된 파일: ${rejectedOldImages.join(', ')}`);
-    }
-
-    if (rejectedNoExifImages.length > 0 && imageFiles.length > 0) {
-      alert(`EXIF 촬영시간이 없는 사진은 업로드에서 제외했어요.\n\n제외된 파일: ${rejectedNoExifImages.join(', ')}`);
     }
 
     const imageUrls = imageFiles.map(file => URL.createObjectURL(file));
@@ -746,22 +733,17 @@ const UploadScreen = () => {
       return;
     }
 
-    // 업로드 직전 한 번 더 검증: EXIF 촬영시간이 있고, 48시간 이내인지 확인
+    // 업로드 직전 한 번 더 검증: EXIF 촬영시간이 있는 경우에만 48시간 이내인지 확인
     const MAX_DIFF_MS = 48 * 60 * 60 * 1000;
     for (const file of formData.imageFiles || []) {
       try {
         const exif = await extractExifData(file);
-        if (!exif?.photoTimestamp) {
-          alert('촬영 메타데이터(EXIF)가 없는 사진은 업로드할 수 없어요.');
-          return;
-        }
-        if ((Date.now() - exif.photoTimestamp) > MAX_DIFF_MS) {
+        if (exif?.photoTimestamp && (Date.now() - exif.photoTimestamp) > MAX_DIFF_MS) {
           alert('촬영 후 48시간이 지난 사진은 업로드할 수 없어요.');
           return;
         }
       } catch (_) {
-        alert('사진 메타데이터 확인에 실패했습니다. 다시 선택해 주세요.');
-        return;
+        // 메타데이터를 읽지 못해도, 촬영 시간이 최근일 수 있으므로 업로드는 허용
       }
     }
 
