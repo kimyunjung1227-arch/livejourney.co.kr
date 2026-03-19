@@ -49,6 +49,35 @@ const getRecommendationTypeForKeyword = (query) => {
   return null;
 };
 
+const getPostTimestampMs = (post) => {
+  const src = post?.photoDate || post?.timestamp || post?.createdAt || null;
+  if (!src) return null;
+  const date = typeof src === 'number' ? new Date(src) : new Date(String(src));
+  const ms = date.getTime();
+  return Number.isNaN(ms) ? null : ms;
+};
+
+const getPostAgeHours = (post) => {
+  const ts = getPostTimestampMs(post);
+  if (!ts) return 0;
+  return Math.max(0, (Date.now() - ts) / (1000 * 60 * 60));
+};
+
+const getMapAgeVisual = (post) => {
+  const ageHours = getPostAgeHours(post);
+  const ageMinutes = ageHours * 60;
+  if (ageMinutes <= 3) {
+    return { imageOpacity: 1, imageFilter: 'none', label: '방금' };
+  }
+  if (ageHours < 24) {
+    return { imageOpacity: 0.78, imageFilter: 'saturate(88%)', label: '24시간 이내' };
+  }
+  if (ageHours < 48) {
+    return { imageOpacity: 0.56, imageFilter: 'grayscale(22%) saturate(70%)', label: '48시간 이내' };
+  }
+  return { imageOpacity: 0.4, imageFilter: 'grayscale(40%)', label: '오래된 정보' };
+};
+
 const MapScreen = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -786,7 +815,7 @@ const MapScreen = () => {
         ? { active: true, results: options.forceSearch.results }
         : (isSearching && searchResults.length > 0 ? { active: true, results: searchResults } : { active: false, results: [] });
       if (effectiveSearch.active && effectiveSearch.results.length > 0) {
-        let filteredResults = [...effectiveSearch.results];
+        let filteredResults = [...effectiveSearch.results].filter((post) => getPostAgeHours(post) < 48);
 
         // 필터 적용 (중복 선택 가능)
         if (selectedFilters.length > 0) {
@@ -823,6 +852,7 @@ const MapScreen = () => {
       let validPosts = allPosts.filter(post => {
         return post.coordinates || post.location || post.detailedLocation || post.region || post.placeName;
       });
+      validPosts = validPosts.filter((post) => getPostAgeHours(post) < 48);
 
       // 필터 적용 (중복 선택 가능)
       if (selectedFilters.length > 0) {
@@ -1432,6 +1462,7 @@ const MapScreen = () => {
         const isSelected = routePins.some(p => p.post.id === post.id);
         const isHighlighted = highlightedPinId && post.id === highlightedPinId;
         const useHighlight = isSelected || isHighlighted;
+        const ageVisual = getMapAgeVisual(post);
         const borderColor = useHighlight ? '#26C6DA' : 'white';
         const borderWidth = useHighlight ? '3px' : '2px';
         const boxShadow = useHighlight
@@ -1470,6 +1501,8 @@ const MapScreen = () => {
               object-fit: cover;
               display: block;
               background: #f5f5f5;
+              opacity: ${ageVisual.imageOpacity};
+              filter: ${ageVisual.imageFilter};
             " 
             alt="${escapeHtmlAttr(post.location || '여행지')}"
           />
@@ -2947,7 +2980,7 @@ const MapScreen = () => {
               flexShrink: 0
             }}
           >
-            ⏱️ 웨이팅
+            웨이팅
           </button>
           {/* 스크롤 끝 여백 (메인 추천여행지 슬라이드와 동일) */}
           <div style={{ width: '16px', flexShrink: 0 }} aria-hidden="true" />
@@ -3005,12 +3038,6 @@ const MapScreen = () => {
                 e.currentTarget.style.transform = isRouteMode ? 'scale(1.05)' : 'scale(1)';
               }}
             >
-              <span className="material-symbols-outlined" style={{ 
-                fontSize: '20px',
-                animation: isRouteMode ? 'pulse 2s infinite' : 'none'
-              }}>
-                route
-              </span>
               {isRouteMode ? '경로 모드' : '경로 만들기'}
               {isRouteMode && selectedRoutePins.length > 0 && (
                 <span style={{
@@ -3075,7 +3102,7 @@ const MapScreen = () => {
                   }
                 }}
               >
-                <span className="material-symbols-outlined" style={{ fontSize: '22px' }}>schedule</span>
+                <span style={{ fontSize: '11px', fontWeight: 700 }}>최근</span>
               </button>
             )}
             {/* 초기화 아이콘 버튼 (경로 모드이고 핀이 선택되었을 때만 표시) */}
@@ -3103,9 +3130,7 @@ const MapScreen = () => {
                   e.currentTarget.style.background = 'white';
                 }}
               >
-                <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>
-                  refresh
-                </span>
+                <span style={{ fontSize: '12px', fontWeight: 700 }}>초기화</span>
               </button>
             )}
           </div>
@@ -3224,7 +3249,6 @@ const MapScreen = () => {
                 e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)';
               }}
             >
-              <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>save</span>
               저장
             </button>
             <button
@@ -3256,7 +3280,6 @@ const MapScreen = () => {
                 e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)';
               }}
             >
-              <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>share</span>
               공유
             </button>
           </div>
@@ -3286,7 +3309,6 @@ const MapScreen = () => {
               fontWeight: 500
             }}
           >
-            <span className="material-symbols-outlined" style={{ fontSize: 16, color: '#22c55e' }}>check_circle</span>
             <span>경로가 저장되었어요</span>
             <button
               type="button"
@@ -3378,9 +3400,6 @@ const MapScreen = () => {
               e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
             }}
           >
-            <span className="material-symbols-outlined" style={{ fontSize: '20px', color: '#00BCD4' }}>
-              photo_library
-            </span>
             <span style={{
               fontSize: '14px',
               fontWeight: '600',
@@ -3469,6 +3488,7 @@ const MapScreen = () => {
               {visiblePins.length > 0 ? (
                 visiblePins.map((pin, index) => {
                   const isSelectedPin = selectedPinId === pin.id;
+                  const ageVisual = getMapAgeVisual(pin.post);
                   return (
                   <div
                     key={`${pin.id}-${index}`}
@@ -3514,7 +3534,9 @@ const MapScreen = () => {
                         style={{
                           width: '100%',
                           height: '90px',
-                          objectFit: 'cover'
+                          objectFit: 'cover',
+                          opacity: ageVisual.imageOpacity,
+                          filter: ageVisual.imageFilter
                         }}
                         onError={(e) => {
                           e.currentTarget.style.display = 'none';
@@ -3535,6 +3557,9 @@ const MapScreen = () => {
                         whiteSpace: 'nowrap'
                       }}>
                         {pin.title}
+                      </p>
+                      <p style={{ margin: '2px 0 0 0', fontSize: '10px', fontWeight: 600, color: '#64748b' }}>
+                        {ageVisual.label}
                       </p>
                     </div>
                   </div>

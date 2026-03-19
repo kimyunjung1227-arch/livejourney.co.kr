@@ -108,7 +108,6 @@ const MagazineAdminScreen = () => {
                 onClick={handleNew}
                 className="inline-flex items-center gap-1.5 rounded-full bg-gray-900 text-white px-3 py-1.5 text-[11px] font-semibold hover:bg-black"
               >
-                <span className="material-symbols-outlined text-[14px]">add</span>
                 <span>새 매거진</span>
               </button>
             </div>

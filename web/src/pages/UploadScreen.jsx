@@ -414,6 +414,7 @@ const UploadScreen = () => {
     const imageFiles = [];
     const videoFiles = [];
     const rejectedOldImages = [];
+    const rejectedNoExifImages = [];
 
     for (const file of files) {
       const isVideo = file.type.startsWith('video/');
@@ -429,16 +430,20 @@ const UploadScreen = () => {
       } else {
         try {
           const exif = await extractExifData(file);
-          if (exif?.photoTimestamp) {
-            const now = Date.now();
-            const diff = now - exif.photoTimestamp;
-            if (diff > MAX_DIFF_MS) {
-              rejectedOldImages.push(file.name);
-              continue;
-            }
+          if (!exif?.photoTimestamp) {
+            rejectedNoExifImages.push(file.name);
+            continue;
+          }
+          const now = Date.now();
+          const diff = now - exif.photoTimestamp;
+          if (diff > MAX_DIFF_MS) {
+            rejectedOldImages.push(file.name);
+            continue;
           }
         } catch (error) {
           logger.warn('EXIF 검사 중 오류 (무시):', error);
+          rejectedNoExifImages.push(file.name);
+          continue;
         }
         imageFiles.push(file);
       }
@@ -449,8 +454,17 @@ const UploadScreen = () => {
       return;
     }
 
+    if (rejectedNoExifImages.length > 0 && imageFiles.length === 0 && videoFiles.length === 0) {
+      alert(`촬영 메타데이터(EXIF)가 없는 사진은 업로드할 수 없어요.\n\n제외된 파일: ${rejectedNoExifImages.join(', ')}`);
+      return;
+    }
+
     if (rejectedOldImages.length > 0 && imageFiles.length > 0) {
       alert(`48시간이 지난 사진은 업로드에서 제외했어요.\n\n제외된 파일: ${rejectedOldImages.join(', ')}`);
+    }
+
+    if (rejectedNoExifImages.length > 0 && imageFiles.length > 0) {
+      alert(`EXIF 촬영시간이 없는 사진은 업로드에서 제외했어요.\n\n제외된 파일: ${rejectedNoExifImages.join(', ')}`);
     }
 
     const imageUrls = imageFiles.map(file => URL.createObjectURL(file));
@@ -730,6 +744,25 @@ const UploadScreen = () => {
     if (!formData.location.trim()) {
       alert('위치를 입력해주세요');
       return;
+    }
+
+    // 업로드 직전 한 번 더 검증: EXIF 촬영시간이 있고, 48시간 이내인지 확인
+    const MAX_DIFF_MS = 48 * 60 * 60 * 1000;
+    for (const file of formData.imageFiles || []) {
+      try {
+        const exif = await extractExifData(file);
+        if (!exif?.photoTimestamp) {
+          alert('촬영 메타데이터(EXIF)가 없는 사진은 업로드할 수 없어요.');
+          return;
+        }
+        if ((Date.now() - exif.photoTimestamp) > MAX_DIFF_MS) {
+          alert('촬영 후 48시간이 지난 사진은 업로드할 수 없어요.');
+          return;
+        }
+      } catch (_) {
+        alert('사진 메타데이터 확인에 실패했습니다. 다시 선택해 주세요.');
+        return;
+      }
     }
 
     logger.log('Validation passed - proceeding with upload');
@@ -1304,7 +1337,6 @@ const UploadScreen = () => {
                 onClick={() => setShowUploadGuide(true)}
                 className="inline-flex items-center gap-1 rounded-full border border-gray-200 dark:border-gray-700 px-2.5 py-1 text-[11px] text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
               >
-                <span className="material-symbols-outlined text-[14px]">info</span>
                 <span>업로드 가이드</span>
               </button>
             </div>
@@ -1323,13 +1355,6 @@ const UploadScreen = () => {
                     padding: '24px 16px'
                   }}
                 >
-                  {/* 가운데 플러스 버튼 */}
-                  <div className="flex items-center justify-center mb-3">
-                    <div className="w-14 h-14 rounded-full border-2 border-primary/60 bg-white flex items-center justify-center shadow-sm">
-                      <span className="material-symbols-outlined text-3xl text-primary">add</span>
-                    </div>
-                  </div>
-                  {/* 플러스 아래 문구 */}
                   <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">
                     사진, 동영상 추가하기
                   </p>
@@ -1412,7 +1437,7 @@ const UploadScreen = () => {
                         className="relative flex-shrink-0 w-24 h-24 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600 bg-gray-100"
                       >
                         <video src={video} className="w-full h-full object-cover" muted />
-                        <span className="absolute inset-0 flex items-center justify-center text-white text-xs drop-shadow">▶</span>
+                        <span className="absolute inset-0 flex items-center justify-center text-white text-xs drop-shadow">동영상</span>
                         <button
                           type="button"
                           onClick={(e) => {

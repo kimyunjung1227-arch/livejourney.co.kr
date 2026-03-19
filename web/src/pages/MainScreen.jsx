@@ -46,6 +46,15 @@ const MainScreen = () => {
     const { handleDragStart, hasMovedRef } = useHorizontalDragScroll();
     const videoRefs = useRef(new Map());
     const currentlyPlayingVideo = useRef(null);
+    const getDeterministicValue = useCallback((seed, min, max) => {
+        const text = String(seed || 'seed');
+        let hash = 0;
+        for (let i = 0; i < text.length; i += 1) {
+            hash = (hash * 31 + text.charCodeAt(i)) >>> 0;
+        }
+        const range = Math.max(1, max - min + 1);
+        return min + (hash % range);
+    }, []);
 
     const withDragCheck = useCallback((fn) => () => {
         if (!hasMovedRef.current) fn();
@@ -244,7 +253,11 @@ const MainScreen = () => {
             // 급상승 지표 계산 (최근 좋아요 증가율 기반)
             const recentLikes = post.likes || 0;
             const surgeIndicator = recentLikes > 50 ? '급상승' : recentLikes > 20 ? '인기' : '실시간';
-            const surgePercent = recentLikes > 50 ? Math.floor(Math.random() * 50) + 100 : recentLikes > 20 ? Math.floor(Math.random() * 30) + 50 : Math.floor(Math.random() * 30) + 20;
+            const surgePercent = recentLikes > 50
+                ? getDeterministicValue(post.id, 100, 149)
+                : recentLikes > 20
+                    ? getDeterministicValue(post.id, 50, 79)
+                    : getDeterministicValue(post.id, 20, 49);
 
             const placeKey = getPlaceKey(post);
             const stats = placeStats[placeKey] || {
@@ -302,12 +315,17 @@ const MainScreen = () => {
                 }
             }
 
+            const aiBasedTags = (Array.isArray(post.tags) ? post.tags : [])
+                .map((t) => String(t || '').replace(/^#+/, '').trim())
+                .filter(Boolean)
+                .slice(0, 3)
+                .map((t) => `#${t}`);
+
             // 아무 태그도 없으면 가벼운 기본 태그로 보완 (정보 과부하 방지용 1~2개)
             const uniqueReasons = [...new Set(reasonTags)];
             if (uniqueReasons.length === 0) {
-                const fallback = ['#추천_맛집', '#SNS_화제', '#오늘_특가', '#사진_맛집'];
-                const shuffled = [...fallback].sort(() => 0.5 - Math.random());
-                uniqueReasons.push(shuffled[0]);
+                const fallback = ['#추천_맛집', '#SNS_화제', '#오늘_특가', '#사진_맛집', '#지금_핫플'];
+                uniqueReasons.push(fallback[getDeterministicValue(post.id, 0, fallback.length - 1)]);
             }
 
             const firstImageUrl = (post.images && post.images.length > 0) ? post.images[0] : (post.image || post.thumbnail || '');
@@ -332,6 +350,7 @@ const MainScreen = () => {
                 // 메타데이터 기반 촬영 시간 라벨
                 captureLabel: formatCaptureLabel(post),
                 // 카드당 최대 2~3개 태그만 노출
+                aiHotTags: aiBasedTags,
                 reasonTags: uniqueReasons.slice(0, 3),
             };
         };
@@ -378,7 +397,7 @@ const MainScreen = () => {
         const recs = getRecommendedRegions(allPosts, selectedRecommendTag);
         setRecommendedData(recs.slice(0, 10));
         setAllPostsForRecommend(allPosts);
-    }, [selectedRecommendTag]);
+    }, [getDeterministicValue]);
 
     const fetchPosts = useCallback(async () => {
         setLoading(true);
@@ -613,7 +632,7 @@ const MainScreen = () => {
                         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             어디로 떠나볼까요?
                         </span>
-                        <span className="material-symbols-outlined" style={{ fontSize: 20, color: '#94a3b8' }}>search</span>
+                        <span style={{ fontSize: 12, color: '#94a3b8' }}>검색</span>
                     </button>
                     <button
                         onClick={() => navigate('/notifications')}
@@ -773,7 +792,6 @@ const MainScreen = () => {
                             className="border-none bg-transparent text-primary hover:text-primary-dark dark:hover:text-primary-soft text-sm font-semibold cursor-pointer py-1.5 px-2.5 min-h-[36px] flex items-center gap-1"
                         >
                             <span>더보기</span>
-                            <span className="material-symbols-outlined" style={{ fontSize: 16 }}>chevron_right</span>
                         </button>
                     </div>
                     <div
@@ -826,7 +844,7 @@ const MainScreen = () => {
                                                 data-video-id={`realtime-${post.id}`}
                                                 src={firstVideo}
                                                 poster={firstImage || getDisplayImageUrl(Array.isArray(post.images) && post.images.length > 0 ? post.images[0] : (post.image || post.thumbnail || '')) || undefined}
-                                                muted
+                                                controls
                                                 loop
                                                 playsInline
                                                 style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', borderRadius: '14px' }}
@@ -848,8 +866,7 @@ const MainScreen = () => {
                                         {/* 좋아요 하트 - 이미지 우하단 */}
                                         <div style={{ position: 'absolute', bottom: '10px', right: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                             <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: 'rgba(255,255,255,0.96)', color: '#111827', padding: '4px 8px', borderRadius: '9999px', fontSize: '11px', fontWeight: 600, boxShadow: '0 2px 6px rgba(15,23,42,0.18)' }}>
-                                                <span className="material-symbols-outlined" style={{ fontSize: 16, color: '#ef4444', fontVariationSettings: "'FILL' 0" }}>favorite</span>
-                                                <span>{likeCount}</span>
+                                                <span>좋아요 {likeCount}</span>
                                             </span>
                                         </div>
                                     </div>
@@ -922,13 +939,13 @@ const MainScreen = () => {
                                                     data-video-id={`interest-${post.id}`}
                                                     src={getDisplayImageUrl(post.videos[0])}
                                                     poster={getDisplayImageUrl(post.images?.[0] || post.image || post.thumbnail)}
-                                                    muted
+                                                    controls
                                                     loop
                                                     playsInline
                                                     style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', borderRadius: '12px' }}
                                                 />
                                             ) : post.thumbnailIsVideo && post.firstVideoUrl ? (
-                                                <video src={post.firstVideoUrl} muted playsInline preload="metadata" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', borderRadius: '12px' }} />
+                                                <video src={post.firstVideoUrl} controls playsInline preload="metadata" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', borderRadius: '12px' }} />
                                             ) : (post.images && post.images.length > 0) ? (
                                                 <img src={getDisplayImageUrl(post.images[0])} alt={post.location} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', borderRadius: '12px' }} />
                                             ) : (
@@ -937,12 +954,10 @@ const MainScreen = () => {
                                             {/* 좋아요·댓글 — 이미지 우하단 반투명 pill */}
                                             <div style={{ position: 'absolute', bottom: '6px', right: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', background: 'rgba(15,23,42,0.6)', color: '#fff', padding: '3px 7px', borderRadius: '9999px', fontSize: '10px', fontWeight: 600 }}>
-                                                    <span className="material-symbols-outlined" style={{ fontSize: '12px', fontVariationSettings: "'FILL' 1" }}>favorite</span>
-                                                    {Number(post.likes ?? post.likeCount ?? 0) || 0}
+                                                    좋아요 {Number(post.likes ?? post.likeCount ?? 0) || 0}
                                                 </span>
                                                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', background: 'rgba(15,23,42,0.6)', color: '#fff', padding: '3px 7px', borderRadius: '9999px', fontSize: '10px', fontWeight: 600 }}>
-                                                    <span className="material-symbols-outlined" style={{ fontSize: '12px' }}>chat_bubble</span>
-                                                    {Array.isArray(post.comments) ? post.comments.length : 0}
+                                                    댓글 {Array.isArray(post.comments) ? post.comments.length : 0}
                                                 </span>
                                             </div>
                                         </div>
@@ -970,14 +985,13 @@ const MainScreen = () => {
                         <div style={{ marginBottom: '0', paddingTop: '0', paddingBottom: '20px', background: '#ffffff' }}>
                             <div style={{ padding: '0 0 8px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#ffffff' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                    <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 600, color: '#374151' }}>실시간 급상승 핫플 🔥</h3>
+                                    <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 600, color: '#374151' }}>실시간 급상승 핫플</h3>
                                 </div>
                                 <button
                                     onClick={() => navigate('/crowded-place')}
                                     className="border-none bg-transparent text-primary hover:text-primary-dark dark:hover:text-primary-soft text-sm font-semibold cursor-pointer py-1.5 px-2.5 min-h-[36px] flex items-center gap-1"
                                 >
                                     <span>더보기</span>
-                                    <span className="material-symbols-outlined" style={{ fontSize: 16 }}>chevron_right</span>
                                 </button>
                             </div>
                             <div
@@ -1001,10 +1015,12 @@ const MainScreen = () => {
                                             ? '지금 ' + String(post.reasonTags[0]).replace(/#/g, '').replace(/_/g, ' ')
                                             : '';
 
-                                    // 핫플 해시태그 (최대 3개) - reasonTags 우선, 없으면 분위기/열기/뷰 중심 기본 태그
-                                    const rawTags = Array.isArray(post.reasonTags) && post.reasonTags.length > 0
-                                        ? post.reasonTags
-                                        : ['분위기 깡패', '뷰맛집', '열기 가득', '줄서있는 곳'];
+                                    // 핫플 해시태그 (최대 3개): AI 분석 태그 우선, 없으면 reasonTags, 그래도 없으면 기본 태그
+                                    const rawTags = Array.isArray(post.aiHotTags) && post.aiHotTags.length > 0
+                                        ? post.aiHotTags
+                                        : (Array.isArray(post.reasonTags) && post.reasonTags.length > 0
+                                            ? post.reasonTags
+                                            : ['분위기 깡패', '뷰맛집', '열기 가득', '줄서있는 곳']);
                                     const hotTags = rawTags
                                         .map((t) => String(t).replace(/#/g, '').replace(/_/g, ' ').trim())
                                         .filter(Boolean)
@@ -1034,13 +1050,13 @@ const MainScreen = () => {
                                                     data-video-id={`crowded-${post.id}`}
                                                     src={getDisplayImageUrl(post.videos[0])}
                                                     poster={getDisplayImageUrl(post.images?.[0] || post.image || post.thumbnail)}
-                                                    muted
+                                                    controls
                                                     loop
                                                     playsInline
                                                     style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
                                                 />
                                             ) : post.thumbnailIsVideo && post.firstVideoUrl ? (
-                                                <video src={post.firstVideoUrl} muted playsInline preload="metadata" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                                                <video src={post.firstVideoUrl} controls playsInline preload="metadata" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                                             ) : (Array.isArray(post.images) && post.images.length > 0) || post.image || post.thumbnail ? (
                                                 <img src={getDisplayImageUrl(post.images?.[0] || post.image || post.thumbnail)} alt={post.location} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                                             ) : (
@@ -1210,7 +1226,6 @@ const MainScreen = () => {
                                     className="border-none bg-transparent text-primary hover:text-primary-dark dark:hover:text-primary-soft text-sm font-semibold cursor-pointer py-1.5 px-2.5 min-h-[36px] flex items-center gap-1"
                                 >
                                     <span>더보기</span>
-                                    <span className="material-symbols-outlined" style={{ fontSize: 16 }}>chevron_right</span>
                                 </button>
                             </div>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingBottom: 4 }}>
@@ -1375,7 +1390,7 @@ const MainScreen = () => {
                                                 >
                                                     <span>{city}</span>
                                                     {isActive && (
-                                                        <span style={{ color: '#0ea5e9', fontSize: 16 }}>✓</span>
+                                                        <span style={{ color: '#0ea5e9', fontSize: 12 }}>선택</span>
                                                     )}
                                                 </button>
                                             );
