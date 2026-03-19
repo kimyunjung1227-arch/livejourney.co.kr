@@ -127,6 +127,7 @@ const PostDetailScreen = () => {
   const [post, setPost] = useState(passedPost);
   const [loading, setLoading] = useState(!passedPost);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [isVideoMuted, setIsVideoMuted] = useState(true);
   const [currentPostIndexState, setCurrentPostIndexState] = useState(currentPostIndex || 0);
   const [liked, setLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(post?.likes || 0);
@@ -201,6 +202,11 @@ const PostDetailScreen = () => {
       : post?.images ? [post.images] : post?.image ? [post.image] : post?.thumbnail ? [post.thumbnail] : [];
     return rawImages.map(toUrl).filter(Boolean).map(getDisplayImageUrl);
   }, [post]);
+
+  const currentMediaItem = useMemo(() => {
+    if (mediaItems.length > 0) return mediaItems[currentImageIndex] || null;
+    return null;
+  }, [mediaItems, currentImageIndex]);
 
   // Q&A 포맷 변환 (useCallback)
   const formatQnA = useCallback((questions) => {
@@ -1262,7 +1268,7 @@ const PostDetailScreen = () => {
                             className="w-full h-full object-cover"
                             autoPlay
                             loop
-                            muted
+                            muted={isVideoMuted}
                             playsInline
                             controls={false}
                           />
@@ -1303,6 +1309,16 @@ const PostDetailScreen = () => {
                   ))}
                 </div>
               </>
+            )}
+
+            {currentMediaItem?.type === 'video' && (
+              <button
+                type="button"
+                onClick={() => setIsVideoMuted((prev) => !prev)}
+                className="absolute right-3 bottom-12 z-20 px-3 py-1.5 rounded-full bg-black/45 text-white text-xs font-semibold backdrop-blur-sm"
+              >
+                {isVideoMuted ? '소리 켜기' : '소리 끄기'}
+              </button>
             )}
           </div>
         </div>

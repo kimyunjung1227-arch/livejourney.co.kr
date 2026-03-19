@@ -1477,8 +1477,8 @@ const UploadScreen = () => {
                 <div className="flex flex-col gap-2">
                   <div className="flex items-center gap-2">
                     <input
-                      className="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-xl border border-primary-soft bg-white focus:border-primary focus:ring-2 focus:ring-primary-soft min-h-[48px] h-12 px-4 text-base font-normal placeholder:text-gray-400"
-                      placeholder="위치를 입력하세요"
+                    className="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-xl border border-primary-soft bg-white focus:border-primary focus:ring-2 focus:ring-primary-soft min-h-[48px] h-12 px-4 text-base font-normal placeholder:text-gray-400"
+                      placeholder="위치를 입력해 주세요."
                       value={formData.location}
                       onChange={(e) => setFormData(prev => ({ ...prev, location: e.target.value }))}
                     />
@@ -1617,8 +1617,8 @@ const UploadScreen = () => {
                 <p className="text-base font-semibold text-gray-800 mb-3">설명 (선택)</p>
                 <div className="relative">
                   <textarea
-                    className="form-textarea w-full rounded-xl border border-primary-soft bg-white focus:border-primary focus:ring-2 focus:ring-primary-soft px-4 py-3 text-base font-normal text-gray-900 placeholder:text-gray-600 resize-none leading-relaxed min-h-[90px]"
-                    placeholder="이 순간의 느낌이나 생각을 또렷하게 남겨주세요"
+                    className="form-textarea w-full rounded-lg border border-primary-soft bg-white focus:border-primary focus:ring-2 focus:ring-primary-soft px-4 py-3 text-base font-normal text-gray-900 placeholder:text-gray-600 resize-none leading-relaxed min-h-[90px]"
+                    placeholder="지금 이곳의 생생한 현장 상황을 자유롭게 입력해주세요."
                     rows="3"
                     value={formData.note}
                     onChange={(e) => setFormData(prev => ({ ...prev, note: e.target.value }))}

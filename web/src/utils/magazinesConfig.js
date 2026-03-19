@@ -32,6 +32,11 @@ export const saveMagazineTopics = (topics) => {
   try {
     if (!Array.isArray(topics)) return;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(topics));
+    try {
+      window.dispatchEvent(new Event('magazineTopicsUpdated'));
+    } catch {
+      // window가 없는 환경에서는 무시
+    }
   } catch {
     // ignore
   }

@@ -419,6 +419,14 @@ const MainScreen = () => {
         setMagazineTopics(loadMagazineTopics());
     }, []);
 
+    useEffect(() => {
+        const onMagazineUpdated = () => {
+            setMagazineTopics(loadMagazineTopics());
+        };
+        window.addEventListener('magazineTopicsUpdated', onMagazineUpdated);
+        return () => window.removeEventListener('magazineTopicsUpdated', onMagazineUpdated);
+    }, []);
+
     const filteredInterestPosts = useMemo(() => {
         if (!selectedInterest) return [];
         const allPosts = [...realtimeData, ...crowdedData, ...recommendedData];
@@ -632,7 +640,7 @@ const MainScreen = () => {
                         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             어디로 떠나볼까요?
                         </span>
-                        <span style={{ fontSize: 12, color: '#94a3b8' }}>검색</span>
+                        <span className="material-symbols-outlined" style={{ fontSize: 20, color: '#94a3b8' }}>search</span>
                     </button>
                     <button
                         onClick={() => navigate('/notifications')}
@@ -844,7 +852,7 @@ const MainScreen = () => {
                                                 data-video-id={`realtime-${post.id}`}
                                                 src={firstVideo}
                                                 poster={firstImage || getDisplayImageUrl(Array.isArray(post.images) && post.images.length > 0 ? post.images[0] : (post.image || post.thumbnail || '')) || undefined}
-                                                controls
+                                                muted
                                                 loop
                                                 playsInline
                                                 style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', borderRadius: '14px' }}
@@ -939,13 +947,13 @@ const MainScreen = () => {
                                                     data-video-id={`interest-${post.id}`}
                                                     src={getDisplayImageUrl(post.videos[0])}
                                                     poster={getDisplayImageUrl(post.images?.[0] || post.image || post.thumbnail)}
-                                                    controls
+                                                    muted
                                                     loop
                                                     playsInline
                                                     style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', borderRadius: '12px' }}
                                                 />
                                             ) : post.thumbnailIsVideo && post.firstVideoUrl ? (
-                                                <video src={post.firstVideoUrl} controls playsInline preload="metadata" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', borderRadius: '12px' }} />
+                                                <video src={post.firstVideoUrl} muted playsInline preload="metadata" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', borderRadius: '12px' }} />
                                             ) : (post.images && post.images.length > 0) ? (
                                                 <img src={getDisplayImageUrl(post.images[0])} alt={post.location} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', borderRadius: '12px' }} />
                                             ) : (
@@ -1050,13 +1058,13 @@ const MainScreen = () => {
                                                     data-video-id={`crowded-${post.id}`}
                                                     src={getDisplayImageUrl(post.videos[0])}
                                                     poster={getDisplayImageUrl(post.images?.[0] || post.image || post.thumbnail)}
-                                                    controls
+                                                    muted
                                                     loop
                                                     playsInline
                                                     style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
                                                 />
                                             ) : post.thumbnailIsVideo && post.firstVideoUrl ? (
-                                                <video src={post.firstVideoUrl} controls playsInline preload="metadata" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                                                <video src={post.firstVideoUrl} muted playsInline preload="metadata" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                                             ) : (Array.isArray(post.images) && post.images.length > 0) || post.image || post.thumbnail ? (
                                                 <img src={getDisplayImageUrl(post.images?.[0] || post.image || post.thumbnail)} alt={post.location} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                                             ) : (
