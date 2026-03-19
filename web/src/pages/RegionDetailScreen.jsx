@@ -303,23 +303,21 @@ const RegionDetailScreen = () => {
               {region.name}
             </h1>
             <button
+              type="button"
               onClick={handleNotificationToggle}
-              className={`flex size-11 shrink-0 items-center justify-center rounded-full border transition-colors ${
-                isNotificationEnabled
-                  ? 'bg-white text-amber-500 border-amber-200 shadow-sm hover:bg-amber-50'
-                  : 'bg-black/40 text-white border-white/30 hover:bg-black/55'
-              }`}
+              className="flex size-11 shrink-0 items-center justify-center rounded-full bg-transparent hover:bg-black/5 active:bg-black/10 transition-colors"
               title={isNotificationEnabled ? '관심 지역 해제' : '관심 지역 추가'}
               style={{ WebkitTapHighlightColor: 'transparent' }}
             >
               <span
                 className="material-symbols-outlined"
                 style={{
-                  fontSize: 22,
-                  fontVariationSettings: isNotificationEnabled ? "'FILL' 1" : undefined,
+                  fontSize: 24,
+                  color: isNotificationEnabled ? '#00BCD4' : '#64748b',
+                  fontVariationSettings: isNotificationEnabled ? "'FILL' 1" : "'FILL' 0",
                 }}
               >
-                {isNotificationEnabled ? 'star' : 'star_outline'}
+                star
               </span>
             </button>
           </div>
