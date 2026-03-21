@@ -233,13 +233,15 @@ export const getCoordinatesByLocation = (locationName) => {
     return regionCoordinates[locationName];
   }
   
-  // 부분 매칭 (예: "서울 강남구" → "강남구")
-  for (const [key, value] of Object.entries(regionCoordinates)) {
-    if (locationName.includes(key) || key.includes(locationName)) {
-      return value;
-    }
+  // 부분 매칭: 더 구체적인(긴) 지역명을 먼저 매칭 (예: "서울 강남구" → 강남구, 서울보다 우선)
+  const entries = Object.entries(regionCoordinates).sort((a, b) => b[0].length - a[0].length);
+  for (const [key, value] of entries) {
+    if (locationName.includes(key)) return value;
   }
-  
+  for (const [key, value] of entries) {
+    if (key.includes(locationName) && locationName.length >= 2) return value;
+  }
+
   return null;
 };
 

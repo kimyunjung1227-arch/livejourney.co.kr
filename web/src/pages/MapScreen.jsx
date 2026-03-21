@@ -20,13 +20,21 @@ const escapeHtmlAttr = (value) => {
     .replace(/>/g, '&gt;');
 };
 
-/** 게시물에서 지도 핀/썸네일에 쓸 이미지 URL 하나 반환 (우선순위: images[0] → thumbnail → image → imageUrl) */
+const isVideoUrl = (u) => typeof u === 'string' && /\.(mp4|mov|m4v|webm)(\?|$)/i.test(u);
+
+/** 게시물에서 지도 핀/썸네일에 쓸 이미지 URL (동영상 URL 제외 — img 태그 호환) */
 const getPostPinImageUrl = (post) => {
   if (!post) return '';
-  const raw =
-    (post.images && Array.isArray(post.images) && post.images.length > 0)
-      ? post.images[0]
-      : (post.thumbnail ?? post.image ?? post.imageUrl ?? '');
+  const candidates = [];
+  if (Array.isArray(post.images)) candidates.push(...post.images);
+  if (post.thumbnail) candidates.push(post.thumbnail);
+  if (post.image) candidates.push(post.image);
+  if (post.imageUrl) candidates.push(post.imageUrl);
+  const normalized = candidates
+    .map((u) => (typeof u === 'string' ? u : (u?.url ?? u?.src ?? '')))
+    .filter(Boolean);
+  const firstImage = normalized.find((u) => !isVideoUrl(u));
+  const raw = firstImage ?? normalized[0] ?? '';
   return getDisplayImageUrl(typeof raw === 'string' ? raw : (raw?.url ?? raw?.src ?? ''));
 };
 import { useHorizontalDragScroll } from '../hooks/useHorizontalDragScroll';

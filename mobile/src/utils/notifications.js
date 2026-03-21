@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { logger } from './logger';
+import { getTimeAgo } from './timeUtils';
 
 const NOTIFICATIONS_KEY = 'notifications';
 
@@ -25,11 +26,13 @@ export const getNotifications = async () => {
 export const addNotification = async (notification) => {
     try {
         const notifications = await getNotifications();
+        const now = new Date();
         const newNotification = {
             id: Date.now().toString(),
             read: false,
-            timestamp: new Date().toISOString(),
-            ...notification
+            ...notification,
+            timestamp: notification.timestamp || now.toISOString(),
+            time: notification.time || getTimeAgo(now),
         };
 
         const typeConfig = NOTIFICATION_TYPES[notification.type] || NOTIFICATION_TYPES.system;
@@ -83,6 +86,18 @@ export const clearAllNotifications = async () => {
     }
 };
 
+export const deleteNotification = async (notificationId) => {
+    try {
+        const notifications = await getNotifications();
+        const updated = notifications.filter((n) => n.id !== notificationId);
+        await AsyncStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(updated));
+        return true;
+    } catch (error) {
+        logger.error('알림 삭제 실패:', error);
+        return false;
+    }
+};
+
 export const getUnreadCountSync = (notifications) => {
     return notifications.filter(n => !n.read).length;
 };
@@ -105,6 +120,7 @@ export default {
     markNotificationAsRead,
     markAllNotificationsAsRead,
     clearAllNotifications,
+    deleteNotification,
     getUnreadCountSync,
     notifyBadge
 };

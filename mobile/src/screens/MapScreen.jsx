@@ -31,6 +31,19 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { COLORS, SPACING, TYPOGRAPHY } from '../constants/styles';
 import { getCoordinatesByLocation } from '../utils/regionLocationMapping';
+import { getMapThumbnailUri } from '../utils/postMedia';
+
+const inferPostCoordinates = (post) => {
+  if (post?.coordinates?.lat != null && post?.coordinates?.lng != null) {
+    return { lat: Number(post.coordinates.lat), lng: Number(post.coordinates.lng) };
+  }
+  const fields = [post.detailedLocation, post.placeName, post.address, post.location];
+  for (const f of fields) {
+    const c = getCoordinatesByLocation(f);
+    if (c?.lat != null && c?.lng != null) return { lat: c.lat, lng: c.lng };
+  }
+  return null;
+};
 // import { BlurView } from 'expo-blur'; // 필요시 설치 후 사용
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -363,8 +376,8 @@ const MapScreen = () => {
     // visiblePins 업데이트 (현재는 posts를 그대로 사용)
     setVisiblePins(posts.map((post, index) => ({
       id: post.id || index,
-      title: post.location || post.detailedLocation || '여행지',
-      image: post.images?.[0] || post.image || '',
+      title: post.placeName || post.detailedLocation || post.location || '여행지',
+      image: getMapThumbnailUri(post) || post.image || '',
       lat: post.coordinates?.lat,
       lng: post.coordinates?.lng,
       post: post
@@ -501,8 +514,13 @@ const MapScreen = () => {
     try {
       // 검색 중이면 검색 결과만 사용
       if (isSearching && searchResults.length > 0) {
-        let filteredResults = [...searchResults];
-        
+        let filteredResults = searchResults
+          .map((post) => {
+            const coords = inferPostCoordinates(post);
+            return coords ? { ...post, coordinates: coords } : null;
+          })
+          .filter(Boolean);
+
         // 필터 적용 (중복 선택 가능)
         if (selectedFilters.length > 0) {
           filteredResults = filteredResults.filter(post => {
@@ -516,17 +534,20 @@ const MapScreen = () => {
             });
           });
         }
-        
+
         setPosts(filteredResults);
         return;
       }
 
       const postsJson = await AsyncStorage.getItem('uploadedPosts');
       const allPosts = postsJson ? JSON.parse(postsJson) : [];
-      
-      let postsWithLocation = allPosts.filter(
-        post => post.coordinates && post.coordinates.lat && post.coordinates.lng
-      );
+
+      let postsWithLocation = allPosts
+        .map((post) => {
+          const coords = inferPostCoordinates(post);
+          return coords ? { ...post, coordinates: coords } : null;
+        })
+        .filter(Boolean);
 
       // 필터 적용 (중복 선택 가능)
       if (selectedFilters.length > 0) {
@@ -645,8 +666,8 @@ const MapScreen = () => {
     // 현재는 모든 posts를 visiblePins로 설정 (실제 지도 구현 시 bounds 기반 필터링)
     setVisiblePins(posts.map((post, index) => ({
       id: post.id || index,
-      title: post.location || post.detailedLocation || '여행지',
-      image: post.images?.[0] || post.image || '',
+      title: post.placeName || post.detailedLocation || post.location || '여행지',
+      image: getMapThumbnailUri(post) || post.image || '',
       lat: post.coordinates?.lat,
       lng: post.coordinates?.lng,
       post: post

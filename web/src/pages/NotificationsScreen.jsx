@@ -194,7 +194,7 @@ const NotificationsScreen = () => {
                       <p className="text-xs text-text-secondary-light dark:text-text-secondary-dark mt-1 line-clamp-2">
                         {notification.message}
                       </p>
-                      <p className="text-[11px] text-subtle-light dark:text-subtle-dark mt-2">
+                      <p className="text-xs font-semibold text-slate-600 dark:text-slate-300 mt-2">
                         {notification.time}
                       </p>
                     </div>

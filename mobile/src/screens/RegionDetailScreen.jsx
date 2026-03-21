@@ -11,6 +11,7 @@ import {
   Dimensions,
   FlatList,
   Modal,
+  Alert,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -399,7 +400,20 @@ const styles = StyleSheet.create({
   iconButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'center', alignItems: 'center' },
   bannerInfo: { position: 'absolute', bottom: 32, left: 24 },
   bannerRegionName: { fontSize: 36, fontWeight: 'bold', color: '#fff', marginBottom: 8 },
-  bannerMeta: { flexDirection: 'row', gap: 12 },
+  bannerMeta: { flexDirection: 'row', gap: 12, flexWrap: 'wrap' },
+  metaItemWeather: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(241,245,249,0.92)',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(148,163,184,0.45)',
+    maxWidth: '100%',
+  },
+  metaTextWeather: { color: '#0f172a', fontSize: 14, fontWeight: '700', letterSpacing: -0.2 },
   metaItem: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(0,0,0,0.4)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 },
   metaText: { color: '#fff', fontSize: 13, fontWeight: '500' },
 

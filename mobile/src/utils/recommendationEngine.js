@@ -1,5 +1,47 @@
 import { filterRecentPosts } from './timeUtils';
 
+const isVideoUri = (u) => typeof u === 'string' && /\.(mp4|mov|m4v|webm)(\?|$)/i.test(u);
+
+/** 추천 여행지 카드용: 해당 지역 게시물의 사진·동영상 피드 */
+export const buildRegionMediaFeedItems = (posts, regionName, maxItems = 10) => {
+    if (!regionName || !Array.isArray(posts)) return [];
+    const match = (post) => {
+        const loc = String(post.location || '');
+        const pn = String(post.placeName || '');
+        const dl = String(post.detailedLocation || '');
+        return (
+            loc.includes(regionName) ||
+            pn.includes(regionName) ||
+            dl.includes(regionName) ||
+            loc === regionName
+        );
+    };
+    const regionPosts = posts
+        .filter(match)
+        .sort((a, b) => (b.timestamp || b.createdAt || 0) - (a.timestamp || a.createdAt || 0));
+    const out = [];
+    const seen = new Set();
+    const add = (type, uri) => {
+        if (!uri || seen.has(uri)) return;
+        seen.add(uri);
+        out.push({ type, uri });
+    };
+    for (const p of regionPosts) {
+        for (const u of p.images || []) {
+            if (u) add(isVideoUri(u) ? 'video' : 'image', u);
+        }
+        for (const u of p.videos || []) {
+            if (u) add('video', u);
+        }
+        if (!(p.images || []).length && !(p.videos || []).length) {
+            const f = p.image || p.thumbnail;
+            if (f) add(isVideoUri(f) ? 'video' : 'image', f);
+        }
+        if (out.length >= maxItems) break;
+    }
+    return out.slice(0, maxItems);
+};
+
 const calculateRegionStats = (posts, regionName) => {
     const regionPosts = posts.filter(post =>
         post.location?.includes(regionName) || post.location === regionName
@@ -68,7 +110,8 @@ export const getRecommendedRegions = (posts, recommendationType = 'blooming') =>
                     title: stat.regionName,
                     description: `개화상태 ${stat.bloomPercentage}% | 최근 게시물 ${stat.recentCount}개`,
                     image: stat.representativeImage,
-                    badge: `🌸 개화 ${stat.bloomPercentage}%`
+                    badge: `🌸 개화 ${stat.bloomPercentage}%`,
+                    mediaFeed: buildRegionMediaFeedItems(posts, stat.regionName),
                 }));
             break;
 
@@ -82,7 +125,8 @@ export const getRecommendedRegions = (posts, recommendationType = 'blooming') =>
                     title: stat.regionName,
                     description: `최근 7일간 ${stat.recentCount}개 게시물`,
                     image: stat.representativeImage,
-                    badge: `🔥 활발 ${stat.recentCount}개`
+                    badge: `🔥 활발 ${stat.recentCount}개`,
+                    mediaFeed: buildRegionMediaFeedItems(posts, stat.regionName),
                 }));
             break;
 
@@ -96,7 +140,8 @@ export const getRecommendedRegions = (posts, recommendationType = 'blooming') =>
                     title: stat.regionName,
                     description: `평균 좋아요 ${stat.avgLikes} | 총 ${stat.total}개 게시물`,
                     image: stat.representativeImage,
-                    badge: `⭐ 인기 ${stat.avgLikes}❤️`
+                    badge: `⭐ 인기 ${stat.avgLikes}❤️`,
+                    mediaFeed: buildRegionMediaFeedItems(posts, stat.regionName),
                 }));
             break;
 
@@ -113,7 +158,8 @@ export const getRecommendedRegions = (posts, recommendationType = 'blooming') =>
                     title: stat.regionName,
                     description: `맛집 정보 ${stat.foodCount}개 | 최근 게시물 ${stat.recentCount}개`,
                     image: stat.representativeImage,
-                    badge: `🍜 맛집 ${stat.foodCount}개`
+                    badge: `🍜 맛집 ${stat.foodCount}개`,
+                    mediaFeed: buildRegionMediaFeedItems(posts, stat.regionName),
                 }));
             break;
 
@@ -130,7 +176,8 @@ export const getRecommendedRegions = (posts, recommendationType = 'blooming') =>
                     title: stat.regionName,
                     description: `추천 장소 ${stat.scenicCount}개 | 최근 게시물 ${stat.recentCount}개`,
                     image: stat.representativeImage,
-                    badge: `🏞️ 명소 ${stat.scenicCount}개`
+                    badge: `🏞️ 명소 ${stat.scenicCount}개`,
+                    mediaFeed: buildRegionMediaFeedItems(posts, stat.regionName),
                 }));
             break;
 
@@ -144,7 +191,8 @@ export const getRecommendedRegions = (posts, recommendationType = 'blooming') =>
                     title: stat.regionName,
                     description: `최근 7일간 ${stat.recentCount}개 게시물`,
                     image: stat.representativeImage,
-                    badge: `🔥 활발`
+                    badge: `🔥 활발`,
+                    mediaFeed: buildRegionMediaFeedItems(posts, stat.regionName),
                 }));
     }
 

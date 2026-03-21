@@ -14,7 +14,7 @@ import {
   FlatList,
   Modal,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -26,6 +26,9 @@ import { getCombinedPosts } from '../utils/mockData';
 import { getRecommendedRegions, RECOMMENDATION_TYPES } from '../utils/recommendationEngine';
 import { ScreenLayout, ScreenContent, ScreenHeader, ScreenBody } from '../components/ScreenLayout';
 import { getWeatherByRegion } from '../utils/weatherApi';
+import MainHorizontalMedia from '../components/MainHorizontalMedia';
+import { buildMediaItemsFromPost } from '../utils/postMedia';
+import { useFeedVideo } from '../contexts/FeedVideoContext';
 
 // 카드 크기 (웹과 동일한 퍼센트 기준)
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -66,6 +69,7 @@ const WeatherWidget = ({ region = '서울' }) => {
 
 const MainScreen = () => {
   const navigation = useNavigation();
+  const { clearAll } = useFeedVideo();
   const [refreshing, setRefreshing] = useState(false);
   const [realtimeData, setRealtimeData] = useState([]);
   const [crowdedData, setCrowdedData] = useState([]);
@@ -129,7 +133,9 @@ const MainScreen = () => {
         return {
           ...post,
           id: post.id,
-          image: post.images?.[0] || post.image || '',
+          images: post.images || [],
+          videos: post.videos || [],
+          image: post.images?.[0] || post.videos?.[0] || post.image || '',
           time: dynamicTime,
           content: post.note || post.content || `${post.location}의 모습`,
           surgeIndicator,
@@ -166,6 +172,10 @@ const MainScreen = () => {
   }, [selectedRecommendTag]);
 
   useEffect(() => { loadMockData(); }, [loadMockData]);
+
+  useFocusEffect(
+    useCallback(() => () => clearAll(), [clearAll])
+  );
 
   useEffect(() => {
     const loadInterestPlaces = async () => {
@@ -339,11 +349,13 @@ const MainScreen = () => {
                 >
                   {realtimeData.map((post) => (
                     <TouchableOpacity key={post.id} style={styles.realtimeCard} onPress={() => navigation.navigate('PostDetail', { post })}>
-                      <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false} style={{ width: '100%', height: '100%' }}>
-                        {(post.images && post.images.length > 0 ? post.images : [post.image]).map((img, i) => (
-                          <Image key={i} source={{ uri: img }} style={styles.cardFullImage} />
-                        ))}
-                      </ScrollView>
+                      <MainHorizontalMedia
+                        width={REALTIME_CARD_WIDTH}
+                        height={280}
+                        mediaItems={buildMediaItemsFromPost(post)}
+                        instanceId={`main-rt-${post.id}`}
+                        style={{ width: '100%', height: '100%' }}
+                      />
                       <LinearGradient colors={['transparent', 'rgba(0,0,0,0.4)', 'rgba(0,0,0,0.9)']} style={styles.cardGradient} />
                       <View style={styles.cardOverlay}>
                         <Text style={styles.cardLocation}>{post.location}</Text>
@@ -371,11 +383,13 @@ const MainScreen = () => {
                   {crowdedData.map((post) => (
                     <TouchableOpacity key={post.id} style={styles.crowdedCard} onPress={() => navigation.navigate('PostDetail', { post })}>
                       <View style={styles.crowdedImageWrapper}>
-                        <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false} style={{ width: '100%', height: '100%' }}>
-                          {(post.images && post.images.length > 0 ? post.images : [post.image]).map((img, i) => (
-                            <Image key={i} source={{ uri: img }} style={styles.crowdedImage} />
-                          ))}
-                        </ScrollView>
+                        <MainHorizontalMedia
+                          width={CROWDED_CARD_WIDTH}
+                          height={120}
+                          mediaItems={buildMediaItemsFromPost(post)}
+                          instanceId={`main-hot-${post.id}`}
+                          style={{ width: '100%', height: '100%' }}
+                        />
                         <View style={styles.surgeBadge}>
                           <Text style={styles.surgeBadgeText}>
                             {post.surgeIndicator === '급상승' ? '🔥 급상승' : post.surgeIndicator === '인기' ? '⭐ 인기' : '⚡ 실시간'}
@@ -427,17 +441,24 @@ const MainScreen = () => {
                   snapToAlignment="center"
                 >
                   {recommendedData.map((item, idx) => {
-                    const allPosts = getCombinedPosts([]);
-                    const regionPosts = allPosts.filter(p => p.location && p.location.includes(item.regionName));
-                    const regionImages = [item.image, ...regionPosts.flatMap(p => p.images || [])].filter(Boolean).slice(0, 5);
-                    
+                    const feed =
+                      item.mediaFeed?.length > 0
+                        ? item.mediaFeed
+                        : buildMediaItemsFromPost({
+                            image: item.image,
+                            images: item.image ? [item.image] : [],
+                            videos: [],
+                          });
+
                     return (
                       <TouchableOpacity key={idx} style={styles.recommendCard} onPress={() => navigation.navigate('RegionDetail', { regionName: item.regionName })}>
-                        <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false} style={{ width: '100%', height: '100%' }}>
-                          {regionImages.map((img, i) => (
-                            <Image key={i} source={{ uri: img }} style={styles.cardFullImage} />
-                          ))}
-                        </ScrollView>
+                        <MainHorizontalMedia
+                          width={RECOMMEND_CARD_WIDTH}
+                          height={240}
+                          mediaItems={feed}
+                          instanceId={`main-rec-${item.regionName}-${idx}`}
+                          style={{ width: '100%', height: '100%' }}
+                        />
                         <View style={styles.recommendBadge}><Text style={styles.recommendBadgeText}>추천</Text></View>
                         <LinearGradient colors={['transparent', 'rgba(0,0,0,0.85)']} style={styles.cardGradient} />
                         <View style={styles.cardOverlay}>

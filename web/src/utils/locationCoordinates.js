@@ -80,11 +80,10 @@ export const getCoordinatesByLocation = (locationName) => {
     return locationCoordinates[locationName];
   }
 
-  // 부분 매치 (예: "서울 강남구" → "서울")
-  for (const [key, value] of Object.entries(locationCoordinates)) {
-    if (locationName.includes(key)) {
-      return value;
-    }
+  // 부분 매치: 긴 키(구체적 지명) 우선
+  const entries = Object.entries(locationCoordinates).sort((a, b) => b[0].length - a[0].length);
+  for (const [key, value] of entries) {
+    if (locationName.includes(key)) return value;
   }
 
   // 기본값: 서울

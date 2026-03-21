@@ -27,6 +27,8 @@ import BadgeListScreen from '../screens/BadgeListScreen';
 import InterestPlacesScreen from '../screens/InterestPlacesScreen';
 import RealtimeFeedScreen from '../screens/RealtimeFeedScreen';
 import CrowdedPlaceScreen from '../screens/CrowdedPlaceScreen';
+import NotificationsScreen from '../screens/NotificationsScreen';
+import { FeedVideoProvider } from '../contexts/FeedVideoContext';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -186,6 +188,7 @@ export default function AppNavigator() {
 
   return (
     <NavigationContainer>
+      <FeedVideoProvider>
       <Stack.Navigator
         screenOptions={{
           headerShown: false,
@@ -254,9 +257,14 @@ export default function AppNavigator() {
               name="CrowdedPlace"
               component={CrowdedPlaceScreen}
             />
+            <Stack.Screen
+              name="Notifications"
+              component={NotificationsScreen}
+            />
           </>
         )}
       </Stack.Navigator>
+      </FeedVideoProvider>
     </NavigationContainer>
   );
 }

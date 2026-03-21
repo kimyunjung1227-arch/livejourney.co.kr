@@ -322,19 +322,18 @@ const RegionDetailScreen = () => {
             </button>
           </div>
 
-          {/* 날씨 — 투명 배경 위에 반투명 팔레트 */}
+          {/* 날씨 — 은은한 회색 패널로 가독성 확보 */}
           <div className="flex justify-center px-3 pb-2">
-            <div className="flex h-9 shrink-0 items-center justify-center gap-x-2 rounded-full bg-black/28 backdrop-blur-sm pl-4 pr-4 shadow-sm">
+            <div className="flex h-10 shrink-0 items-center justify-center gap-x-2 rounded-xl border border-slate-300/50 bg-slate-100/90 px-4 shadow-sm backdrop-blur-sm dark:border-slate-600/50 dark:bg-slate-800/85">
               {weatherInfo.loading ? (
-                <div className="animate-spin rounded-full h-4 w-4 border-2 border-white/80 border-t-transparent"></div>
+                <div className="animate-spin rounded-full h-4 w-4 border-2 border-slate-400 border-t-transparent"></div>
               ) : (
                 <>
                   <span className="text-base">{weatherInfo.icon}</span>
                   <p
-                    className="font-semibold leading-normal text-white"
+                    className="font-semibold leading-normal text-slate-900 dark:text-slate-100"
                     style={{
                       fontSize: 13,
-                      textShadow: '0 1px 3px rgba(0,0,0,0.65)',
                       letterSpacing: '-0.01em',
                     }}
                   >
