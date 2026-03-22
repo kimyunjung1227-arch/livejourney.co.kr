@@ -1370,9 +1370,9 @@ const PostDetailScreen = () => {
           </div>
         </div>
 
-        <main className="flex flex-col bg-white dark:bg-gray-900" style={{ minHeight: 'auto' }}>
-          <div className="px-4 pt-4 pb-3">
-            <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900">
+        <main className="flex flex-col w-full max-w-full bg-white dark:bg-gray-900" style={{ minHeight: 'auto' }}>
+          <div className="w-full max-w-full px-4 pt-4 pb-3">
+            <div className="w-full max-w-full space-y-4">
               {/* 1행: 위치정보 | 카테고리 정보 | 연필 수정 (아이콘 열·썸네일 없음) */}
               <div className="flex items-end gap-2 sm:gap-3">
                 <div className="min-w-0 flex-1">
