@@ -1049,6 +1049,19 @@ const PostDetailScreen = () => {
     return `${month}/${day} ${hours}:${minutes} 촬영`;
   }, [photoDate, post]);
   const categoryName = useMemo(() => post?.categoryName || null, [post]);
+  /** 제목 우측 부제 (참고 UI: "구 / 카테고리") */
+  const headerSubtitle = useMemo(() => {
+    if (!post) return '';
+    const bits = [];
+    if (post.region) bits.push(post.region);
+    else {
+      const loc = String(locationText || '').trim();
+      const first = loc.split(/\s+/)[0];
+      if (first && first !== '여행지') bits.push(first);
+    }
+    if (categoryName) bits.push(categoryName);
+    return bits.join(' / ');
+  }, [post, locationText, categoryName]);
   // EXIF에서 검증된 위치 정보
   const verifiedLocation = useMemo(() => post?.verifiedLocation || post?.exifData?.gpsCoordinates ? locationText : null, [post, locationText]);
   const hasExifData = useMemo(() => !!(post?.exifData || post?.photoDate || post?.verifiedLocation), [post]);
@@ -1202,7 +1215,7 @@ const PostDetailScreen = () => {
 
         <div className="flex w-full bg-transparent dark:bg-transparent" style={{ marginTop: 0 }}>
           <div
-            className="image-swipe-area w-full gap-1 overflow-hidden bg-white dark:bg-gray-900 flex relative shadow-md"
+            className="image-swipe-area relative flex w-full gap-1 overflow-hidden rounded-b-2xl bg-white shadow-md dark:bg-gray-900"
             style={{ height: '60vh', minHeight: '330px', marginTop: '-64px' }}
           >
             {/* 프로필 - 사진 위 오버레이 */}
@@ -1381,119 +1394,116 @@ const PostDetailScreen = () => {
 
         <main className="flex flex-col bg-white dark:bg-gray-900" style={{ minHeight: 'auto' }}>
           <div className="px-4 pt-4 pb-3">
-            <div className="rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm p-4 space-y-1">
-              {/* 📍 위치 + 우측 썸네일·카테고리·수정 (앱 상세 레이아웃) */}
-              <div className="flex items-start gap-3">
-                <span className="material-symbols-outlined mt-0.5 w-7 shrink-0 text-center text-2xl text-gray-500 dark:text-gray-400" aria-hidden="true">location_on</span>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="truncate text-base font-bold text-zinc-900 dark:text-zinc-100">
-                      {verifiedLocation || detailedLocationText || locationText}
-                    </p>
-                    <div className="flex shrink-0 items-center gap-2">
-                      {categoryName && (
-                        <span
-                          title={categoryName}
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 text-lg dark:bg-gray-800"
-                          aria-label={categoryName}
-                        >
-                          {categoryName.includes('개화') && '🌸'}
-                          {categoryName.includes('맛집') && '🍜'}
-                          {categoryName.includes('야경') && '🌙'}
-                          {categoryName.includes('시즌') && '🍂'}
-                          {!categoryName.includes('개화') && !categoryName.includes('맛집') && !categoryName.includes('야경') && !categoryName.includes('시즌') && '🏞️'}
-                        </span>
-                      )}
-                      {infoThumbUrl && (
-                        <img
-                          src={infoThumbUrl}
-                          alt=""
-                          className="h-10 w-10 rounded-md border border-gray-200 object-cover dark:border-gray-600"
-                        />
-                      )}
-                      {isPostAuthor && !isEditingPost && (
-                        <button
-                          type="button"
-                          onClick={handleStartEditPost}
-                          className="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-                        >
-                          수정
-                        </button>
-                      )}
-                    </div>
+            {/* 정보 구역: 테두리 카드 없이 참고 UI(제목↔부제, 메타, 본문) */}
+            <div className="flex items-start justify-between gap-3">
+                <h2 className="min-w-0 flex-1 text-xl font-bold leading-snug text-zinc-900 dark:text-zinc-50">
+                  {verifiedLocation || detailedLocationText || locationText}
+                </h2>
+                <div className="flex shrink-0 flex-col items-end gap-1.5">
+                  {headerSubtitle ? (
+                    <span className="max-w-[10rem] text-right text-xs font-normal leading-tight text-gray-500 dark:text-gray-400">
+                      {headerSubtitle}
+                    </span>
+                  ) : null}
+                  <div className="flex items-center gap-2">
+                    {categoryName && (
+                      <span
+                        title={categoryName}
+                        className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-gray-100 text-base dark:bg-gray-800"
+                        aria-label={categoryName}
+                      >
+                        {categoryName.includes('개화') && '🌸'}
+                        {categoryName.includes('맛집') && '🍜'}
+                        {categoryName.includes('야경') && '🌙'}
+                        {categoryName.includes('시즌') && '🍂'}
+                        {!categoryName.includes('개화') && !categoryName.includes('맛집') && !categoryName.includes('야경') && !categoryName.includes('시즌') && '🏞️'}
+                      </span>
+                    )}
+                    {infoThumbUrl && (
+                      <img
+                        src={infoThumbUrl}
+                        alt=""
+                        className="h-9 w-9 rounded-md object-cover ring-1 ring-black/5 dark:ring-white/10"
+                      />
+                    )}
+                    {isPostAuthor && !isEditingPost && (
+                      <button
+                        type="button"
+                        onClick={handleStartEditPost}
+                        className="text-xs text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
+                      >
+                        수정
+                      </button>
+                    )}
                   </div>
-                  {addressText && (
-                    <p className="mt-0.5 text-xs text-zinc-400 dark:text-zinc-500">{addressText}</p>
-                  )}
                 </div>
               </div>
-
-              {/* 시각 + 날씨 — 한 줄(시계 아이콘 + 촬영 시각 + 날씨·기온) */}
-              {!isEditingPost ? (
-                <div className="flex items-start gap-3 pt-0.5">
-                  <span className="material-symbols-outlined mt-0.5 w-7 shrink-0 text-center text-xl text-gray-500 dark:text-gray-400">schedule</span>
-                  <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-0.5 text-[13px] text-zinc-600 dark:text-zinc-400">
-                    <span className="font-medium text-zinc-700 dark:text-zinc-300">
-                      {captureLabel || post?.time || (post?.createdAt ? getTimeAgo(post.createdAt) : '방금 전')}
-                    </span>
-                    {weatherInfo.loading ? (
-                      <span className="flex items-center gap-1">
-                        <span className="material-symbols-outlined text-lg text-amber-500">wb_sunny</span>
-                        <span>로딩중...</span>
-                      </span>
-                    ) : (
-                      <span className="flex items-center gap-1">
-                        <span className="text-base leading-none">{weatherInfo.icon}</span>
-                        <span className="font-semibold text-zinc-800 dark:text-zinc-200">
-                          {weatherInfo.temperature
-                            ? `${weatherInfo.condition}, ${weatherInfo.temperature}`
-                            : weatherInfo.condition}
-                          {post?.weather ? (
-                            <span className="ml-1 text-xs font-normal text-zinc-500 dark:text-zinc-500">(업로드 당시)</span>
-                          ) : null}
-                        </span>
-                      </span>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <div className="flex items-start gap-3 pt-0.5">
-                  <span className="material-symbols-outlined mt-0.5 w-7 shrink-0 text-center text-xl text-gray-500 dark:text-gray-400">schedule</span>
-                  <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-0.5 text-[13px] text-zinc-600 dark:text-zinc-400">
-                    <span className="font-medium text-zinc-700 dark:text-zinc-300">
-                      {captureLabel || post?.time || (post?.createdAt ? getTimeAgo(post.createdAt) : '방금 전')}
-                    </span>
-                    {!weatherInfo.loading && (
-                      <span className="flex items-center gap-1">
-                        <span className="text-base leading-none">{weatherInfo.icon}</span>
-                        <span className="font-semibold text-zinc-800 dark:text-zinc-200">
-                          {weatherInfo.temperature ? `${weatherInfo.condition}, ${weatherInfo.temperature}` : weatherInfo.condition}
-                        </span>
-                      </span>
-                    )}
-                    {weatherInfo.loading && <span className="text-xs">날씨 로딩…</span>}
-                  </div>
-                </div>
+              {addressText && (
+                <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">{addressText}</p>
               )}
 
-              {/* 설명 — 노트 아이콘 + 본문 (시간·날씨와 바로 이어지게 간격 최소) */}
+              {/* 촬영·날씨 (별점 자리에 해당하는 보조 정보 한 줄) */}
+              {!isEditingPost ? (
+                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                  <span className="text-gray-600 dark:text-gray-300">
+                    {captureLabel || post?.time || (post?.createdAt ? getTimeAgo(post.createdAt) : '방금 전')}
+                  </span>
+                  {weatherInfo.loading ? (
+                    <>
+                      <span className="mx-1.5 text-gray-300 dark:text-gray-600">·</span>
+                      <span>날씨 로딩…</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="mx-1.5 text-gray-300 dark:text-gray-600">·</span>
+                      <span className="mr-1">{weatherInfo.icon}</span>
+                      <span className="font-medium text-gray-700 dark:text-gray-300">
+                        {weatherInfo.temperature
+                          ? `${weatherInfo.condition}, ${weatherInfo.temperature}`
+                          : weatherInfo.condition}
+                        {post?.weather ? (
+                          <span className="ml-1 text-xs font-normal text-gray-400">(업로드 당시)</span>
+                        ) : null}
+                      </span>
+                    </>
+                  )}
+                </p>
+              ) : (
+                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                  <span className="text-gray-600 dark:text-gray-300">
+                    {captureLabel || post?.time || (post?.createdAt ? getTimeAgo(post.createdAt) : '방금 전')}
+                  </span>
+                  {weatherInfo.loading ? (
+                    <>
+                      <span className="mx-1.5 text-gray-300 dark:text-gray-600">·</span>
+                      <span>날씨 로딩…</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="mx-1.5 text-gray-300 dark:text-gray-600">·</span>
+                      <span className="mr-1">{weatherInfo.icon}</span>
+                      <span className="font-medium text-gray-700 dark:text-gray-300">
+                        {weatherInfo.temperature ? `${weatherInfo.condition}, ${weatherInfo.temperature}` : weatherInfo.condition}
+                      </span>
+                    </>
+                  )}
+                </p>
+              )}
+
               {!isEditingPost && (
-                <div className="flex items-start gap-3 pt-0.5">
-                  <span className="material-symbols-outlined mt-0.5 w-7 shrink-0 text-center text-2xl text-gray-500 dark:text-gray-400">edit_note</span>
-                  <div className="min-w-0 flex-1">
-                    {(post?.note || post?.content) ? (
-                      <p className="whitespace-pre-wrap text-sm leading-snug text-gray-700 dark:text-gray-300">
-                        {post.note || post.content}
-                      </p>
-                    ) : (
-                      <p className="text-sm italic text-gray-400 dark:text-gray-500">작성자가 남긴 노트가 없습니다</p>
-                    )}
-                  </div>
+                <div className="mt-3">
+                  {(post?.note || post?.content) ? (
+                    <p className="whitespace-pre-wrap text-[15px] leading-relaxed text-gray-800 dark:text-gray-200">
+                      {post.note || post.content}
+                    </p>
+                  ) : (
+                    <p className="text-[15px] leading-relaxed text-gray-400 dark:text-gray-500">작성자가 남긴 노트가 없습니다</p>
+                  )}
                 </div>
               )}
 
             {isEditingPost ? (
-              <div className="flex flex-col gap-3 mb-3 p-3 bg-gray-50 dark:bg-gray-800/80 rounded-xl border border-gray-200 dark:border-gray-600">
+              <div className="mt-3 flex flex-col gap-3 rounded-xl border border-gray-200 bg-gray-50 p-3 dark:border-gray-600 dark:bg-gray-800/80">
                 <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">위치</label>
                 <input
                   type="text"
@@ -1555,61 +1565,52 @@ const PostDetailScreen = () => {
                     if (post?.id) recordConversion(post.id, CONVERSION_TYPES.MAP);
                     navigate('/map', { state: { mapState, selectedPinId } });
                   }}
-                  className="mb-3 flex w-full items-center gap-2 rounded-lg bg-gray-100 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 sm:w-auto"
+                  className="mt-3 flex w-full items-center gap-2 rounded-lg bg-gray-100 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 sm:w-auto"
                 >
                   <span className="material-symbols-outlined text-lg">map</span>
                   <span>지도에서 주변 보기</span>
                 </button>
               )}
 
-              {/* 🏷️ 해시태그 */}
-              <div className="flex items-start gap-3 pt-0.5">
-                <span className="material-symbols-outlined mt-0.5 w-7 shrink-0 text-center text-2xl text-gray-500 dark:text-gray-400">tag</span>
-                <div className="flex-1">
-                  {(() => {
-                    const getText = (t) =>
-                      (typeof t === 'string'
-                        ? (t || '').replace(/^#+/, '')
-                        : String(t?.name ?? t?.label ?? '')).trim();
-                    const seen = new Set();
-                    const merged = [];
-
-                    [...(post?.tags || []), ...(post?.aiLabels || [])].forEach((t) => {
-                      const raw = getText(t);
-                      const key = raw.toLowerCase();
-                      if (!key || seen.has(key)) return;
-                      seen.add(key);
-                      merged.push(raw);
-                    });
-
-                    return merged.length > 0 ? (
-                      <div className="flex flex-wrap gap-2">
-                        {merged.map((tagText, index) => {
-                          const korean = tagTranslations[tagText.toLowerCase()] || tagText;
-                          const handleTagClick = () => {
-                            // 원본 태그 텍스트(앞의 # 제거)를 그대로 HashtagScreen으로 전달
-                            const raw = (tagText || '').replace(/^#+/, '').trim();
-                            navigate(`/hashtags?tag=${encodeURIComponent(raw)}`);
-                          };
-                          return (
-                            <button
-                              key={`tag-${index}`}
-                              type="button"
-                              onClick={handleTagClick}
-                              className="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-semibold bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors cursor-pointer"
-                            >
-                              #{korean}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <p className="text-sm text-gray-400 dark:text-gray-500">태그가 없습니다</p>
-                    );
-                  })()}
-                </div>
+              <div className="mt-3">
+                {(() => {
+                  const getText = (t) =>
+                    (typeof t === 'string'
+                      ? (t || '').replace(/^#+/, '')
+                      : String(t?.name ?? t?.label ?? '')).trim();
+                  const seen = new Set();
+                  const merged = [];
+                  [...(post?.tags || []), ...(post?.aiLabels || [])].forEach((t) => {
+                    const raw = getText(t);
+                    const key = raw.toLowerCase();
+                    if (!key || seen.has(key)) return;
+                    seen.add(key);
+                    merged.push(raw);
+                  });
+                  return merged.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {merged.map((tagText, index) => {
+                        const korean = tagTranslations[tagText.toLowerCase()] || tagText;
+                        return (
+                          <button
+                            key={`tag-${index}`}
+                            type="button"
+                            onClick={() => {
+                              const raw = (tagText || '').replace(/^#+/, '').trim();
+                              navigate(`/hashtags?tag=${encodeURIComponent(raw)}`);
+                            }}
+                            className="inline-flex items-center rounded-full bg-gray-100 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                          >
+                            #{korean}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-400 dark:text-gray-500">태그가 없습니다</p>
+                  );
+                })()}
               </div>
-            </div>
           </div>
 
           {/* 정보가 정확해요 - 다른 사용자들이 정보 정확도 평가 */}
@@ -1634,17 +1635,13 @@ const PostDetailScreen = () => {
             </button>
           </div>
 
-          {/* 인터랙션 바 - 좋아요, 댓글, 공유 */}
-          <div className="px-4 py-3 flex items-center justify-between border-t border-gray-200 dark:border-gray-700">
-            <div className="flex items-center gap-4">
-              {/* 좋아요 (하트 아이콘 크기에 맞춘 애니메이션) */}
-              <button
-                onClick={handleLike}
-                className="flex items-center gap-2"
-              >
+          {/* 인터랙션 바 — 좌: 좋아요·댓글 / 우: 북마크(관심)·공유 */}
+          <div className="flex items-center justify-between border-t border-gray-100 px-4 py-3 dark:border-gray-800">
+            <div className="flex items-center gap-5">
+              <button type="button" onClick={handleLike} className="flex items-center gap-1.5" aria-label="좋아요">
                 <span className="relative inline-flex">
                   <span
-                    className={`material-symbols-outlined text-2xl ${liked ? 'text-red-500' : 'text-gray-600 dark:text-gray-400'}`}
+                    className={`material-symbols-outlined text-[26px] ${liked ? 'text-red-500' : 'text-gray-600 dark:text-gray-400'}`}
                     style={liked ? { fontVariationSettings: "'FILL' 1" } : {}}
                   >
                     {liked ? 'favorite' : 'favorite_border'}
@@ -1655,13 +1652,12 @@ const PostDetailScreen = () => {
                     </span>
                   )}
                 </span>
-                <span className={`text-base font-semibold ${liked ? 'text-red-500' : 'text-gray-700 dark:text-gray-300'}`}>
+                <span className={`text-[15px] font-semibold ${liked ? 'text-red-500' : 'text-gray-800 dark:text-gray-200'}`}>
                   {likeCount}
                 </span>
               </button>
-
-              {/* 댓글 (클릭 시 댓글창으로 스크롤, 항상 열려 있음) */}
               <button
+                type="button"
                 onClick={() => {
                   const input = document.getElementById('comment-input');
                   if (input) {
@@ -1669,20 +1665,36 @@ const PostDetailScreen = () => {
                     setTimeout(() => input.focus(), 300);
                   }
                 }}
-                className="flex items-center gap-2"
+                className="flex items-center gap-1.5"
+                aria-label="댓글"
               >
-                <span className="material-symbols-outlined text-2xl text-gray-600 dark:text-gray-400">chat_bubble_outline</span>
-                <span className="text-base font-semibold text-gray-700 dark:text-gray-300">{comments.length}</span>
+                <span className="material-symbols-outlined text-[26px] text-gray-600 dark:text-gray-400">chat_bubble_outline</span>
+                <span className="text-[15px] font-semibold text-gray-800 dark:text-gray-200">{comments.length}</span>
               </button>
             </div>
-
-            {/* 공유 */}
-            <button
-              onClick={handleShare}
-              className="flex items-center"
-            >
-              <span className="material-symbols-outlined text-2xl text-gray-600 dark:text-gray-400">ios_share</span>
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={handleFavorite}
+                className="flex h-10 w-10 items-center justify-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
+                aria-label={isFavorited ? '관심 장소 해제' : '관심 장소 등록'}
+              >
+                <span
+                  className={`material-symbols-outlined text-[26px] ${isFavorited ? 'text-primary' : 'text-gray-600 dark:text-gray-400'}`}
+                  style={isFavorited ? { fontVariationSettings: "'FILL' 1" } : {}}
+                >
+                  {isFavorited ? 'bookmark' : 'bookmark_border'}
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={handleShare}
+                className="flex h-10 w-10 items-center justify-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
+                aria-label="공유"
+              >
+                <span className="material-symbols-outlined text-[26px] text-gray-600 dark:text-gray-400">ios_share</span>
+              </button>
+            </div>
           </div>
 
           {/* 댓글 섹션 - 항상 열린 상태 */}
