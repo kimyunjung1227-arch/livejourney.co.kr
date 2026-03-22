@@ -7,7 +7,7 @@ import { useAuth } from '../contexts/AuthContext';
 import BottomNavigation from '../components/BottomNavigation';
 import { getUnreadCount } from '../utils/notifications';
 import { getEarnedBadgesForDisplay, getBadgeDisplayName } from '../utils/badgeSystem';
-import { getTrustScore, getTrustGrade, TRUST_GRADES } from '../utils/trustIndex';
+import { getTrustScore, getTrustRawScore, getTrustGrade, TRUST_GRADES } from '../utils/trustIndex';
 import { getCoordinatesByLocation } from '../utils/regionLocationMapping';
 import { follow, unfollow, isFollowing, getFollowerCount, getFollowingCount, getFollowerIds, getFollowingIds } from '../utils/followSystem';
 import { logger } from '../utils/logger';
@@ -1436,7 +1436,8 @@ const ProfileScreen = () => {
             <div className="px-6 py-4">
               {(() => {
                 const uid = (authUser || user)?.id;
-                const { grade, nextGrade, progressToNext } = getTrustGrade(trustScore, uid ? String(uid) : null);
+                const raw = getTrustRawScore(uid ? String(uid) : null);
+                const { grade, nextGrade, progressToNext, pointsRemainingInTier } = getTrustGrade(raw, uid ? String(uid) : null);
                 return (
                   <div>
                     <div className="flex items-center justify-between gap-2 mb-1 flex-nowrap min-w-0">
@@ -1448,14 +1449,15 @@ const ProfileScreen = () => {
                         신뢰지수
                       </button>
                       <div className="flex items-center gap-1.5 shrink-0">
-                        <span className="text-xl font-bold text-gray-800 dark:text-gray-100">{trustScore}</span>
+                        <span className="text-xl font-bold text-gray-800 dark:text-gray-100">{progressToNext}</span>
                         <span className="text-xs font-medium text-text-secondary-light dark:text-text-secondary-dark whitespace-nowrap">{grade.icon} {grade.name}</span>
                       </div>
                     </div>
+                    <p className="text-[10px] text-gray-400 dark:text-gray-500 mb-1 text-right">등급마다 0~100점 · 높은 등급일수록 채우기 더딤</p>
                     {nextGrade && (
                       <>
                         <div className="flex justify-end mb-0.5">
-                          <span className="text-[11px] text-gray-500 dark:text-gray-400">다음 등급까지 {nextGrade.minScore - trustScore}점</span>
+                          <span className="text-[11px] text-gray-500 dark:text-gray-400">이번 단계 승급까지 {pointsRemainingInTier}점</span>
                         </div>
                         <div className="h-1.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
                           <div
@@ -2319,9 +2321,12 @@ const ProfileScreen = () => {
                 </div>
                 {(() => {
                   const uid = (authUser || user)?.id;
-                  const { grade: currentGrade } = getTrustGrade(trustScore, uid ? String(uid) : null);
+                  const rawModal = getTrustRawScore(uid ? String(uid) : null);
+                  const { grade: currentGrade } = getTrustGrade(rawModal, uid ? String(uid) : null);
                   const currentGradeId = currentGrade?.id;
-                  return TRUST_GRADES.map((g) => (
+                  return TRUST_GRADES.map((g, idx) => {
+                    const nextMin = idx < TRUST_GRADES.length - 1 ? TRUST_GRADES[idx + 1].minScore : null;
+                    return (
                   <div
                     key={g.id}
                     className={`flex flex-col gap-1 py-3 px-3 rounded-xl ${currentGradeId === g.id ? 'bg-primary/10 dark:bg-primary/20 border border-primary/30' : 'bg-gray-50 dark:bg-gray-800'}`}
@@ -2329,12 +2334,14 @@ const ProfileScreen = () => {
                     <div className="flex items-center justify-between gap-3">
                       <span className="text-xl" aria-hidden>{g.icon}</span>
                       <span className="flex-1 text-sm font-medium text-text-primary-light dark:text-text-primary-dark">{g.name}</span>
-                      <span className="text-xs text-gray-500 dark:text-gray-400">
-                        {g.nextScore != null ? `${g.minScore}점 ~ ${g.nextScore - 1}점` : `${g.minScore}점 이상`}
+                      <span className="text-xs text-gray-500 dark:text-gray-400 text-right">
+                        {nextMin != null ? `Compass ${g.minScore}~${nextMin - 1}` : `Compass ${g.minScore}+`}
                       </span>
                     </div>
+                    <span className="text-[10px] text-gray-400 dark:text-gray-500 pl-8">화면 점수는 단계마다 0~100</span>
                   </div>
-                  ));
+                    );
+                  });
                 })()}
               </div>
             </div>

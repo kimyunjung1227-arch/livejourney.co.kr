@@ -143,10 +143,10 @@ const applyDecay = (rawScore, userId) => {
 };
 
 /**
- * 신뢰지수 (외부 사용): 감쇠 적용된 Compass Score
+ * Compass 누적 점수 (내부·뱃지 조건용): 감쇠 적용
  * postsOverride: 해당 사용자 게시물 배열이 있으면 그걸로 계산 (다른 사용자 프로필용)
  */
-export const getTrustScore = (userId = null, postsOverride = null) => {
+export const getTrustRawScore = (userId = null, postsOverride = null) => {
   const raw = getCompassScore(userId, postsOverride);
   const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
   const targetUserId = userId != null ? String(userId) : (currentUser?.id ? String(currentUser.id) : null);
@@ -154,15 +154,16 @@ export const getTrustScore = (userId = null, postsOverride = null) => {
 };
 
 /**
- * 등급 체계 — 모든 등급에 동일한 3가지 조건 적용 (점수 + GPS 인증 수 + 정확해요 수)
- * Lv.1 노마드 → Lv.2 트래커 → Lv.3 가이드 → Lv.4 마스터 → Lv.5 앰버서더
+ * 등급 체계 — Compass 누적(minScore) + GPS·정확해요 게이트
+ * 화면에 보이는 점수는 단계마다 0~100(진행률). 상위 등급일수록 같은 활동으로 채워지는 구간이 길어짐(더딤).
+ * Lv.1 노마드 → … → Lv.5 앰버서더
  */
 export const TRUST_GRADES = [
-  { id: 'nomad', name: '노마드', minScore: 0, minGpsAuth: 0, minAccuracy: 0, nextScore: 1200, icon: '🧭', badgeId: '노마드' },
-  { id: 'tracker', name: '트래커', minScore: 1200, minGpsAuth: 10, minAccuracy: 25, nextScore: 3500, icon: '📍', badgeId: '트래커' },
-  { id: 'guide', name: '가이드', minScore: 3500, minGpsAuth: 25, minAccuracy: 60, nextScore: 8000, icon: '📖', badgeId: '가이드' },
-  { id: 'master', name: '마스터', minScore: 8000, minGpsAuth: 50, minAccuracy: 120, nextScore: 20000, icon: '🏆', badgeId: '마스터' },
-  { id: 'ambassador', name: '앰버서더', minScore: 20000, minGpsAuth: 100, minAccuracy: 250, nextScore: null, icon: '👑', badgeId: '앰버서더' }
+  { id: 'nomad', name: '노마드', minScore: 0, minGpsAuth: 0, minAccuracy: 0, icon: '🧭', badgeId: '노마드' },
+  { id: 'tracker', name: '트래커', minScore: 1200, minGpsAuth: 10, minAccuracy: 25, icon: '📍', badgeId: '트래커' },
+  { id: 'guide', name: '가이드', minScore: 4500, minGpsAuth: 25, minAccuracy: 60, icon: '📖', badgeId: '가이드' },
+  { id: 'master', name: '마스터', minScore: 16000, minGpsAuth: 50, minAccuracy: 120, icon: '🏆', badgeId: '마스터' },
+  { id: 'ambassador', name: '앰버서더', minScore: 52000, minGpsAuth: 100, minAccuracy: 250, icon: '👑', badgeId: '앰버서더' }
 ];
 
 /**
@@ -237,17 +238,20 @@ export const getTrustGrade = (score, userId = null, postsOverride = null) => {
     }
   }
 
+  /** 현재 등급 구간 안에서만 0~100% (다음 등급 Compass 하한까지의 진행률) */
   let progressToNext = 100;
-  if (next && next.nextScore != null) {
+  if (next) {
     const range = next.minScore - current.minScore;
     const progress = num - current.minScore;
-    progressToNext = range > 0 ? Math.min(100, Math.round((progress / range) * 100)) : 100;
+    progressToNext = range > 0 ? Math.min(100, Math.max(0, Math.round((progress / range) * 100))) : 100;
   }
 
   return {
     grade: current,
     nextGrade: next,
     progressToNext,
+    /** 현재 단계에서 승급까지 남은 "표시 점수"(0~100 척도) */
+    pointsRemainingInTier: next ? Math.max(0, 100 - progressToNext) : 0,
     gates,
     gpsAuthCount,
     totalAccuracy
@@ -255,10 +259,21 @@ export const getTrustGrade = (score, userId = null, postsOverride = null) => {
 };
 
 /**
+ * 신뢰지수 (화면 표시): 현재 등급 단계 안에서의 진행도 0~100만 표시 (단계마다 100점 만점)
+ * 누적 Compass는 getTrustRawScore()
+ */
+export const getTrustScore = (userId = null, postsOverride = null) => {
+  const raw = getTrustRawScore(userId, postsOverride);
+  const { progressToNext } = getTrustGrade(raw, userId, postsOverride);
+  return progressToNext;
+};
+
+/**
  * 현재 점수에 해당하는 등급의 뱃지 ID
  */
-export const getTrustBadgeIdForScore = (score) => {
-  const { grade } = getTrustGrade(score ?? getTrustScore());
+export const getTrustBadgeIdForScore = (rawScore) => {
+  const raw = rawScore != null ? Number(rawScore) : getTrustRawScore();
+  const { grade } = getTrustGrade(raw);
   return grade?.badgeId || null;
 };
 

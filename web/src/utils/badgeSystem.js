@@ -5,7 +5,7 @@
  * - Supabase user_badges 연동: 로그아웃 후 재로그인해도 획득 뱃지·활동 통계 유지
  */
 import { logger } from './logger';
-import { getTrustScore } from './trustIndex';
+import { getTrustRawScore } from './trustIndex';
 import { fetchUserBadgesSupabase, saveUserBadgeSupabase } from '../api/userBadgesSupabase';
 
 /** [지역명] 뱃지일 때 표시명 반환. 그 외는 name 그대로 */
@@ -76,12 +76,12 @@ export const BADGES = {
   '연속 중계 마스터': { name: '연속 중계 마스터', description: '30일 연속으로 실시간 상황 1회 이상 공유. 변함없는 성실함으로 신뢰를 쌓는 유저', icon: '📅', category: '기여도', difficulty: 4, gradient: 'from-emerald-500 to-green-700', condition: (s) => (s.consecutiveDays || 0) >= 30, getProgress: (s) => Math.min(100, ((s.consecutiveDays || 0) / 30) * 100) },
   '지도 개척자': { name: '지도 개척자', description: '정보가 없던 새로운 장소의 첫 실시간 정보 등록. 라이브저니의 지도를 확장하는 선구자', icon: '🗺️', category: '기여도', difficulty: 2, gradient: 'from-amber-600 to-orange-700', condition: (s) => (s.firstReportNewPlace || 0) >= 1, getProgress: (s) => Math.min(100, ((s.firstReportNewPlace || 0) / 1) * 100) },
 
-  // 📊 신뢰지수 매트릭스 (Compass Score → 등급 뱃지) — 노마드 → 트래커 → 가이드 → 마스터 → 앰버서더
-  '노마드': { name: '노마드', description: '가입 즉시. 정보 열람·기본 업로드', icon: '🧭', category: '신뢰지수', difficulty: 1, gradient: 'from-stone-400 to-amber-700', condition: (s) => (s.trustScore ?? 0) >= 0, getProgress: (s) => Math.min(100, ((s.trustScore ?? 0) / 500) * 100) },
-  '트래커': { name: '트래커', description: 'GPS 기반 실시간 인증 5회 이상 + 500점', icon: '📍', category: '신뢰지수', difficulty: 1, gradient: 'from-slate-500 to-blue-700', condition: (s) => (s.trustScore ?? 0) >= 500, getProgress: (s) => Math.min(100, (((s.trustScore ?? 0) - 500) / 1500) * 100) },
-  '가이드': { name: '가이드', description: "'정확해요' 피드백 30개 수집 + 2,000점", icon: '📖', category: '신뢰지수', difficulty: 2, gradient: 'from-cyan-600 to-blue-800', condition: (s) => (s.trustScore ?? 0) >= 2000, getProgress: (s) => Math.min(100, (((s.trustScore ?? 0) - 2000) / 3000) * 100) },
-  '마스터': { name: '마스터', description: "지역 '마스터' 뱃지 + 5,000점", icon: '🏆', category: '신뢰지수', difficulty: 3, gradient: 'from-amber-600 to-orange-700', condition: (s) => (s.trustScore ?? 0) >= 5000, getProgress: (s) => Math.min(100, (((s.trustScore ?? 0) - 5000) / 10000) * 100) },
-  '앰버서더': { name: '앰버서더', description: '누적 절약 시간 1,000분 + 15,000점', icon: '👑', category: '신뢰지수', difficulty: 4, gradient: 'from-amber-400 to-yellow-600', condition: (s) => (s.trustScore ?? 0) >= 15000, getProgress: (s) => Math.min(100, ((s.trustScore ?? 0) / 15000) * 100) }
+  // 📊 신뢰지수 (stats.trustScore = Compass 누적, 등급 구간은 trustIndex TRUST_GRADES와 동일)
+  '노마드': { name: '노마드', description: '가입 즉시. 정보 열람·기본 업로드', icon: '🧭', category: '신뢰지수', difficulty: 1, gradient: 'from-stone-400 to-amber-700', condition: (s) => (s.trustScore ?? 0) >= 0, getProgress: (s) => Math.min(100, ((s.trustScore ?? 0) / 1200) * 100) },
+  '트래커': { name: '트래커', description: 'Compass 누적·조건 충족 시 승급 (GPS·정확해요)', icon: '📍', category: '신뢰지수', difficulty: 1, gradient: 'from-slate-500 to-blue-700', condition: (s) => (s.trustScore ?? 0) >= 1200, getProgress: (s) => Math.min(100, (((s.trustScore ?? 0) - 1200) / 3300) * 100) },
+  '가이드': { name: '가이드', description: '높은 등급일수록 같은 활동으로 점수가 더 천천히 오릅니다', icon: '📖', category: '신뢰지수', difficulty: 2, gradient: 'from-cyan-600 to-blue-800', condition: (s) => (s.trustScore ?? 0) >= 4500, getProgress: (s) => Math.min(100, (((s.trustScore ?? 0) - 4500) / 11500) * 100) },
+  '마스터': { name: '마스터', description: 'Compass 누적·커뮤니티 검증으로 달성', icon: '🏆', category: '신뢰지수', difficulty: 3, gradient: 'from-amber-600 to-orange-700', condition: (s) => (s.trustScore ?? 0) >= 16000, getProgress: (s) => Math.min(100, (((s.trustScore ?? 0) - 16000) / 36000) * 100) },
+  '앰버서더': { name: '앰버서더', description: '최고 등급 — 지속적 기여로 유지', icon: '👑', category: '신뢰지수', difficulty: 4, gradient: 'from-amber-400 to-yellow-600', condition: (s) => (s.trustScore ?? 0) >= 52000, getProgress: (s) => Math.min(100, ((s.trustScore ?? 0) / 52000) * 100) }
 };
 
 /**
@@ -197,7 +197,7 @@ export const calculateUserStats = (posts = [], user = {}) => {
     consecutiveDays,
     firstReportNewPlace: 0,
 
-    trustScore: getTrustScore()
+    trustScore: getTrustRawScore()
   };
 
   logger.log(`✅ 통계 계산 완료: 총 ${stats.totalPosts}개 게시물, ${stats.visitedRegions}개 지역, 신뢰지수 ${stats.trustScore}`);

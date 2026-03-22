@@ -9,7 +9,7 @@ import { logger } from '../utils/logger';
 import { getDisplayImageUrl } from '../api/upload';
 import { getPosts } from '../api/posts';
 import { fetchPostsByUserIdSupabase, fetchPostsSupabase } from '../api/postsSupabase';
-import { getTrustScore, getTrustGrade } from '../utils/trustIndex';
+import { getTrustRawScore, getTrustGrade } from '../utils/trustIndex';
 import api from '../api/axios';
 
 const UserProfileScreen = () => {
@@ -31,7 +31,8 @@ const UserProfileScreen = () => {
   const [followerCount, setFollowerCount] = useState(0);
   const [followingCount, setFollowingCount] = useState(0);
   const [followLoading, setFollowLoading] = useState(false);
-  const [trustScore, setTrustScore] = useState(0);
+  /** Compass 누적(내부). 화면에는 등급 단계 0~100만 표시 */
+  const [trustRawScore, setTrustRawScore] = useState(0);
 
   // 지도 관련
   const mapRef = useRef(null);
@@ -228,22 +229,20 @@ const UserProfileScreen = () => {
     return () => window.removeEventListener('followsUpdated', load);
   }, [userId]);
 
-  // 신뢰지수: 해당 사용자 게시물로 계산 후, 서버 값이 있으면 덮어쓰기 (다른 사용자 프로필에서도 표시)
+  // 신뢰지수: 클라이언트 Compass 누적(등급·단계 진행률은 getTrustGrade로 계산)
   useEffect(() => {
     if (!userId) return;
-    const score = getTrustScore(userId, userPosts.length ? userPosts : null);
-    setTrustScore(score);
+    const raw = getTrustRawScore(userId, userPosts.length ? userPosts : null);
+    setTrustRawScore(raw);
   }, [userId, userPosts]);
 
-  // 서버에서 신뢰지수/유저 정보 가져와서 덮어쓰기
+  // 서버에서 유저 정보 가져오기 (신뢰지수는 로컬 Compass 기준으로 통일)
   useEffect(() => {
     if (!userId) return;
     const isServerId = /^[a-fA-F0-9]{24}$/.test(String(userId));
     if (!isServerId) return;
     api.get(`/users/${userId}`)
       .then((res) => {
-        const serverTrust = res.data?.user?.trustScore;
-        if (typeof serverTrust === 'number') setTrustScore(serverTrust);
         const u = res.data?.user;
         if (u && (u.username || u.profileImage != null)) {
           setUser((prev) => (prev ? { ...prev, ...u, id: prev.id } : null));
@@ -549,18 +548,18 @@ const UserProfileScreen = () => {
           {/* 신뢰지수 - 한 줄로 깔끔하게 (다른 사용자도 해당 사용자 게시물 기준으로 표시) */}
           {(() => {
             const postsForTrust = userPosts.length ? userPosts : null;
-            const { grade, nextGrade, progressToNext } = getTrustGrade(trustScore, userId || null, postsForTrust);
+            const { grade, nextGrade, progressToNext, pointsRemainingInTier } = getTrustGrade(trustRawScore, userId || null, postsForTrust);
             return (
               <div className="bg-white dark:bg-gray-900 border-t border-gray-100 dark:border-gray-800 px-6 py-4">
                 <div className="flex items-center justify-between gap-2 mb-1.5 flex-nowrap min-w-0">
                   <span className="text-sm font-semibold text-text-primary-light dark:text-text-primary-dark shrink-0">신뢰지수</span>
-                  <span className="text-xs text-gray-500 dark:text-gray-400 truncate" title="활동·검증·신선도로 계산되는 Compass Score">Compass Score (신뢰 지수)</span>
+                  <span className="text-xs text-gray-500 dark:text-gray-400 truncate" title="등급마다 0~100점, 높은 등급일수록 채우기 더딤">단계 진행 (0~100)</span>
                 </div>
                 <div className="flex items-center gap-2 mb-1.5 flex-nowrap min-w-0">
-                  <span className="text-2xl font-bold text-gray-800 dark:text-gray-100 shrink-0">{trustScore}</span>
+                  <span className="text-2xl font-bold text-gray-800 dark:text-gray-100 shrink-0">{progressToNext}</span>
                   <span className="text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark whitespace-nowrap shrink-0">{grade.icon} {grade.name}</span>
                   {nextGrade && (
-                    <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap shrink-0">다음 등급까지 {nextGrade.minScore - trustScore}점</span>
+                    <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap shrink-0">이번 단계 승급까지 {pointsRemainingInTier}점</span>
                   )}
                 </div>
                 {nextGrade && (

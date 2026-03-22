@@ -6,7 +6,7 @@
 import api from '../api/axios';
 import { notifyLikeMilestone, notifyTotalLikesMilestone, notifyNewLike, notifyPostHelped } from './browserNotifications';
 import { checkNewBadges, awardBadge, calculateUserStats, getEarnedBadges, BADGES } from './badgeSystem';
-import { getTrustScore, getTrustGrade, getTrustBadgeIdForScore } from './trustIndex';
+import { getTrustRawScore, getTrustGrade, getTrustBadgeIdForScore } from './trustIndex';
 import { logger } from './logger';
 
 // 좋아요 토글
@@ -336,15 +336,15 @@ export const toggleAccuracyFeedback = async (postId) => {
 
   if (authorIsMe) {
     try {
-      const score = getTrustScore();
-      const badgeId = getTrustBadgeIdForScore(score);
+      const raw = getTrustRawScore();
+      const badgeId = getTrustBadgeIdForScore(raw);
       if (badgeId && BADGES[badgeId] && !getEarnedBadges().some((b) => b.name === badgeId)) {
         const awarded = awardBadge(BADGES[badgeId], { userId: currentUser?.id });
         if (awarded) {
           window.dispatchEvent(new CustomEvent('badgeEarned', { detail: BADGES[badgeId] }));
         }
       }
-      window.dispatchEvent(new CustomEvent('trustIndexUpdated', { detail: { score, grade: getTrustGrade(score).grade } }));
+      window.dispatchEvent(new CustomEvent('trustIndexUpdated', { detail: { score: raw, grade: getTrustGrade(raw).grade } }));
     } catch (e) {
       logger.error('신뢰지수 뱃지 부여 확인 실패', e);
     }

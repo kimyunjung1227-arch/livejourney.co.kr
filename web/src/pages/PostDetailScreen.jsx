@@ -11,7 +11,7 @@ import { getTimeAgo } from '../utils/dateUtils';
 import { toggleLike, isPostLiked, addComment, deleteCommentFromPost, updateCommentInPost, getPostAccuracyCount, hasUserMarkedAccurate, toggleAccuracyFeedback } from '../utils/socialInteractions';
 import { toggleInterestPlace, isInterestPlace } from '../utils/interestPlaces';
 import { getEarnedBadgesForUser } from '../utils/badgeSystem';
-import { getTrustScore, getTrustGrade } from '../utils/trustIndex';
+import { getTrustRawScore, getTrustGrade } from '../utils/trustIndex';
 import { follow, unfollow, isFollowing } from '../utils/followSystem';
 import { recordConversion, CONVERSION_TYPES } from '../utils/conversionEvents';
 import { logger } from '../utils/logger';
@@ -929,9 +929,9 @@ const PostDetailScreen = () => {
         ? sameAuthorPosts
         : [post, ...sameAuthorPosts]
       : [post, ...sameAuthorPosts];
-    const score = getTrustScore(postUserId, withCurrent.length ? withCurrent : null);
-    const { grade } = getTrustGrade(score, postUserId, withCurrent.length ? withCurrent : null);
-    setAuthorTrustScore(score);
+    const raw = getTrustRawScore(postUserId, withCurrent.length ? withCurrent : null);
+    const { grade, progressToNext } = getTrustGrade(raw, postUserId, withCurrent.length ? withCurrent : null);
+    setAuthorTrustScore(progressToNext);
     setAuthorTrustGrade(grade);
   }, [post]);
 

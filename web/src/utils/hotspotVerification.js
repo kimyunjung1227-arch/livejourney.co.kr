@@ -4,7 +4,7 @@
  */
 
 import { getPostAccuracyCount } from './socialInteractions';
-import { getTrustScore } from './trustIndex';
+import { getTrustRawScore } from './trustIndex';
 import { getPostAgeInHours } from './timeUtils';
 
 const getPostTimeMs = (post) => {
@@ -63,7 +63,7 @@ export const getTrustWeight = (post) => {
     const currentUser = typeof localStorage !== 'undefined' ? JSON.parse(localStorage.getItem('user') || '{}') : {};
     const uid = post?.userId ?? post?.user?.id ?? post?.user;
     if (uid && currentUser?.id && String(uid) === String(currentUser.id)) {
-      authorScore = Math.min(1, 0.3 + (getTrustScore() || 0) / 5000);
+      authorScore = Math.min(1, 0.3 + (getTrustRawScore() || 0) / 52000);
     }
   } catch (_) {}
   const postTrust = Math.min(1, 0.5 + (accuracyCount || 0) * 0.05);
