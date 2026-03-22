@@ -141,8 +141,6 @@ const PostDetailScreen = () => {
   const [showHeartAnimation, setShowHeartAnimation] = useState(false);
   const [editingCommentId, setEditingCommentId] = useState(null);
   const [editCommentText, setEditCommentText] = useState('');
-  const [showAuthorPostMenu, setShowAuthorPostMenu] = useState(false);
-  const authorPostMenuRef = useRef(null);
   const [isFollowAuthor, setIsFollowAuthor] = useState(false);
   const [accuracyMarked, setAccuracyMarked] = useState(false);
   const [accuracyCount, setAccuracyCount] = useState(0);
@@ -607,7 +605,6 @@ const PostDetailScreen = () => {
 
   const handleNavigateToEditPost = useCallback(() => {
     if (!postId) return;
-    setShowAuthorPostMenu(false);
     navigate(`/post/${postId}/edit`);
   }, [navigate, postId]);
 
@@ -631,17 +628,6 @@ const PostDetailScreen = () => {
     window.dispatchEvent(new Event('postsUpdated'));
     navigate(-1);
   }, [post, isPostAuthor, navigate]);
-
-  useEffect(() => {
-    if (!showAuthorPostMenu) return;
-    const onClose = (e) => {
-      if (authorPostMenuRef.current && !authorPostMenuRef.current.contains(e.target)) {
-        setShowAuthorPostMenu(false);
-      }
-    };
-    document.addEventListener('mousedown', onClose);
-    return () => document.removeEventListener('mousedown', onClose);
-  }, [showAuthorPostMenu]);
 
   // 게시물 변경 (상하/좌우 스와이프 모두 지원)
   const changePost = useCallback((direction) => {
@@ -1202,59 +1188,6 @@ const PostDetailScreen = () => {
                   </div>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
-                  {isPostAuthor ? (
-                    <div className="relative" ref={authorPostMenuRef}>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setShowAuthorPostMenu((v) => !v);
-                        }}
-                        className="flex h-9 w-9 items-center justify-center rounded-full text-gray-700 hover:bg-black/5 dark:text-gray-200 dark:hover:bg-white/10"
-                        aria-expanded={showAuthorPostMenu}
-                        aria-haspopup="menu"
-                        aria-label="게시물 메뉴"
-                      >
-                        <span className="material-symbols-outlined text-[22px]">more_vert</span>
-                      </button>
-                      {showAuthorPostMenu && (
-                        <div
-                          className="absolute right-0 top-full z-[100] mt-1 min-w-[200px] overflow-hidden rounded-xl border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-gray-900"
-                          role="menu"
-                        >
-                          <button
-                            type="button"
-                            role="menuitem"
-                            className="flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left text-sm font-medium text-gray-900 hover:bg-gray-50 dark:text-gray-100 dark:hover:bg-gray-800"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleNavigateToEditPost();
-                            }}
-                          >
-                            <span>수정하기</span>
-                            <span className="material-symbols-outlined text-[20px] text-gray-500" style={{ fontVariationSettings: "'FILL' 0" }}>
-                              edit
-                            </span>
-                          </button>
-                          <button
-                            type="button"
-                            role="menuitem"
-                            className="flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left text-sm font-medium text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setShowAuthorPostMenu(false);
-                              handleDeletePost();
-                            }}
-                          >
-                            <span>삭제하기</span>
-                            <span className="material-symbols-outlined text-[20px] text-red-500" style={{ fontVariationSettings: "'FILL' 0" }}>
-                              delete
-                            </span>
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  ) : null}
                   {postUserId && user?.id && String(postUserId) !== String(user.id) && (
                     <button
                       onClick={(e) => {
@@ -1362,11 +1295,22 @@ const PostDetailScreen = () => {
               <button
                 type="button"
                 onClick={() => setIsVideoMuted((prev) => !prev)}
-                className="absolute right-2 bottom-3 z-20 flex h-8 w-8 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm shadow-sm"
+                className="absolute right-2 bottom-3 z-20 flex shrink-0 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm shadow-sm"
+                style={{
+                  width: 32,
+                  height: 32,
+                  minWidth: 32,
+                  minHeight: 32,
+                  maxWidth: 32,
+                  maxHeight: 32,
+                  padding: 0,
+                  aspectRatio: '1',
+                  boxSizing: 'border-box'
+                }}
                 title={isVideoMuted ? '소리 켜기' : '소리 끄기'}
                 aria-label={isVideoMuted ? '소리 켜기' : '소리 끄기'}
               >
-                <span className="material-symbols-outlined text-[18px] leading-none">
+                <span className="material-symbols-outlined text-[17px] leading-none block">
                   {isVideoMuted ? 'volume_off' : 'volume_up'}
                 </span>
               </button>
@@ -1385,13 +1329,32 @@ const PostDetailScreen = () => {
                     {verifiedLocation || detailedLocationText || locationText}
                   </p>
                 </div>
-                <div className="min-w-0 max-w-[42%] shrink-0 sm:max-w-[38%]">
-                  <p className="text-[11px] font-medium text-gray-400 dark:text-gray-500">카테고리 정보</p>
+                <div className="min-w-0 max-w-[52%] shrink-0 sm:max-w-[46%]">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[11px] font-medium text-gray-400 dark:text-gray-500">카테고리 정보</p>
+                    {isPostAuthor ? (
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={handleNavigateToEditPost}
+                          className="rounded-md px-1.5 py-0.5 text-[10px] font-medium text-sky-600 hover:bg-sky-50 dark:text-sky-400 dark:hover:bg-sky-950/40"
+                        >
+                          수정
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleDeletePost}
+                          className="rounded-md px-1.5 py-0.5 text-[10px] font-medium text-gray-400 hover:bg-gray-100 hover:text-red-500 dark:text-gray-500 dark:hover:bg-gray-800"
+                        >
+                          삭제
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
                   <p className="mt-0.5 truncate text-sm text-gray-500 dark:text-gray-400" title={categoryName || ''}>
                     {categoryName || '—'}
                   </p>
                 </div>
-                <div className="h-9 w-9 shrink-0" aria-hidden="true" />
               </div>
               {addressText ? (
                 <p className="mt-2 text-xs text-gray-400 dark:text-gray-500">{addressText}</p>

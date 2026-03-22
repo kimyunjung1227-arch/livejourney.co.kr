@@ -12,10 +12,11 @@ export const feedGridImageBox = {
 };
 
 export const feedGridInfoBox = {
-  padding: '6px 14px 10px',
-  minHeight: '92px',
+  padding: '4px 14px 8px',
+  minHeight: 0,
   display: 'flex',
   flexDirection: 'column',
+  gap: '2px',
   overflow: 'hidden',
 };
 
@@ -32,9 +33,9 @@ export const feedGridTitleStyle = {
 export const feedGridDescStyle = {
   fontSize: '12px',
   color: '#4b5563',
-  marginTop: '2px',
+  marginTop: 0,
   lineHeight: 1.35,
-  height: '2.7em',
+  maxHeight: '2.7em',
   overflow: 'hidden',
   display: '-webkit-box',
   WebkitLineClamp: 2,
@@ -45,7 +46,7 @@ export const feedGridMetaRow = {
   display: 'flex',
   justifyContent: 'space-between',
   alignItems: 'center',
-  marginTop: '2px',
+  marginTop: '1px',
   flexShrink: 0,
   fontSize: '11px',
   color: '#6b7280',

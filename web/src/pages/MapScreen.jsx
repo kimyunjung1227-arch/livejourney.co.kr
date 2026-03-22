@@ -9,7 +9,7 @@ import { getCombinedPosts } from '../utils/mockData';
 import { getDisplayImageUrl } from '../api/upload';
 import { fetchPostsSupabase } from '../api/postsSupabase';
 import { logger } from '../utils/logger';
-import { getMapThumbnailUri } from '../utils/postMedia';
+import { getMapThumbnailUri, getFirstVideoUriFromPost } from '../utils/postMedia';
 import { useHorizontalDragScroll } from '../hooks/useHorizontalDragScroll';
 
 // HTML 속성에 넣을 URL/텍스트 이스케이프 (핀 img src가 깨지지 않도록)
@@ -63,17 +63,28 @@ const getPostAgeHours = (post) => {
 const getMapAgeVisual = (post) => {
   const ageHours = getPostAgeHours(post);
   const ageMinutes = ageHours * 60;
-  if (ageMinutes <= 3) {
+  // 최신(약 8분 이내): 선명·선명도 100%
+  if (ageMinutes <= 8) {
     return { imageOpacity: 1, imageFilter: 'none', label: '방금' };
   }
-  if (ageHours < 24) {
-    return { imageOpacity: 0.78, imageFilter: 'saturate(88%)', label: '24시간 이내' };
-  }
-  if (ageHours < 48) {
-    return { imageOpacity: 0.56, imageFilter: 'grayscale(22%) saturate(70%)', label: '48시간 이내' };
-  }
-  return { imageOpacity: 0.4, imageFilter: 'grayscale(40%)', label: '오래된 정보' };
+  // 8분~48시간: 서서히 흐려짐(불투명·채도·미세 블러 연속 보간)
+  const t = Math.min(1, Math.max(0, (ageMinutes - 8) / (48 * 60 - 8)));
+  const opacity = 1 - t * 0.52;
+  const blurPx = t * 2.2;
+  const sat = 100 - t * 32;
+  const gray = t * 36;
+  let label = '24시간 이내';
+  if (ageHours >= 24 && ageHours < 48) label = '48시간 이내';
+  if (ageHours >= 48) label = '오래된 정보';
+  return {
+    imageOpacity: opacity,
+    imageFilter: `saturate(${sat}%) grayscale(${gray}%) blur(${blurPx}px)`,
+    label
+  };
 };
+
+const MAP_PIN_PLACEHOLDER_SVG =
+  'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiByeD0iNCIgZmlsbD0iI0YzRjRGNiIvPgo8cGF0aCBkPSJNMjAgMTNDMTcuMjQgMTMgMTUgMTUuMjQgMTUgMThDMTUgMjAuNzYgMTcuMjQgMjMgMjAgMjNDMjIuNzYgMjMgMjUgMjAuNzYgMjUgMThDMjUgMTUuMjQgMjIuNzYgMTMgMjAgMTNaIiBmaWxsPSIjOUI5Q0E1Ii8+Cjwvc3ZnPg==';
 
 const MapScreen = () => {
   const navigate = useNavigate();
@@ -1452,8 +1463,10 @@ const MapScreen = () => {
         const position = new window.kakao.maps.LatLng(lat, lng);
         bounds.extend(position);
 
-        // 핀 썸네일: 사용자가 올린 사진 우선 (getPostPinImageUrl로 통일)
+        // 핀 썸네일: 정지 이미지 우선, 없으면 동영상 첫 프레임(비디오 태그)
         const imageUrl = getPostPinImageUrl(post);
+        const rawVideoUri = !imageUrl ? getFirstVideoUriFromPost(post) : '';
+        const videoDisplayUrl = rawVideoUri ? getDisplayImageUrl(rawVideoUri) : '';
 
         // 선택된 핀(경로) 또는 현재 강조할 핀(지도/시트 선택)인지 확인
         const isSelected = routePins.some(p => p.post.id === post.id);
@@ -1466,7 +1479,41 @@ const MapScreen = () => {
           ? '0 2px 8px rgba(0, 188, 212, 0.35)'
           : '0 2px 8px rgba(0,0,0,0.25)';
 
-        const PLACEHOLDER_SVG = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiByeD0iNCIgZmlsbD0iI0YzRjRGNiIvPgo8cGF0aCBkPSJNMjAgMTNDMTcuMjQgMTMgMTUgMTUuMjQgMTUgMThDMTUgMjAuNzYgMTcuMjQgMjMgMjAgMjNDMjIuNzYgMjMgMjUgMjAuNzYgMjUgMThDMjUgMTUuMjQgMjIuNzYgMTMgMjAgMTNaIiBmaWxsPSIjOUI5Q0E1Ii8+Cjwvc3ZnPg==';
+        const PLACEHOLDER_SVG = MAP_PIN_PLACEHOLDER_SVG;
+        const mediaInner = videoDisplayUrl
+          ? `<video
+            class="pin-video-thumb"
+            muted
+            playsinline
+            webkit-playsinline="true"
+            preload="metadata"
+            width="50"
+            height="50"
+            style="
+              width: 100%;
+              height: 100%;
+              object-fit: cover;
+              display: block;
+              background: #f5f5f5;
+              opacity: ${ageVisual.imageOpacity};
+              filter: ${ageVisual.imageFilter};
+            "
+          ></video>`
+          : `<img 
+            width="50"
+            height="50"
+            loading="eager"
+            style="
+              width: 100%;
+              height: 100%;
+              object-fit: cover;
+              display: block;
+              background: #f5f5f5;
+              opacity: ${ageVisual.imageOpacity};
+              filter: ${ageVisual.imageFilter};
+            " 
+            alt="${escapeHtmlAttr(post.location || '여행지')}"
+          />`;
         const el = document.createElement('div');
         el.innerHTML = `
         <button 
@@ -1488,21 +1535,7 @@ const MapScreen = () => {
           " 
           data-post-id="${post.id}"
         >
-          <img 
-            width="50"
-            height="50"
-            loading="eager"
-            style="
-              width: 100%;
-              height: 100%;
-              object-fit: cover;
-              display: block;
-              background: #f5f5f5;
-              opacity: ${ageVisual.imageOpacity};
-              filter: ${ageVisual.imageFilter};
-            " 
-            alt="${escapeHtmlAttr(post.location || '여행지')}"
-          />
+          ${mediaInner}
           ${isSelected ? `
             <div style="
               position: absolute;
@@ -1532,7 +1565,22 @@ const MapScreen = () => {
         el.style.position = 'relative';
         el.style.zIndex = '1';
 
-        // img src는 JS로 설정 (HTML 이스케이프로 URL 깨짐 방지, blob/긴 URL 안정 처리)
+        // 이미지/동영상 src는 JS로 설정 (URL 이스케이프·깨짐 방지)
+        const vidThumb = el.querySelector('video.pin-video-thumb');
+        if (vidThumb && videoDisplayUrl) {
+          vidThumb.src = videoDisplayUrl;
+          vidThumb.onerror = function onPinVideoError() {
+            this.onerror = null;
+            this.style.display = 'none';
+            const fallback = document.createElement('img');
+            fallback.width = 50;
+            fallback.height = 50;
+            fallback.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
+            fallback.alt = '';
+            fallback.src = PLACEHOLDER_SVG;
+            this.parentNode?.insertBefore(fallback, this);
+          };
+        }
         const img = el.querySelector('img');
         if (img) {
           img.src = imageUrl || PLACEHOLDER_SVG;
@@ -1567,10 +1615,14 @@ const MapScreen = () => {
           });
         }
 
-        // 핀 이미지가 처음부터 보이도록 프리로드 (오버레이가 나중에 그려져도 캐시에서 바로 표시)
+        // 핀 미디어 프리로드
         if (imageUrl) {
           const preload = new Image();
           preload.src = imageUrl;
+        } else if (videoDisplayUrl) {
+          const pre = document.createElement('video');
+          pre.preload = 'metadata';
+          pre.src = videoDisplayUrl;
         }
 
         const overlay = new window.kakao.maps.CustomOverlay({
@@ -1631,10 +1683,14 @@ const MapScreen = () => {
                      markerData.post.note || 
                      markerData.post.location || 
                      '여행지';
+        const pinImg = getPostPinImageUrl(markerData.post);
+        const rawVid = !pinImg ? getFirstVideoUriFromPost(markerData.post) : '';
+        const videoUrl = rawVid ? getDisplayImageUrl(rawVid) : '';
         return {
           id: markerData.post.id,
           title: title,
-          image: getPostPinImageUrl(markerData.post),
+          image: pinImg,
+          videoUrl,
           lat: markerData.position.getLat(),
           lng: markerData.position.getLng(),
           post: markerData.post
@@ -2320,6 +2376,15 @@ const MapScreen = () => {
     }
   };
 
+  // 경로 모드만 종료 (시트 복구 + 핀 초기화) — 취소 버튼용
+  const exitRouteMode = () => {
+    if (!isRouteMode) return;
+    setIsRouteMode(false);
+    clearRoute();
+    setIsSheetHidden(false);
+    setSheetOffset(0);
+  };
+
   // 경로 저장: 저장 후 경로 모드 해제, 방금 저장한 경로 표시(연결선·핀 스타일 동일)
   const saveRoute = () => {
     if (selectedRoutePins.length < 2) {
@@ -2983,28 +3048,32 @@ const MapScreen = () => {
           <div style={{ width: '16px', flexShrink: 0 }} aria-hidden="true" />
         </div>
 
-        {/* 경로 모드 토글 버튼 및 초기화 아이콘 - 시트가 내려갔을 때는 숨김 */}
-        {!isSheetHidden && (
-          <div style={{
+        {/* 경로 모드 토글·초기화 — 시트 접힘과 무관하게 항상 표시 (활성 상태 추적·취소 가능) */}
+        <div style={{
             position: 'absolute',
             left: '16px',
-            bottom: `${Math.max(sheetHeight + 20, 100)}px`,
+            bottom: `${isSheetHidden ? 100 : Math.max(sheetHeight + 20, 100)}px`,
             zIndex: 30,
             transition: 'all 0.3s ease-out',
             pointerEvents: 'auto',
             display: 'flex',
             alignItems: 'center',
-            gap: '8px'
+            gap: '8px',
+            flexWrap: 'wrap'
           }}>
             <button
+              type="button"
               onClick={toggleRouteMode}
+              aria-pressed={isRouteMode}
               style={{
                 padding: '10px 16px',
                 borderRadius: '24px',
-                border: isRouteMode ? '2px solid #00BCD4' : '2px solid transparent',
-                background: isRouteMode ? '#00BCD4' : 'white',
+                border: isRouteMode ? '2px solid #00838F' : '2px solid rgba(0,0,0,0.08)',
+                background: isRouteMode ? 'linear-gradient(145deg, #00ACC1 0%, #00838F 100%)' : 'white',
                 color: isRouteMode ? 'white' : '#333',
-                boxShadow: isRouteMode ? '0 4px 12px rgba(0, 188, 212, 0.4)' : '0 2px 8px rgba(0,0,0,0.15)',
+                boxShadow: isRouteMode
+                  ? '0 0 0 3px rgba(0, 188, 212, 0.45), 0 4px 14px rgba(0, 131, 143, 0.45)'
+                  : '0 2px 8px rgba(0,0,0,0.15)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -3036,6 +3105,21 @@ const MapScreen = () => {
               }}
             >
               {isRouteMode ? '경로 모드' : '경로 만들기'}
+              {isRouteMode && (
+                <span
+                  style={{
+                    marginLeft: '2px',
+                    padding: '2px 7px',
+                    borderRadius: '10px',
+                    background: 'rgba(255,255,255,0.35)',
+                    fontSize: '11px',
+                    fontWeight: '800',
+                    letterSpacing: '0.02em'
+                  }}
+                >
+                  ON
+                </span>
+              )}
               {isRouteMode && selectedRoutePins.length > 0 && (
                 <span style={{
                   marginLeft: '4px',
@@ -3049,6 +3133,36 @@ const MapScreen = () => {
                 </span>
               )}
             </button>
+            {isRouteMode && (
+              <button
+                type="button"
+                onClick={exitRouteMode}
+                style={{
+                  padding: '8px 14px',
+                  borderRadius: '20px',
+                  border: '1px solid rgba(0,0,0,0.12)',
+                  background: 'rgba(255,255,255,0.95)',
+                  color: '#555',
+                  fontSize: '13px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                  transition: 'all 0.2s'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = '#fff';
+                  e.currentTarget.style.color = '#c62828';
+                  e.currentTarget.style.borderColor = 'rgba(198,40,40,0.35)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.95)';
+                  e.currentTarget.style.color = '#555';
+                  e.currentTarget.style.borderColor = 'rgba(0,0,0,0.12)';
+                }}
+              >
+                취소
+              </button>
+            )}
             {/* 최근 저장한 경로 (시간 아이콘) - 켜면 경로, 끄면 바로 내 위치 */}
             {recentSavedRoutes.length > 0 && (
               <button
@@ -3131,7 +3245,6 @@ const MapScreen = () => {
               </button>
             )}
           </div>
-        )}
 
         {/* 저장된 경로 패널 — 최근 2개만, 사이즈 축소 */}
         {showSavedRoutesPanel && !isRouteMode && (
@@ -3205,13 +3318,13 @@ const MapScreen = () => {
           </div>
         )}
 
-        {/* 저장, 공유 버튼들 (경로 모드이고 2개 이상 선택되었을 때) — 필터와 비슷한 스타일 */}
+        {/* 저장·공유 — 경로 모드에서 항상 보이도록 z-index 상향, 시트 높이와 동기화 */}
         {isRouteMode && selectedRoutePins.length >= 2 && (
           <div style={{
             position: 'absolute',
             left: '16px',
             bottom: (isSheetHidden ? 100 : Math.max(sheetHeight + 20, 100)) + 56,
-            zIndex: 30,
+            zIndex: 32,
             pointerEvents: 'auto',
             display: 'flex',
             gap: '8px',
@@ -3524,21 +3637,37 @@ const MapScreen = () => {
                       e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)';
                     }}
                   >
-                    {(pin.image || getPostPinImageUrl(pin.post)) && (
-                      <img
-                        src={pin.image || getPostPinImageUrl(pin.post)}
-                        alt={pin.title}
-                        style={{
-                          width: '100%',
-                          height: '90px',
-                          objectFit: 'cover',
-                          opacity: ageVisual.imageOpacity,
-                          filter: ageVisual.imageFilter
-                        }}
-                        onError={(e) => {
-                          e.currentTarget.style.display = 'none';
-                        }}
-                      />
+                    {(pin.image || pin.videoUrl || getPostPinImageUrl(pin.post)) && (
+                      pin.videoUrl && !pin.image ? (
+                        <video
+                          src={pin.videoUrl}
+                          muted
+                          playsInline
+                          preload="metadata"
+                          style={{
+                            width: '100%',
+                            height: '90px',
+                            objectFit: 'cover',
+                            opacity: ageVisual.imageOpacity,
+                            filter: ageVisual.imageFilter
+                          }}
+                        />
+                      ) : (
+                        <img
+                          src={pin.image || getPostPinImageUrl(pin.post)}
+                          alt={pin.title}
+                          style={{
+                            width: '100%',
+                            height: '90px',
+                            objectFit: 'cover',
+                            opacity: ageVisual.imageOpacity,
+                            filter: ageVisual.imageFilter
+                          }}
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                          }}
+                        />
+                      )
                     )}
                     <div style={{
                       padding: '6px',
@@ -3597,12 +3726,30 @@ const MapScreen = () => {
             }}
           >
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: 12 }}>
-              <img
-                src={getPostPinImageUrl(pinDetailView.post)}
-                alt=""
-                style={{ width: 72, height: 72, borderRadius: 10, objectFit: 'cover', flexShrink: 0 }}
-                onError={(e) => { e.target.style.display = 'none'; }}
-              />
+              {(() => {
+                const thumb = getPostPinImageUrl(pinDetailView.post);
+                const rawVid = !thumb ? getFirstVideoUriFromPost(pinDetailView.post) : '';
+                const vUrl = rawVid ? getDisplayImageUrl(rawVid) : '';
+                if (vUrl && !thumb) {
+                  return (
+                    <video
+                      src={vUrl}
+                      muted
+                      playsInline
+                      preload="metadata"
+                      style={{ width: 72, height: 72, borderRadius: 10, objectFit: 'cover', flexShrink: 0 }}
+                    />
+                  );
+                }
+                return (
+                  <img
+                    src={thumb || MAP_PIN_PLACEHOLDER_SVG}
+                    alt=""
+                    style={{ width: 72, height: 72, borderRadius: 10, objectFit: 'cover', flexShrink: 0 }}
+                    onError={(e) => { e.target.src = MAP_PIN_PLACEHOLDER_SVG; }}
+                  />
+                );
+              })()}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <p style={{ margin: 0, fontSize: 15, fontWeight: 'bold', color: '#333', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {pinDetailView.post.placeName || pinDetailView.post.detailedLocation || pinDetailView.post.location || '여행지'}
@@ -3724,25 +3871,44 @@ const MapScreen = () => {
                 </button>
               </div>
 
-              {/* 이미지 */}
+              {/* 이미지 / 동영상 썸네일 */}
               <div style={{
                 width: '100%',
                 aspectRatio: '4/3',
                 overflow: 'hidden',
                 background: '#f5f5f5'
               }}>
-                <img
-                  src={getPostPinImageUrl(selectedPost.post)}
-                  alt={selectedPost.post.location || '여행지'}
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'cover'
-                  }}
-                  onError={(e) => {
-                    e.currentTarget.style.display = 'none';
-                  }}
-                />
+                {(() => {
+                  const t = getPostPinImageUrl(selectedPost.post);
+                  const rv = !t ? getFirstVideoUriFromPost(selectedPost.post) : '';
+                  const vu = rv ? getDisplayImageUrl(rv) : '';
+                  if (vu && !t) {
+                    return (
+                      <video
+                        src={vu}
+                        muted
+                        playsInline
+                        controls
+                        preload="metadata"
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      />
+                    );
+                  }
+                  return (
+                    <img
+                      src={t || MAP_PIN_PLACEHOLDER_SVG}
+                      alt={selectedPost.post.location || '여행지'}
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'cover'
+                      }}
+                      onError={(e) => {
+                        e.currentTarget.src = MAP_PIN_PLACEHOLDER_SVG;
+                      }}
+                    />
+                  );
+                })()}
               </div>
 
               {/* 내용 — 사진 아래 시트 스타일 통일 */}

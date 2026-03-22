@@ -83,6 +83,15 @@ export const getMapThumbnailUri = (post) => {
   return '';
 };
 
+/** 동영상만 있는 게시물의 첫 동영상 URL (핀 썸네일용 비디오 태그) */
+export const getFirstVideoUriFromPost = (post) => {
+  const n = normalizePostForMedia(post);
+  if (!n) return '';
+  const items = buildMediaItemsFromPost(n);
+  const v = items.find((m) => m.type === 'video');
+  return v?.uri ? String(v.uri) : '';
+};
+
 /**
  * 피드 그리드용 커버: 이미지·동영상 poster 우선(정지), 없을 때만 video 태그용 src
  * @param {(url: string) => string} displayUrl — 보통 getDisplayImageUrl
