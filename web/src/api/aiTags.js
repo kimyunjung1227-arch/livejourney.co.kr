@@ -10,13 +10,19 @@ import api from './axios';
 import { logger } from '../utils/logger';
 import { supabase } from '../utils/supabaseClient';
 
-/** 502 방지: 해상도·용량을 보수적으로 (768px, 300KB 이하 권장) */
-const MAX_WIDTH_AI = 768;
-const JPEG_QUALITY = 0.6;
+/** 502 방지: 해상도·용량을 더 보수적으로 (640px, 220KB 이하 권장) */
+const MAX_WIDTH_AI = 640;
+const JPEG_QUALITY = 0.58;
 /** 이 크기 초과 시 무조건 리사이즈 */
 const MAX_SIZE_BEFORE_RESIZE = 250 * 1024;
 /** 리사이즈 후 목표 최대 크기 (초과 시 품질 추가 하락) */
-const TARGET_MAX_BYTES = 300 * 1024;
+const TARGET_MAX_BYTES = 220 * 1024;
+/** 이 크기를 넘으면 Edge Function 호출 자체를 생략 (gateway 502 예방) */
+const MAX_BYTES_FOR_EDGE_CALL = 240 * 1024;
+
+const EDGE_FN_NAME = 'analyze-tags';
+const EDGE_FN_COOLDOWN_KEY = 'aiTags_edgeCooldownUntil';
+const EDGE_FN_COOLDOWN_MS = 10 * 60 * 1000; // 10분
 
 /** 이미지를 AI 분석용으로 리사이즈·압축 (Edge Function 502 방지, 항상 안전한 크기로 전송) */
 const resizeImageForAI = (file) => {
@@ -97,13 +103,52 @@ const fileToBase64 = (file) =>
     reader.readAsDataURL(file);
   });
 
+const nowMs = () => Date.now();
+
+const getEdgeCooldownUntil = () => {
+  try {
+    const raw = localStorage.getItem(EDGE_FN_COOLDOWN_KEY);
+    const until = raw ? Number(raw) : 0;
+    return Number.isFinite(until) ? until : 0;
+  } catch {
+    return 0;
+  }
+};
+
+const setEdgeCooldown = () => {
+  try {
+    localStorage.setItem(EDGE_FN_COOLDOWN_KEY, String(nowMs() + EDGE_FN_COOLDOWN_MS));
+  } catch {
+    // ignore storage failures
+  }
+};
+
+const clearEdgeCooldown = () => {
+  try {
+    localStorage.removeItem(EDGE_FN_COOLDOWN_KEY);
+  } catch {
+    // ignore storage failures
+  }
+};
+
 /**
  * Supabase Edge Function으로 AI 태그 생성 (OpenAI API 키는 Supabase Secrets에만 둠)
  */
 const generateAITagsViaSupabase = async (imageFile, location = '', exifData = null) => {
   if (!supabase) return null;
   try {
+    const cooldownUntil = getEdgeCooldownUntil();
+    if (cooldownUntil > nowMs()) {
+      const leftSec = Math.max(1, Math.ceil((cooldownUntil - nowMs()) / 1000));
+      logger.warn(`Supabase AI 호출 일시 중지 중 (${leftSec}초 후 재시도)`);
+      return null;
+    }
+
     const resized = await resizeImageForAI(imageFile);
+    if (!resized || resized.size > MAX_BYTES_FOR_EDGE_CALL) {
+      logger.warn('AI 태그: 이미지가 커서 Edge 호출 생략, 로컬 분석으로 폴백');
+      return null;
+    }
     const imageBase64 = await fileToBase64(resized);
     const base64Str = typeof imageBase64 === 'string' ? imageBase64.replace(/\s/g, '') : '';
     if (!base64Str || base64Str.length < 100) {
@@ -118,13 +163,18 @@ const generateAITagsViaSupabase = async (imageFile, location = '', exifData = nu
       location: locationStr,
       exifData: exifData && typeof exifData === 'object' ? exifData : undefined,
     };
-    const { data, error } = await supabase.functions.invoke('analyze-tags', {
+    const { data, error } = await supabase.functions.invoke(EDGE_FN_NAME, {
       body,
     });
     if (error) {
+      const status = error?.context?.status;
+      if (status === 502 || /502|Bad Gateway/i.test(error.message || '')) {
+        setEdgeCooldown();
+      }
       logger.warn('Supabase AI 태그 Edge Function 오류:', error.message);
       return null;
     }
+    clearEdgeCooldown();
     if (data && !data.success && data.detail) {
       logger.warn('AI 태그 서버 응답:', data.message || 'error', data.detail?.slice?.(0, 200));
     }
