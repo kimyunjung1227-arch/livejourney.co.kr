@@ -76,6 +76,23 @@ const parseDateKeyLocal = (key) => {
   return new Date(y, m - 1, d);
 };
 
+// 로그인 사용자(authUser)와 로컬 수정값(savedUser)을 병합해 프로필 편집 내용을 우선 반영
+const mergeProfileUser = (authUser, savedUser) => {
+  const auth = authUser && Object.keys(authUser).length > 0 ? authUser : null;
+  const saved = savedUser && Object.keys(savedUser).length > 0 ? savedUser : null;
+
+  if (!auth) return saved;
+  if (!saved) return auth;
+
+  // 다른 계정의 로컬 데이터가 섞이지 않도록 동일 사용자일 때만 병합
+  if (saved.id && auth.id && String(saved.id) !== String(auth.id)) return auth;
+
+  return {
+    ...auth,
+    ...saved,
+  };
+};
+
 const ProfileScreen = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -201,8 +218,7 @@ const ProfileScreen = () => {
     if (!isAuthenticated) return;
     // localStorage에서 사용자 정보 로드
     const savedUser = JSON.parse(localStorage.getItem('user') || '{}');
-    // authUser가 있으면 우선 사용, 없으면 localStorage에서 로드한 값 사용
-    const userData = authUser || savedUser;
+    const userData = mergeProfileUser(authUser, savedUser);
     if (userData && Object.keys(userData).length > 0) {
       setUser(userData);
     }
@@ -339,7 +355,7 @@ const ProfileScreen = () => {
     // 사용자 정보 업데이트 이벤트 리스너
     const handleUserUpdate = () => {
       const updatedUser = JSON.parse(localStorage.getItem('user') || '{}');
-      const userData = authUser || updatedUser;
+      const userData = mergeProfileUser(authUser, updatedUser);
       if (userData && Object.keys(userData).length > 0) {
         setUser(userData);
       }
