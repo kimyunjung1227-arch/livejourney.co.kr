@@ -602,13 +602,13 @@ const BadgeListScreen = () => {
           onClick={closeModal}
         >
           <div 
-            className={`w-full max-w-sm flex flex-col rounded-2xl overflow-hidden shadow-2xl ${selectedBadge.isEarned ? 'bg-gradient-to-b from-primary/10 to-white dark:from-primary/20 dark:to-gray-900 ring-2 ring-primary/30' : 'bg-white dark:bg-background-dark'}`}
+            className={`w-full max-w-sm flex flex-col rounded-2xl overflow-hidden shadow-2xl ${selectedBadge.isEarned ? 'bg-white dark:bg-gray-900 ring-2 ring-primary/30 border border-primary/20' : 'bg-white dark:bg-background-dark'}`}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex flex-col items-center p-6 overflow-y-auto max-h-[85vh]">
               {/* 획득 시 상단 축하 문구 */}
               {selectedBadge.isEarned && (
-                <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-green-500/15 text-green-700 dark:text-green-400 mb-3">
+                <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 mb-3 border border-green-200 dark:border-green-800">
                   <span className="text-lg">🎉</span>
                   <span className="text-sm font-bold">획득 완료!</span>
                 </div>
@@ -641,7 +641,7 @@ const BadgeListScreen = () => {
                 </span>
               </div>
 
-              <p className="mt-3 text-sm text-gray-600 dark:text-gray-400 leading-relaxed px-1">
+              <p className="mt-3 text-sm text-gray-700 dark:text-gray-300 leading-relaxed px-1">
                 {selectedBadge.description}
               </p>
 
