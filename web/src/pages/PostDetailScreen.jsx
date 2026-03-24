@@ -1621,30 +1621,44 @@ const PostDetailScreen = () => {
                 </button>
                 {showShareMenu && (
                   <div
-                    className="absolute right-0 bottom-full z-[100] mb-1 min-w-[148px] overflow-hidden rounded-xl border border-gray-200 bg-white py-1 shadow-lg dark:border-gray-700 dark:bg-gray-900"
+                    className="absolute right-0 bottom-full z-[100] mb-1 w-[min(100vw-2rem,220px)] overflow-hidden rounded-lg border border-gray-200 bg-white p-1 shadow-lg dark:border-gray-700 dark:bg-gray-900"
                     role="menu"
                   >
                     <button
                       type="button"
                       role="menuitem"
-                      className="flex w-full px-3 py-2 text-left text-sm text-gray-900 hover:bg-gray-50 dark:text-gray-100 dark:hover:bg-gray-800"
+                      className="flex w-full items-center justify-between gap-3 rounded-md px-3 py-2.5 text-left text-sm font-medium text-gray-800 transition-colors hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800"
                       onClick={async () => {
                         setShowShareMenu(false);
                         await handleShare();
                       }}
                     >
-                      공유
+                      <span>공유</span>
+                      <span
+                        className="material-symbols-outlined shrink-0 text-[20px] text-gray-500 dark:text-gray-400"
+                        style={{ fontVariationSettings: "'FILL' 0, 'wght' 400" }}
+                        aria-hidden
+                      >
+                        share
+                      </span>
                     </button>
                     <button
                       type="button"
                       role="menuitem"
-                      className="flex w-full px-3 py-2 text-left text-sm text-gray-900 hover:bg-gray-50 dark:text-gray-100 dark:hover:bg-gray-800"
+                      className="flex w-full items-center justify-between gap-3 rounded-md px-3 py-2.5 text-left text-sm font-medium text-gray-800 transition-colors hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800"
                       onClick={() => {
                         setShowShareMenu(false);
                         handleReportPost();
                       }}
                     >
-                      신고하기
+                      <span>신고하기</span>
+                      <span
+                        className="material-symbols-outlined shrink-0 text-[20px] text-gray-500 dark:text-gray-400"
+                        style={{ fontVariationSettings: "'FILL' 0, 'wght' 400" }}
+                        aria-hidden
+                      >
+                        flag
+                      </span>
                     </button>
                   </div>
                 )}
