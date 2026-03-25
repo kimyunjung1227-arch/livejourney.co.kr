@@ -6,6 +6,7 @@ import { getCombinedPosts } from '../utils/mockData';
 import { getDisplayImageUrl } from '../api/upload';
 import PostThumbnail from '../components/PostThumbnail';
 import { fetchPostsSupabase } from '../api/postsSupabase';
+import { getTags } from '../api/posts';
 
 const DEFAULT_HASHTAGS = ['바다', '힐링', '맛집', '자연', '꽃', '일출', '카페', '여행', '휴양', '등산', '야경', '축제', '해변', '산', '전통', '한옥', '감귤', '벚꽃', '단풍', '도시'];
 const MAX_TAGS_SHOWN = 30;
@@ -19,10 +20,12 @@ const HashtagScreen = () => {
   const [selectedTag, setSelectedTag] = useState(null);
   const [tagsExpanded, setTagsExpanded] = useState(false);
   const [showExpandButton, setShowExpandButton] = useState(true);
+  /** MongoDB `/posts/tags` 집계(연결 시 로컬 게시물과 병합) */
+  const [serverTagStats, setServerTagStats] = useState([]);
 
   const scrollBodyRef = useRef(null);
 
-  // 사용자 기반 추천: 게시물에서만 태그 수집, 빈도순, 적당히 제한 (상위 MAX_TAGS_SHOWN)
+  // 사용자 기반 추천: 게시물 태그 + 서버 집계 병합, 빈도순
   const allHashtags = useMemo(() => {
     const norm = (s) => String(s || '').replace(/^#+/, '').trim().toLowerCase();
     const getDisplay = (t) => (typeof t === 'string' ? t : (t?.name || t?.label || '')).replace(/^#+/, '').trim();
@@ -39,6 +42,16 @@ const HashtagScreen = () => {
         map.get(n).count += 1;
       });
     });
+    (serverTagStats || []).forEach((st) => {
+      const raw = st?.name;
+      if (!raw) return;
+      const n = norm(raw);
+      if (!n || n.length < 2) return;
+      const prev = map.get(n);
+      const c = st.count || 0;
+      if (prev) prev.count = Math.max(prev.count, c);
+      else map.set(n, { display: String(raw).replace(/^#+/, '').trim() || n, count: c });
+    });
     const fromPosts = Array.from(map.entries())
       .map(([n, { display, count }]) => ({ key: n, display, count }))
       .sort((a, b) => b.count - a.count)
@@ -47,7 +60,7 @@ const HashtagScreen = () => {
       return DEFAULT_HASHTAGS.slice(0, INITIAL_TAGS_VISIBLE).map((t) => ({ key: t.toLowerCase(), display: t, count: 0 }));
     }
     return fromPosts;
-  }, [allPosts]);
+  }, [allPosts, serverTagStats]);
 
   // 검색어로 태그 필터
   const filteredBySearch = useMemo(() => {
@@ -86,6 +99,12 @@ const HashtagScreen = () => {
         if (p && p.id && !byId.has(p.id)) byId.set(p.id, p);
       });
       setAllPosts(getCombinedPosts(Array.from(byId.values())));
+      try {
+        const res = await getTags();
+        if (res?.success && Array.isArray(res.tags)) setServerTagStats(res.tags);
+      } catch {
+        /* 백엔드 없으면 로컬만 */
+      }
     };
     load();
   }, []);

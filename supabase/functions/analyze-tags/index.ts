@@ -25,11 +25,11 @@ interface RequestBody {
 }
 
 const CATEGORY_MAP: Record<string, { name: string; icon: string }> = {
-  bloom: { name: '꽃·개화', icon: '🌸' },
-  food: { name: '맛집·음식', icon: '🍽️' },
-  scenic: { name: '풍경·명소', icon: '📍' },
-  landmark: { name: '관광지', icon: '🏛️' },
-  waiting: { name: '웨이팅·대기', icon: '⏳' },
+  bloom: { name: '개화정보', icon: '🌸' },
+  food: { name: '맛집정보', icon: '🍜' },
+  scenic: { name: '추천장소', icon: '🏞️' },
+  landmark: { name: '명소', icon: '🏛️' },
+  waiting: { name: '웨이팅', icon: '⏱️' },
   general: { name: '일반', icon: '📌' },
 };
 const CATEGORY_KEYS = Object.keys(CATEGORY_MAP);
@@ -126,7 +126,7 @@ Deno.serve(async (req) => {
       '  - bloom: 사진의 주된 피사체가 꽃·벚꽃·개화·매화 등 식물 개화일 때만 사용. 다리·강·도시·하늘만 있으면 bloom 아님.\n' +
       '  - scenic: 다리, 강, 바다, 하늘, 도시 전경, 풍경, 자연 경치, 인물+배경 등. 꽃이 주제가 아니면 scenic.\n' +
       '  - food=맛집·음식, landmark=관광지·명소, waiting=웨이팅·대기, general=일반\n' +
-      'NAME: 위 카테고리에 맞는 한글 이름 한 줄 (예: 풍경·명소, 꽃·개화)\n' +
+      'NAME: 위 카테고리에 맞는 한글 이름 한 줄 (예: 추천장소, 개화정보, 웨이팅, 맛집정보)\n' +
       'TAGS: #태그1 #태그2 #태그3 ... 한글 위주 5~12개, 짧고 구체적으로\n\n' +
       locationText +
       exifText;

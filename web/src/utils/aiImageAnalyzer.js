@@ -192,33 +192,36 @@ const detectSeason = () => {
   }
 };
 
-// 카테고리 자동 분류 (풍경 vs 개화 구분 강화)
+// 카테고리 자동 분류 (추천장소·개화정보·웨이팅·맛집정보 — 키워드 우선순위)
 const detectCategory = (keywords, location, note, brightness) => {
   const keywordList = Array.from(keywords);
   const allText = `${keywordList.join(' ')} ${location} ${note}`.toLowerCase();
 
-  // 풍경/명소 키워드 (다리, 강, 하늘, 도시 등) → scenic 우선
+  const waitingKeywords = ['웨이팅', '대기', '줄서', '줄서서', '대기줄', 'queue', 'waiting', '번호표', '웨이트', '순번', '예상 대기'];
+  if (waitingKeywords.some((kw) => allText.includes(kw))) {
+    return { category: 'waiting', categoryName: '웨이팅', icon: '⏱️' };
+  }
+
+  const bloomKeywords = ['꽃', '벚꽃', '개화', '매화', '진달래', '철쭉', '튤립', '유채', '수국', '코스모스', '해바라기', '만개'];
+  const hasBloom = bloomKeywords.some((kw) => allText.includes(kw));
+
   const scenicKeywords = ['다리', '강', '바다', '하늘', '도시', '풍경', '전경', '전망', '뷰', '경치', '자연', '산', '호수', '해변', '스카이라인'];
   const hasScenic = scenicKeywords.some((kw) => allText.includes(kw));
 
-  // 개화: 꽃·개화가 주제일 때만 (봄/가을 같은 넓은 단어 제외)
-  const bloomKeywords = ['꽃', '벚꽃', '개화', '매화', '진달래', '철쭉', '튤립', '유채', '수국', '코스모스', '해바라기'];
-  const hasBloom = bloomKeywords.some((kw) => allText.includes(kw));
-
-  if (hasScenic && !hasBloom) {
-    return { category: 'scenic', categoryName: '추천 장소', icon: '🏞️' };
-  }
   if (hasBloom) {
-    return { category: 'bloom', categoryName: '개화 상황', icon: '🌸' };
+    return { category: 'bloom', categoryName: '개화정보', icon: '🌸' };
   }
 
-  // 맛집 정보 🍜
   const foodKeywords = ['맛집', '음식', '카페', '커피', '디저트', '레스토랑', '식당', '먹', '요리', '메뉴', '빵', '케이크'];
   if (foodKeywords.some((kw) => allText.includes(kw))) {
-    return { category: 'food', categoryName: '맛집 정보', icon: '🍜' };
+    return { category: 'food', categoryName: '맛집정보', icon: '🍜' };
   }
 
-  return { category: 'scenic', categoryName: '추천 장소', icon: '🏞️' };
+  if (hasScenic) {
+    return { category: 'scenic', categoryName: '추천장소', icon: '🏞️' };
+  }
+
+  return { category: 'scenic', categoryName: '추천장소', icon: '🏞️' };
 };
 
 // 이미지 색상 분석 (고급)
@@ -333,8 +336,8 @@ export const analyzeImageForTags = async (imageFile, location = '', existingNote
           ? null
           : detectCategory(new Set(aiResult.tags || []), location, existingNote, { brightness: 0.5 });
         const category = aiResult.category || fallbackCategory?.category || 'scenic';
-        const categoryName = aiResult.categoryName || fallbackCategory?.categoryName || '추천 장소';
-        const categoryIcon = aiResult.categoryIcon || fallbackCategory?.icon || '📍';
+        const categoryName = aiResult.categoryName || fallbackCategory?.categoryName || '추천장소';
+        const categoryIcon = aiResult.categoryIcon || fallbackCategory?.icon || '🏞️';
 
         return {
           success: !!aiResult.success || hasTags || !!aiResult.category,
@@ -679,7 +682,7 @@ export const analyzeImageForTags = async (imageFile, location = '', existingNote
       success: false,
       tags: ['여행', '풍경', '추억'],
       category: 'scenic',
-      categoryName: '추천 장소',
+      categoryName: '추천장소',
       categoryIcon: '🏞️',
       error: error.message
     };

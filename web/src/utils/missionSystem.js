@@ -413,7 +413,7 @@ export const getSuggestedChallenge = () => {
   const topCategory = Object.entries(preferences.categories || {})
     .sort((a, b) => b[1] - a[1])[0]?.[0];
   
-  if (topCategory === 'food' || topCategory === '맛집 정보') {
+  if (topCategory === 'food' || topCategory === '맛집 정보' || topCategory === '맛집정보') {
     return {
       id: 'food_challenge',
       title: '맛집 탐방',

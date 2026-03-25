@@ -161,10 +161,15 @@ router.post('/analyze-tags', upload.single('image'), async (req, res) => {
     const mimeTypeHint = req.file.mimetype || 'image/jpeg';
     const aiResult = await generateSmartTags(imagePathOrUrl, location, exifData, mimeTypeHint);
 
-    if (!aiResult || !aiResult.success) {
+    const hasTags = Array.isArray(aiResult?.tags) && aiResult.tags.length > 0;
+    const hasCategory = !!(aiResult?.category && aiResult.success);
+    if (!aiResult || !aiResult.success || (!hasTags && !hasCategory)) {
       return res.json({
         success: false,
         tags: [],
+        category: aiResult?.category || null,
+        categoryName: aiResult?.categoryName || null,
+        categoryIcon: aiResult?.categoryIcon || null,
         message: aiResult?.message || 'AI 태그 생성에 실패했습니다.'
       });
     }
@@ -174,7 +179,10 @@ router.post('/analyze-tags', upload.single('image'), async (req, res) => {
       tags: aiResult.tags || [],
       caption: aiResult.caption || null,
       method: aiResult.method || 'gemini-ai',
-      message: 'AI 태그 생성 완료'
+      category: aiResult.category || null,
+      categoryName: aiResult.categoryName || null,
+      categoryIcon: aiResult.categoryIcon || null,
+      message: hasTags ? 'AI 태그 생성 완료' : (aiResult.message || 'AI 카테고리 분류 완료')
     });
   } catch (error) {
     console.error('AI 태그 분석 오류:', error);

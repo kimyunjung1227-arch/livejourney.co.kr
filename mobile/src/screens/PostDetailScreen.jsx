@@ -852,9 +852,11 @@ const PostDetailScreen = () => {
                     {categoryName && (
                       <View style={styles.categoryBadge}>
                         <Text style={styles.categoryEmoji}>
-                          {categoryName.includes('개화') && '🌸'}
-                          {categoryName.includes('맛집') && '🍜'}
-                          {!categoryName.includes('개화') && !categoryName.includes('맛집') && '🏞️'}
+                          {post?.category === 'waiting' ? '⏱️'
+                            : post?.category === 'bloom' || categoryName.includes('개화') ? '🌸'
+                            : post?.category === 'food' || categoryName.includes('맛집') ? '🍜'
+                            : post?.category === 'landmark' ? '🏛️'
+                            : '🏞️'}
                         </Text>
                         <Text style={styles.categoryText}>{categoryName}</Text>
                       </View>

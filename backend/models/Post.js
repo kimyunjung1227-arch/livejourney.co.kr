@@ -52,7 +52,7 @@ const postSchema = new mongoose.Schema({
   }],
   category: {
     type: String,
-    enum: ['bloom', 'landmark', 'food', 'scenic', 'general'],
+    enum: ['bloom', 'landmark', 'food', 'scenic', 'waiting', 'general'],
     default: 'general',
     index: true
   },

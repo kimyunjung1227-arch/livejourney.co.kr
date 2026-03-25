@@ -16,6 +16,7 @@ const calculateRegionStats = (posts, regionName) => {
   const total = regionPosts.length;
   const bloomCount = regionPosts.filter(p => p.category === 'bloom').length;
   const foodCount = regionPosts.filter(p => p.category === 'food').length;
+  const waitingCount = regionPosts.filter(p => p.category === 'waiting').length;
   const scenicCount = regionPosts.filter(p => 
     p.category === 'landmark' || p.category === 'scenic'
   ).length;
@@ -42,6 +43,7 @@ const calculateRegionStats = (posts, regionName) => {
     total,
     bloomCount,
     foodCount,
+    waitingCount,
     scenicCount,
     recentCount,
     avgLikes: Math.round(avgLikes * 10) / 10,
@@ -166,11 +168,36 @@ export const getRecommendedRegions = (posts, recommendationType = 'blooming') =>
         .map(stat => ({
           regionName: stat.regionName,
           title: stat.regionName,
-          description: `맛집 정보 ${stat.foodCount}개 | 최근 게시물 ${stat.recentCount}개`,
+          description: `맛집정보 ${stat.foodCount}개 | 최근 게시물 ${stat.recentCount}개`,
           image: stat.representativeImage,
           badge: `🍜 맛집 ${stat.foodCount}개`,
           stats: {
             foodCount: stat.foodCount,
+            recentCount: stat.recentCount,
+            total: stat.total
+          }
+        }));
+      break;
+
+    case 'waiting':
+      // 웨이팅·대기 제보가 많은 곳
+      recommended = regionStats
+        .filter(stat => stat.waitingCount > 0)
+        .sort((a, b) => {
+          if (a.waitingCount !== b.waitingCount) {
+            return b.waitingCount - a.waitingCount;
+          }
+          return b.activityScore - a.activityScore;
+        })
+        .slice(0, 10)
+        .map(stat => ({
+          regionName: stat.regionName,
+          title: stat.regionName,
+          description: `웨이팅 제보 ${stat.waitingCount}개 | 최근 게시물 ${stat.recentCount}개`,
+          image: stat.representativeImage,
+          badge: `⏱ ${stat.waitingCount}건`,
+          stats: {
+            waitingCount: stat.waitingCount,
             recentCount: stat.recentCount,
             total: stat.total
           }
@@ -192,9 +219,9 @@ export const getRecommendedRegions = (posts, recommendationType = 'blooming') =>
         .map(stat => ({
           regionName: stat.regionName,
           title: stat.regionName,
-          description: `추천 장소 ${stat.scenicCount}개 | 최근 게시물 ${stat.recentCount}개`,
+          description: `추천장소 ${stat.scenicCount}개 | 최근 게시물 ${stat.recentCount}개`,
           image: stat.representativeImage,
-          badge: `🏞️ 명소 ${stat.scenicCount}개`,
+          badge: `🏞️ 추천장소 ${stat.scenicCount}개`,
           stats: {
             scenicCount: stat.scenicCount,
             recentCount: stat.recentCount,
@@ -237,8 +264,8 @@ export const RECOMMENDATION_TYPES = [
   },
   {
     id: 'blooming',
-    name: '🌸 오늘 개화 현황',
-    description: '오늘 개화 상태가 좋은 곳',
+    name: '🌸 개화정보',
+    description: '개화·꽃 정보가 많이 올라온 지역',
     icon: '🌸'
   },
   {
@@ -248,15 +275,21 @@ export const RECOMMENDATION_TYPES = [
     icon: '⭐'
   },
   {
+    id: 'waiting',
+    name: '⏱ 웨이팅',
+    description: '대기·줄 상황 제보가 많은 곳',
+    icon: '⏱️'
+  },
+  {
     id: 'food',
-    name: '🍲 실시간 웨이팅 현황',
-    description: '실시간 웨이팅이 있는 곳',
+    name: '🍜 맛집정보',
+    description: '맛집·음식 정보가 많은 곳',
     icon: '🍜'
   },
   {
     id: 'scenic',
-    name: '🏞️ 추천 장소',
-    description: '가볼만한 곳이 많은 곳',
+    name: '🏞️ 추천장소',
+    description: '명소·풍경 제보가 많은 곳',
     icon: '🏞️'
   }
 ];

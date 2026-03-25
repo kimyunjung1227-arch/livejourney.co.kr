@@ -11,6 +11,57 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 // API 키가 있으면 자동으로 활성화 (별도 설정이 'false'가 아닌 경우)
 const USE_AI = process.env.USE_AI_TAG_GENERATION !== 'false' && !!GEMINI_API_KEY;
 
+/** 서비스 공통 카테고리 (한글 표기 통일: 추천장소·개화정보·웨이팅·맛집정보) */
+const CATEGORY_SLUGS = ['bloom', 'scenic', 'food', 'waiting', 'landmark', 'general'];
+const CATEGORY_DISPLAY = {
+  bloom: { name: '개화정보', icon: '🌸' },
+  scenic: { name: '추천장소', icon: '🏞️' },
+  food: { name: '맛집정보', icon: '🍜' },
+  waiting: { name: '웨이팅', icon: '⏱️' },
+  landmark: { name: '명소', icon: '🏛️' },
+  general: { name: '일반', icon: '📌' }
+};
+
+/**
+ * 이미지 캡션·위치·태그 텍스트로 여행 카테고리 추론 (캡션은 Gemini 비전 결과라 이미 AI 기반)
+ */
+const inferTravelCategoryFromText = (caption, location = '', tagList = []) => {
+  const text = `${caption || ''} ${location || ''} ${(tagList || []).join(' ')}`.toLowerCase();
+
+  const waitingKw = ['웨이팅', '대기', '줄서', '줄서서', '대기줄', 'queue', 'waiting', '번호표', '웨이트', '순번', '입장 대기', '예상 대기'];
+  if (waitingKw.some((kw) => text.includes(kw))) {
+    const m = CATEGORY_DISPLAY.waiting;
+    return { category: 'waiting', categoryName: m.name, categoryIcon: m.icon };
+  }
+
+  const bloomKw = ['꽃', '벚꽃', '개화', '매화', '진달래', '철쭉', '튤립', '유채', '수국', '코스모스', '해바라기', '만개', '개화기', '벚꽃길'];
+  if (bloomKw.some((kw) => text.includes(kw))) {
+    const m = CATEGORY_DISPLAY.bloom;
+    return { category: 'bloom', categoryName: m.name, categoryIcon: m.icon };
+  }
+
+  const foodKw = ['맛집', '음식', '카페', '커피', '디저트', '레스토랑', '식당', '먹거리', '요리', '메뉴', '빵', '케이크', '플레이팅', '브런치', '한식', '일식', '디너'];
+  if (foodKw.some((kw) => text.includes(kw))) {
+    const m = CATEGORY_DISPLAY.food;
+    return { category: 'food', categoryName: m.name, categoryIcon: m.icon };
+  }
+
+  const landmarkKw = ['사찰', '박물관', '미술관', '궁궐', '성당', '유적', '유네스코', '문화재', '탑', '전망대'];
+  if (landmarkKw.some((kw) => text.includes(kw))) {
+    const m = CATEGORY_DISPLAY.landmark;
+    return { category: 'landmark', categoryName: m.name, categoryIcon: m.icon };
+  }
+
+  const scenicKw = ['다리', '강', '바다', '하늘', '도시', '풍경', '전망', '뷰', '경치', '자연', '산', '호수', '해변', '스카이라인', '일출', '일몰'];
+  if (scenicKw.some((kw) => text.includes(kw))) {
+    const m = CATEGORY_DISPLAY.scenic;
+    return { category: 'scenic', categoryName: m.name, categoryIcon: m.icon };
+  }
+
+  const m = CATEGORY_DISPLAY.scenic;
+  return { category: 'scenic', categoryName: m.name, categoryIcon: m.icon };
+};
+
 // 디버깅: 환경 변수 확인
 console.log('🔍 AI 태그 생성 설정 확인:');
 console.log('  USE_AI:', USE_AI);
@@ -400,18 +451,27 @@ const generateSmartTags = async (imagePathOrUrl, location = '', exifData = null,
 
     console.log('✅ 이미지 묘사 완료:', caption.substring(0, 100) + '...');
 
+    let catFromCaption = inferTravelCategoryFromText(caption, location, []);
+
     // 2단계: 묘사를 바탕으로 태그 생성
     console.log('🏷️ 2단계: 태그 생성 중...');
     const tags = await generateTagsFromCaption(caption, location, exifData);
 
+    if (tags && tags.length > 0) {
+      catFromCaption = inferTravelCategoryFromText(caption, location, tags);
+    }
+
     if (!tags || tags.length === 0) {
-      console.log('⚠️ 태그 생성 실패 - 기본 방식 사용');
+      console.log('⚠️ 태그 생성 실패 — 캡션 기반 카테고리만 반환');
       return {
-        success: false,
+        success: true,
         tags: [],
         caption,
-        method: 'tags-failed',
-        message: 'AI 태그 생성에 실패했습니다.'
+        category: catFromCaption.category,
+        categoryName: catFromCaption.categoryName,
+        categoryIcon: catFromCaption.categoryIcon,
+        method: 'gemini-ai',
+        message: '태그 생성에 실패했으나 카테고리는 캡션 기준으로 분류했습니다.'
       };
     }
 
@@ -426,6 +486,9 @@ const generateSmartTags = async (imagePathOrUrl, location = '', exifData = null,
       success: true,
       tags: finalTags,
       caption: caption,
+      category: catFromCaption.category,
+      categoryName: catFromCaption.categoryName,
+      categoryIcon: catFromCaption.categoryIcon,
       method: 'gemini-ai'
     };
   } catch (error) {
@@ -444,5 +507,8 @@ module.exports = {
   generateSmartTags,
   generateImageCaption,
   generateTagsFromCaption,
-  filterAndRefineTags
+  filterAndRefineTags,
+  inferTravelCategoryFromText,
+  CATEGORY_SLUGS,
+  CATEGORY_DISPLAY
 };

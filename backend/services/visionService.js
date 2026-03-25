@@ -15,9 +15,10 @@ const analyzeImage = async (imageBuffer) => {
     
     // 랜덤하게 카테고리 할당 (실제 프로덕션에서는 ML 모델 사용)
     const categories = [
-      { id: 'scenic', name: '추천 장소', keywords: ['풍경', '자연', '경치', '뷰'] },
-      { id: 'food', name: '맛집 정보', keywords: ['음식', '맛집', '레스토랑', '카페'] },
-      { id: 'bloom', name: '개화 상황', keywords: ['꽃', '벚꽃', '개화', '봄'] }
+      { id: 'scenic', name: '추천장소', keywords: ['풍경', '자연', '경치', '뷰'] },
+      { id: 'food', name: '맛집정보', keywords: ['음식', '맛집', '레스토랑', '카페'] },
+      { id: 'bloom', name: '개화정보', keywords: ['꽃', '벚꽃', '개화', '봄'] },
+      { id: 'waiting', name: '웨이팅', keywords: ['대기', '줄', '웨이팅'] }
     ];
     
     // 랜덤 선택 (실제로는 이미지 분석)
@@ -39,7 +40,7 @@ const analyzeImage = async (imageBuffer) => {
     // 실패 시 기본값
     return {
       category: 'scenic',
-      categoryName: '추천 장소',
+      categoryName: '추천장소',
       labels: ['여행', '풍경'],
       confidence: 0.5
     };
@@ -59,7 +60,7 @@ const analyzeImageFromPath = async (filePath) => {
     console.error('파일 읽기 실패:', error);
     return {
       category: 'scenic',
-      categoryName: '추천 장소',
+      categoryName: '추천장소',
       labels: ['여행'],
       confidence: 0.5
     };

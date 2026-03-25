@@ -5,7 +5,13 @@ const path = require('path');
 const jwt = require('jsonwebtoken');
 const Post = require('../models/Post');
 const User = require('../models/User');
-const { generateSmartTags } = require('../services/aiTagService');
+const { generateSmartTags, CATEGORY_SLUGS } = require('../services/aiTagService');
+
+const normalizeCategory = (c) => {
+  const v = String(c || '').trim().toLowerCase();
+  if (CATEGORY_SLUGS.includes(v)) return v;
+  return 'general';
+};
 
 // JWT에서 userId 추출 (auth 라우트와 동일한 payload: userId)
 const getUserIdFromReq = (req) => {
@@ -97,12 +103,12 @@ router.get('/', async (req, res) => {
       query.category = category;
     }
 
-    // 태그 필터링 추가
+    // 태그 필터링 (대소문자·# 무시)
     if (tag) {
-      query.$or = [
-        { tags: tag },
-        { 'aiLabels.name': tag }
-      ];
+      const raw = String(tag).trim().replace(/^#+/, '');
+      const esc = raw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const re = new RegExp(`^${esc}$`, 'i');
+      query.$or = [{ tags: re }, { 'aiLabels.name': re }];
     }
 
     // 정렬 조건 구성
@@ -293,31 +299,35 @@ router.post('/', async (req, res) => {
         : undefined,
       images: Array.isArray(images) ? images : [],
       tags: Array.isArray(tags) ? tags : [],
-      category: category || 'general',
-      categoryName: categoryName || '일반'
+      category: normalizeCategory(category),
+      categoryName: (categoryName && String(categoryName).trim()) || '일반'
     });
 
-    // 🔹 AI 태그 생성 시도 (GEMINI_API_KEY가 설정된 경우만)
+    // 🔹 AI 태그·카테고리 (GEMINI_API_KEY가 설정된 경우만) — 캡션 기반 분류로 추천장소/개화정보/웨이팅/맛집정보 반영
     try {
       const primaryImage = Array.isArray(images) && images.length > 0 ? images[0] : null;
       if (primaryImage && typeof primaryImage === 'string' && primaryImage.startsWith('/uploads/')) {
         const imagePath = path.join(__dirname, '..', primaryImage);
-        const aiResult = await generateSmartTags(imagePath, location, exifData || null);
+        const aiResult = await generateSmartTags(imagePath, locationStr, exifData || null);
 
-        if (aiResult && aiResult.success && Array.isArray(aiResult.tags)) {
-          // aiLabels 필드에 저장
-          newPost.aiLabels = aiResult.tags.map((t) => ({
-            name: t,
-            confidence: 1
-          }));
-          newPost.aiProcessed = true;
+        if (aiResult && aiResult.success) {
+          if (aiResult.category && CATEGORY_SLUGS.includes(aiResult.category)) {
+            newPost.category = aiResult.category;
+            newPost.categoryName = aiResult.categoryName || newPost.categoryName;
+          }
+          if (Array.isArray(aiResult.tags) && aiResult.tags.length > 0) {
+            newPost.aiLabels = aiResult.tags.map((t) => ({
+              name: t,
+              confidence: 1
+            }));
+            newPost.aiProcessed = true;
 
-          // 기존 tags와 합쳐서 중복 제거
-          const baseTags = Array.isArray(newPost.tags)
-            ? newPost.tags.map((t) => String(t).replace(/^#+/, '').trim())
-            : [];
-          const merged = Array.from(new Set([...baseTags, ...aiResult.tags].filter(Boolean)));
-          newPost.tags = merged;
+            const baseTags = Array.isArray(newPost.tags)
+              ? newPost.tags.map((t) => String(t).replace(/^#+/, '').trim())
+              : [];
+            const merged = Array.from(new Set([...baseTags, ...aiResult.tags].filter(Boolean)));
+            newPost.tags = merged;
+          }
         }
       }
     } catch (aiError) {

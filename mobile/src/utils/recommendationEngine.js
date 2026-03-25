@@ -40,6 +40,7 @@ const calculateRegionStats = (posts, regionName) => {
     const total = regionPosts.length;
     const bloomCount = regionPosts.filter(p => p.category === 'bloom').length;
     const foodCount = regionPosts.filter(p => p.category === 'food').length;
+    const waitingCount = regionPosts.filter(p => p.category === 'waiting').length;
     const scenicCount = regionPosts.filter(p =>
         p.category === 'landmark' || p.category === 'scenic'
     ).length;
@@ -59,6 +60,7 @@ const calculateRegionStats = (posts, regionName) => {
         total,
         bloomCount,
         foodCount,
+        waitingCount,
         scenicCount,
         recentCount,
         avgLikes: Math.round(avgLikes * 10) / 10,
@@ -146,9 +148,27 @@ export const getRecommendedRegions = (posts, recommendationType = 'blooming') =>
                 .map(stat => ({
                     regionName: stat.regionName,
                     title: stat.regionName,
-                    description: `맛집 정보 ${stat.foodCount}개 | 최근 게시물 ${stat.recentCount}개`,
+                    description: `맛집정보 ${stat.foodCount}개 | 최근 게시물 ${stat.recentCount}개`,
                     image: stat.representativeImage,
                     badge: `🍜 맛집 ${stat.foodCount}개`,
+                    mediaFeed: buildRegionMediaFeedItems(posts, stat.regionName),
+                }));
+            break;
+
+        case 'waiting':
+            recommended = regionStats
+                .filter(stat => stat.waitingCount > 0)
+                .sort((a, b) => {
+                    if (a.waitingCount !== b.waitingCount) return b.waitingCount - a.waitingCount;
+                    return b.activityScore - a.activityScore;
+                })
+                .slice(0, 10)
+                .map(stat => ({
+                    regionName: stat.regionName,
+                    title: stat.regionName,
+                    description: `웨이팅 제보 ${stat.waitingCount}개 | 최근 게시물 ${stat.recentCount}개`,
+                    image: stat.representativeImage,
+                    badge: `⏱ ${stat.waitingCount}건`,
                     mediaFeed: buildRegionMediaFeedItems(posts, stat.regionName),
                 }));
             break;
@@ -164,9 +184,9 @@ export const getRecommendedRegions = (posts, recommendationType = 'blooming') =>
                 .map(stat => ({
                     regionName: stat.regionName,
                     title: stat.regionName,
-                    description: `추천 장소 ${stat.scenicCount}개 | 최근 게시물 ${stat.recentCount}개`,
+                    description: `추천장소 ${stat.scenicCount}개 | 최근 게시물 ${stat.recentCount}개`,
                     image: stat.representativeImage,
-                    badge: `🏞️ 명소 ${stat.scenicCount}개`,
+                    badge: `🏞️ 추천장소 ${stat.scenicCount}개`,
                     mediaFeed: buildRegionMediaFeedItems(posts, stat.regionName),
                 }));
             break;
@@ -190,9 +210,10 @@ export const getRecommendedRegions = (posts, recommendationType = 'blooming') =>
 };
 
 export const RECOMMENDATION_TYPES = [
-    { id: 'blooming', name: '🌸 개화 정보', description: '개화상태 80% 이상인 곳', icon: '🌸' },
     { id: 'active', name: '🔥 활발한 지역', description: '최근 업로드가 많은 곳', icon: '🔥' },
+    { id: 'blooming', name: '🌸 개화정보', description: '개화·꽃 정보가 많은 곳', icon: '🌸' },
     { id: 'popular', name: '⭐ 인기 지역', description: '좋아요가 많은 곳', icon: '⭐' },
-    { id: 'food', name: '🍜 맛집 정보', description: '맛집 정보가 많은 곳', icon: '🍜' },
-    { id: 'scenic', name: '🏞️ 추천 장소', description: '가볼만한 곳이 많은 곳', icon: '🏞️' }
+    { id: 'waiting', name: '⏱ 웨이팅', description: '대기·줄 제보가 많은 곳', icon: '⏱️' },
+    { id: 'food', name: '🍜 맛집정보', description: '맛집·음식 정보가 많은 곳', icon: '🍜' },
+    { id: 'scenic', name: '🏞️ 추천장소', description: '명소·풍경 제보가 많은 곳', icon: '🏞️' }
 ];

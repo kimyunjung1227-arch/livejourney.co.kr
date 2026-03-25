@@ -86,25 +86,27 @@ const detectSeason = () => {
   }
 };
 
-// 카테고리 자동 분류 (3가지)
+// 카테고리 자동 분류 (추천장소·개화정보·웨이팅·맛집정보)
 const detectCategory = (keywords, location, note, brightness) => {
   const keywordList = Array.from(keywords);
   const allText = `${keywordList.join(' ')} ${location} ${note}`.toLowerCase();
-  
-  // 1. 개화 상황 🌸
-  const bloomKeywords = ['꽃', '벚꽃', '개화', '봄', '매화', '진달래', '철쭉', '튤립', '유채', '수국', '코스모스', '해바라기'];
-  if (bloomKeywords.some(kw => allText.includes(kw))) {
-    return { category: 'bloom', categoryName: '개화 상황', icon: '🌸' };
+
+  const waitingKeywords = ['웨이팅', '대기', '줄서', '줄서서', '대기줄', 'queue', 'waiting', '번호표', '웨이트', '순번', '예상 대기'];
+  if (waitingKeywords.some((kw) => allText.includes(kw))) {
+    return { category: 'waiting', categoryName: '웨이팅', icon: '⏱️' };
   }
-  
-  // 2. 맛집 정보 🍜
+
+  const bloomKeywords = ['꽃', '벚꽃', '개화', '매화', '진달래', '철쭉', '튤립', '유채', '수국', '코스모스', '해바라기', '만개'];
+  if (bloomKeywords.some((kw) => allText.includes(kw))) {
+    return { category: 'bloom', categoryName: '개화정보', icon: '🌸' };
+  }
+
   const foodKeywords = ['맛집', '음식', '카페', '커피', '디저트', '레스토랑', '식당', '먹', '요리', '메뉴', '빵', '케이크'];
-  if (foodKeywords.some(kw => allText.includes(kw))) {
-    return { category: 'food', categoryName: '맛집 정보', icon: '🍜' };
+  if (foodKeywords.some((kw) => allText.includes(kw))) {
+    return { category: 'food', categoryName: '맛집정보', icon: '🍜' };
   }
-  
-  // 3. 추천 장소 🏞️ (기본값)
-  return { category: 'scenic', categoryName: '추천 장소', icon: '🏞️' };
+
+  return { category: 'scenic', categoryName: '추천장소', icon: '🏞️' };
 };
 
 // React Native에서 이미지 분석 (간단한 버전)
@@ -183,7 +185,7 @@ export const analyzeImageForTags = async (imageUri, location = '', existingNote 
       success: false,
       tags: ['여행', '풍경', '추억'],
       category: 'scenic',
-      categoryName: '추천 장소',
+      categoryName: '추천장소',
       categoryIcon: '🏞️',
       error: error.message
     };
