@@ -23,43 +23,51 @@ const CATEGORY_DISPLAY = {
 };
 
 /**
- * 이미지 캡션·위치·태그 텍스트로 여행 카테고리 추론 (캡션은 Gemini 비전 결과라 이미 AI 기반)
+ * 이미지 캡션·위치·태그로 여행 카테고리 다중 추론 (꽃·개화 + 풍경이면 개화정보+추천장소 동시)
  */
-const inferTravelCategoryFromText = (caption, location = '', tagList = []) => {
+const inferTravelCategoriesFromText = (caption, location = '', tagList = []) => {
   const text = `${caption || ''} ${location || ''} ${(tagList || []).join(' ')}`.toLowerCase();
+  const out = [];
+  const seen = new Set();
+  const push = (slug) => {
+    if (seen.has(slug)) return;
+    if (!CATEGORY_SLUGS.includes(slug)) return;
+    seen.add(slug);
+    const m = CATEGORY_DISPLAY[slug];
+    if (!m) return;
+    out.push({ category: slug, categoryName: m.name, categoryIcon: m.icon });
+  };
 
   const waitingKw = ['웨이팅', '대기', '줄서', '줄서서', '대기줄', 'queue', 'waiting', '번호표', '웨이트', '순번', '입장 대기', '예상 대기'];
-  if (waitingKw.some((kw) => text.includes(kw))) {
-    const m = CATEGORY_DISPLAY.waiting;
-    return { category: 'waiting', categoryName: m.name, categoryIcon: m.icon };
-  }
-
   const bloomKw = ['꽃', '벚꽃', '개화', '매화', '진달래', '철쭉', '튤립', '유채', '수국', '코스모스', '해바라기', '만개', '개화기', '벚꽃길'];
-  if (bloomKw.some((kw) => text.includes(kw))) {
-    const m = CATEGORY_DISPLAY.bloom;
-    return { category: 'bloom', categoryName: m.name, categoryIcon: m.icon };
-  }
-
   const foodKw = ['맛집', '음식', '카페', '커피', '디저트', '레스토랑', '식당', '먹거리', '요리', '메뉴', '빵', '케이크', '플레이팅', '브런치', '한식', '일식', '디너'];
-  if (foodKw.some((kw) => text.includes(kw))) {
-    const m = CATEGORY_DISPLAY.food;
-    return { category: 'food', categoryName: m.name, categoryIcon: m.icon };
-  }
-
   const landmarkKw = ['사찰', '박물관', '미술관', '궁궐', '성당', '유적', '유네스코', '문화재', '탑', '전망대'];
-  if (landmarkKw.some((kw) => text.includes(kw))) {
-    const m = CATEGORY_DISPLAY.landmark;
-    return { category: 'landmark', categoryName: m.name, categoryIcon: m.icon };
-  }
-
   const scenicKw = ['다리', '강', '바다', '하늘', '도시', '풍경', '전망', '뷰', '경치', '자연', '산', '호수', '해변', '스카이라인', '일출', '일몰'];
-  if (scenicKw.some((kw) => text.includes(kw))) {
-    const m = CATEGORY_DISPLAY.scenic;
-    return { category: 'scenic', categoryName: m.name, categoryIcon: m.icon };
-  }
 
-  const m = CATEGORY_DISPLAY.scenic;
-  return { category: 'scenic', categoryName: m.name, categoryIcon: m.icon };
+  const hasWaiting = waitingKw.some((kw) => text.includes(kw));
+  const hasBloom = bloomKw.some((kw) => text.includes(kw));
+  const hasFood = foodKw.some((kw) => text.includes(kw));
+  const hasLandmark = landmarkKw.some((kw) => text.includes(kw));
+  const hasScenic = scenicKw.some((kw) => text.includes(kw));
+
+  if (hasWaiting) push('waiting');
+  if (hasBloom) {
+    push('bloom');
+    push('scenic');
+  }
+  if (hasFood) push('food');
+  if (hasLandmark) push('landmark');
+  if (hasScenic && !hasBloom) push('scenic');
+
+  if (out.length === 0) push('scenic');
+
+  return out;
+};
+
+/** 호환용: 첫 카테고리만 */
+const inferTravelCategoryFromText = (caption, location = '', tagList = []) => {
+  const arr = inferTravelCategoriesFromText(caption, location, tagList);
+  return arr[0] || { category: 'scenic', categoryName: CATEGORY_DISPLAY.scenic.name, categoryIcon: CATEGORY_DISPLAY.scenic.icon };
 };
 
 // 디버깅: 환경 변수 확인
@@ -451,15 +459,18 @@ const generateSmartTags = async (imagePathOrUrl, location = '', exifData = null,
 
     console.log('✅ 이미지 묘사 완료:', caption.substring(0, 100) + '...');
 
-    let catFromCaption = inferTravelCategoryFromText(caption, location, []);
+    let catsFromCaption = inferTravelCategoriesFromText(caption, location, []);
 
     // 2단계: 묘사를 바탕으로 태그 생성
     console.log('🏷️ 2단계: 태그 생성 중...');
     const tags = await generateTagsFromCaption(caption, location, exifData);
 
     if (tags && tags.length > 0) {
-      catFromCaption = inferTravelCategoryFromText(caption, location, tags);
+      catsFromCaption = inferTravelCategoriesFromText(caption, location, tags);
     }
+
+    const primaryCat = catsFromCaption[0] || inferTravelCategoryFromText(caption, location, tags || []);
+    const categoryNamesJoined = catsFromCaption.map((c) => c.categoryName).join(', ');
 
     if (!tags || tags.length === 0) {
       console.log('⚠️ 태그 생성 실패 — 캡션 기반 카테고리만 반환');
@@ -467,9 +478,10 @@ const generateSmartTags = async (imagePathOrUrl, location = '', exifData = null,
         success: true,
         tags: [],
         caption,
-        category: catFromCaption.category,
-        categoryName: catFromCaption.categoryName,
-        categoryIcon: catFromCaption.categoryIcon,
+        categories: catsFromCaption,
+        category: primaryCat.category,
+        categoryName: categoryNamesJoined,
+        categoryIcon: primaryCat.categoryIcon,
         method: 'gemini-ai',
         message: '태그 생성에 실패했으나 카테고리는 캡션 기준으로 분류했습니다.'
       };
@@ -486,9 +498,10 @@ const generateSmartTags = async (imagePathOrUrl, location = '', exifData = null,
       success: true,
       tags: finalTags,
       caption: caption,
-      category: catFromCaption.category,
-      categoryName: catFromCaption.categoryName,
-      categoryIcon: catFromCaption.categoryIcon,
+      categories: catsFromCaption,
+      category: primaryCat.category,
+      categoryName: categoryNamesJoined,
+      categoryIcon: primaryCat.categoryIcon,
       method: 'gemini-ai'
     };
   } catch (error) {
@@ -509,6 +522,7 @@ module.exports = {
   generateTagsFromCaption,
   filterAndRefineTags,
   inferTravelCategoryFromText,
+  inferTravelCategoriesFromText,
   CATEGORY_SLUGS,
   CATEGORY_DISPLAY
 };

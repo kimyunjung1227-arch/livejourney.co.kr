@@ -192,36 +192,50 @@ const detectSeason = () => {
   }
 };
 
-// 카테고리 자동 분류 (추천장소·개화정보·웨이팅·맛집정보 — 키워드 우선순위)
-const detectCategory = (keywords, location, note, brightness) => {
+/** 다중 카테고리 (백엔드 inferTravelCategoriesFromText 와 동일 규칙) */
+const detectCategories = (keywords, location, note) => {
   const keywordList = Array.from(keywords);
   const allText = `${keywordList.join(' ')} ${location} ${note}`.toLowerCase();
+  const out = [];
+  const seen = new Set();
+  const push = (slug, name, icon) => {
+    if (seen.has(slug)) return;
+    seen.add(slug);
+    out.push({ category: slug, categoryName: name, categoryIcon: icon });
+  };
 
   const waitingKeywords = ['웨이팅', '대기', '줄서', '줄서서', '대기줄', 'queue', 'waiting', '번호표', '웨이트', '순번', '예상 대기'];
-  if (waitingKeywords.some((kw) => allText.includes(kw))) {
-    return { category: 'waiting', categoryName: '웨이팅', icon: '⏱️' };
-  }
-
   const bloomKeywords = ['꽃', '벚꽃', '개화', '매화', '진달래', '철쭉', '튤립', '유채', '수국', '코스모스', '해바라기', '만개'];
-  const hasBloom = bloomKeywords.some((kw) => allText.includes(kw));
+  const foodKeywords = ['맛집', '음식', '카페', '커피', '디저트', '레스토랑', '식당', '먹', '요리', '메뉴', '빵', '케이크'];
+  const landmarkKeywords = ['사찰', '박물관', '미술관', '궁궐', '성당', '유적', '유네스코', '문화재', '탑', '전망대'];
+  const scenicKeywords = ['다리', '강', '바다', '하늘', '도시', '풍경', '전경', '전망', '뷰', '경치', '자연', '산', '호수', '해변', '스카이라인', '일출', '일몰'];
 
-  const scenicKeywords = ['다리', '강', '바다', '하늘', '도시', '풍경', '전경', '전망', '뷰', '경치', '자연', '산', '호수', '해변', '스카이라인'];
+  const hasWaiting = waitingKeywords.some((kw) => allText.includes(kw));
+  const hasBloom = bloomKeywords.some((kw) => allText.includes(kw));
+  const hasFood = foodKeywords.some((kw) => allText.includes(kw));
+  const hasLandmark = landmarkKeywords.some((kw) => allText.includes(kw));
   const hasScenic = scenicKeywords.some((kw) => allText.includes(kw));
 
+  if (hasWaiting) push('waiting', '웨이팅', '⏱️');
   if (hasBloom) {
-    return { category: 'bloom', categoryName: '개화정보', icon: '🌸' };
+    push('bloom', '개화정보', '🌸');
+    push('scenic', '추천장소', '🏞️');
   }
+  if (hasFood) push('food', '맛집정보', '🍜');
+  if (hasLandmark) push('landmark', '명소', '🏛️');
+  if (hasScenic && !hasBloom) push('scenic', '추천장소', '🏞️');
+  if (out.length === 0) push('scenic', '추천장소', '🏞️');
+  return out;
+};
 
-  const foodKeywords = ['맛집', '음식', '카페', '커피', '디저트', '레스토랑', '식당', '먹', '요리', '메뉴', '빵', '케이크'];
-  if (foodKeywords.some((kw) => allText.includes(kw))) {
-    return { category: 'food', categoryName: '맛집정보', icon: '🍜' };
-  }
-
-  if (hasScenic) {
-    return { category: 'scenic', categoryName: '추천장소', icon: '🏞️' };
-  }
-
-  return { category: 'scenic', categoryName: '추천장소', icon: '🏞️' };
+const mergeCategoryLists = (a, b) => {
+  const map = new Map();
+  [...(a || []), ...(b || [])].forEach((x) => {
+    const slug = x?.category;
+    if (!slug) return;
+    if (!map.has(slug)) map.set(slug, x);
+  });
+  return Array.from(map.values());
 };
 
 // 이미지 색상 분석 (고급)
@@ -321,7 +335,8 @@ export const analyzeImageForTags = async (imageFile, location = '', existingNote
       logger.debug('  API 호출 결과:', aiResult);
       
       const hasRemoteTags = Array.isArray(aiResult?.tags) && aiResult.tags.length > 0;
-      if (aiResult && (aiResult.success || aiResult.category || hasRemoteTags)) {
+      const hasRemoteCategories = Array.isArray(aiResult?.categories) && aiResult.categories.length > 0;
+      if (aiResult && (aiResult.success || aiResult.category || hasRemoteTags || hasRemoteCategories)) {
         const hasTags = Array.isArray(aiResult.tags) && aiResult.tags.length > 0;
         if (hasTags) {
           logger.log('✅ 멀티모달 AI 태그 생성 성공!');
@@ -332,19 +347,38 @@ export const analyzeImageForTags = async (imageFile, location = '', existingNote
         }
         logger.debug('  이미지 묘사:', aiResult.caption?.substring(0, 100) + '...');
 
-        const fallbackCategory = aiResult.category && aiResult.categoryName && aiResult.categoryIcon
-          ? null
-          : detectCategory(new Set(aiResult.tags || []), location, existingNote, { brightness: 0.5 });
-        const category = aiResult.category || fallbackCategory?.category || 'scenic';
-        const categoryName = aiResult.categoryName || fallbackCategory?.categoryName || '추천장소';
-        const categoryIcon = aiResult.categoryIcon || fallbackCategory?.icon || '🏞️';
+        const remoteCats =
+          Array.isArray(aiResult.categories) && aiResult.categories.length > 0
+            ? aiResult.categories.map((c) => ({
+                category: c.category,
+                categoryName: c.categoryName,
+                categoryIcon: c.categoryIcon || c.icon
+              }))
+            : aiResult.category
+              ? [
+                  {
+                    category: aiResult.category,
+                    categoryName: aiResult.categoryName,
+                    categoryIcon: aiResult.categoryIcon
+                  }
+                ]
+              : [];
+        const fallbackCats = detectCategories(new Set(aiResult.tags || []), location, existingNote);
+        const categories = remoteCats.length ? mergeCategoryLists(remoteCats, fallbackCats) : fallbackCats;
+        const primary = categories[0] || { category: 'scenic', categoryName: '추천장소', categoryIcon: '🏞️' };
 
         return {
-          success: !!aiResult.success || hasTags || !!aiResult.category,
+          success:
+            !!aiResult.success ||
+            hasTags ||
+            !!aiResult.category ||
+            hasRemoteCategories ||
+            categories.length > 0,
           tags: Array.isArray(aiResult.tags) ? aiResult.tags.slice(0, 10) : [],
-          category,
-          categoryName,
-          categoryIcon,
+          categories,
+          category: primary.category,
+          categoryName: categories.map((c) => c.categoryName).join(', '),
+          categoryIcon: primary.categoryIcon,
           caption: aiResult.caption,
           method: aiResult.method || 'multimodal-ai'
         };
@@ -644,8 +678,13 @@ export const analyzeImageForTags = async (imageFile, location = '', existingNote
       }
     }
     
-    // 8. AI 카테고리 자동 분류 ⭐
-    const categoryResult = detectCategory(keywords, location, existingNote, colorAnalysis);
+    // 8. AI 카테고리 자동 분류 (다중) ⭐
+    if (colorAnalysis.isPink && (new Date().getMonth() + 1 >= 3 && new Date().getMonth() + 1 <= 5)) {
+      keywords.add('벚꽃');
+      keywords.add('꽃');
+    }
+    const categoryList = detectCategories(keywords, location, existingNote);
+    const categoryResult = categoryList[0] || { category: 'scenic', categoryName: '추천장소', categoryIcon: '🏞️' };
     
     // 9. 중복 제거 및 배열 변환 - 한국어만 필터링 (5개로 제한)
     const finalTags = Array.from(keywords)
@@ -667,9 +706,10 @@ export const analyzeImageForTags = async (imageFile, location = '', existingNote
     return {
       success: true,
       tags: finalTags,
+      categories: categoryList,
       category: categoryResult.category,
-      categoryName: categoryResult.categoryName,
-      categoryIcon: categoryResult.icon,
+      categoryName: categoryList.map((c) => c.categoryName).join(', '),
+      categoryIcon: categoryResult.categoryIcon,
       brightness: colorAnalysis.brightness,
       colorAnalysis,
       metadata: exifData,
@@ -681,6 +721,7 @@ export const analyzeImageForTags = async (imageFile, location = '', existingNote
     return {
       success: false,
       tags: ['여행', '풍경', '추억'],
+      categories: [{ category: 'scenic', categoryName: '추천장소', categoryIcon: '🏞️' }],
       category: 'scenic',
       categoryName: '추천장소',
       categoryIcon: '🏞️',

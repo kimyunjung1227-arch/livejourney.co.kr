@@ -38,11 +38,13 @@ const calculateRegionStats = (posts, regionName) => {
     );
 
     const total = regionPosts.length;
-    const bloomCount = regionPosts.filter(p => p.category === 'bloom').length;
-    const foodCount = regionPosts.filter(p => p.category === 'food').length;
-    const waitingCount = regionPosts.filter(p => p.category === 'waiting').length;
+    const hasCat = (p, slug) =>
+        p.category === slug || (Array.isArray(p.categories) && p.categories.includes(slug));
+    const bloomCount = regionPosts.filter(p => hasCat(p, 'bloom')).length;
+    const foodCount = regionPosts.filter(p => hasCat(p, 'food')).length;
+    const waitingCount = regionPosts.filter(p => hasCat(p, 'waiting')).length;
     const scenicCount = regionPosts.filter(p =>
-        p.category === 'landmark' || p.category === 'scenic'
+        hasCat(p, 'landmark') || hasCat(p, 'scenic')
     ).length;
 
     const recentPosts = filterRecentPosts(regionPosts, 7);

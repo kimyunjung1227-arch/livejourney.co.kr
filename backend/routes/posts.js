@@ -5,13 +5,21 @@ const path = require('path');
 const jwt = require('jsonwebtoken');
 const Post = require('../models/Post');
 const User = require('../models/User');
-const { generateSmartTags, CATEGORY_SLUGS } = require('../services/aiTagService');
+const { generateSmartTags, CATEGORY_SLUGS, CATEGORY_DISPLAY } = require('../services/aiTagService');
 
 const normalizeCategory = (c) => {
   const v = String(c || '').trim().toLowerCase();
   if (CATEGORY_SLUGS.includes(v)) return v;
   return 'general';
 };
+
+const normalizeCategoriesList = (arr) => {
+  if (!Array.isArray(arr)) return [];
+  return [...new Set(arr.map(normalizeCategory).filter((s) => CATEGORY_SLUGS.includes(s)))];
+};
+
+const categorySlugsToNames = (slugs) =>
+  (slugs || []).map((s) => CATEGORY_DISPLAY[s]?.name || s).filter(Boolean).join(', ');
 
 // JWT에서 userId 추출 (auth 라우트와 동일한 payload: userId)
 const getUserIdFromReq = (req) => {
@@ -97,18 +105,27 @@ router.get('/', async (req, res) => {
 
     const { category, tag, sort = 'latest', limit = 20, page = 1 } = req.query;
 
-    // 필터 조건 구성
+    // 필터 조건 구성 (카테고리 + 태그 동시 사용 시 $and로 결합)
     const query = { isPublic: true, isBlocked: false };
+    const andParts = [];
+
     if (category && category !== 'all') {
-      query.category = category;
+      andParts.push({
+        $or: [{ category: category }, { categories: category }]
+      });
     }
 
-    // 태그 필터링 (대소문자·# 무시)
     if (tag) {
       const raw = String(tag).trim().replace(/^#+/, '');
       const esc = raw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const re = new RegExp(`^${esc}$`, 'i');
-      query.$or = [{ tags: re }, { 'aiLabels.name': re }];
+      andParts.push({ $or: [{ tags: re }, { 'aiLabels.name': re }] });
+    }
+
+    if (andParts.length === 1) {
+      Object.assign(query, andParts[0]);
+    } else if (andParts.length > 1) {
+      query.$and = andParts;
     }
 
     // 정렬 조건 구성
@@ -268,6 +285,7 @@ router.post('/', async (req, res) => {
       tags,
       category,
       categoryName,
+      categories: categoriesRaw,
       placeName,
       exifData
     } = req.body;
@@ -300,10 +318,17 @@ router.post('/', async (req, res) => {
       images: Array.isArray(images) ? images : [],
       tags: Array.isArray(tags) ? tags : [],
       category: normalizeCategory(category),
-      categoryName: (categoryName && String(categoryName).trim()) || '일반'
+      categoryName: (categoryName && String(categoryName).trim()) || '일반',
+      categories: []
     });
 
-    // 🔹 AI 태그·카테고리 (GEMINI_API_KEY가 설정된 경우만) — 캡션 기반 분류로 추천장소/개화정보/웨이팅/맛집정보 반영
+    let catList = normalizeCategoriesList(categoriesRaw);
+    if (catList.length === 0) catList = [normalizeCategory(category)];
+    newPost.categories = catList;
+    newPost.category = catList[0];
+    newPost.categoryName = categorySlugsToNames(catList) || newPost.categoryName;
+
+    // 🔹 AI 태그·카테고리 (GEMINI_API_KEY가 설정된 경우만) — 다중 카테고리 병합
     try {
       const primaryImage = Array.isArray(images) && images.length > 0 ? images[0] : null;
       if (primaryImage && typeof primaryImage === 'string' && primaryImage.startsWith('/uploads/')) {
@@ -311,9 +336,13 @@ router.post('/', async (req, res) => {
         const aiResult = await generateSmartTags(imagePath, locationStr, exifData || null);
 
         if (aiResult && aiResult.success) {
-          if (aiResult.category && CATEGORY_SLUGS.includes(aiResult.category)) {
-            newPost.category = aiResult.category;
-            newPost.categoryName = aiResult.categoryName || newPost.categoryName;
+          const fromAi = Array.isArray(aiResult.categories) && aiResult.categories.length
+            ? aiResult.categories.map((c) => c.category).filter((s) => CATEGORY_SLUGS.includes(s))
+            : (aiResult.category && CATEGORY_SLUGS.includes(aiResult.category) ? [aiResult.category] : []);
+          if (fromAi.length) {
+            newPost.categories = [...new Set([...(newPost.categories || []), ...fromAi])];
+            newPost.category = newPost.categories[0];
+            newPost.categoryName = categorySlugsToNames(newPost.categories) || newPost.categoryName;
           }
           if (Array.isArray(aiResult.tags) && aiResult.tags.length > 0) {
             newPost.aiLabels = aiResult.tags.map((t) => ({

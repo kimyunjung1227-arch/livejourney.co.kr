@@ -829,12 +829,14 @@ const MapScreen = () => {
         if (selectedFilters.length > 0) {
           filteredResults = filteredResults.filter(post => {
             const category = post.category || 'general';
+            const cats = Array.isArray(post.categories) ? post.categories : [];
+            const hasCat = (slug) => category === slug || cats.includes(slug);
             // 활성화된 필터 중 하나라도 매칭되면 표시
             return selectedFilters.some(filter => {
-              if (filter === 'bloom') return category === 'bloom';
-              if (filter === 'food') return category === 'food';
-              if (filter === 'scenic') return category === 'scenic' || category === 'landmark';
-              if (filter === 'waiting') return category === 'waiting' || (post.tags && Array.isArray(post.tags) && post.tags.some(t => /웨이팅|대기|줄|waiting|웨이트/i.test(String(t).trim())));
+              if (filter === 'bloom') return hasCat('bloom');
+              if (filter === 'food') return hasCat('food');
+              if (filter === 'scenic') return hasCat('scenic') || hasCat('landmark');
+              if (filter === 'waiting') return hasCat('waiting') || (post.tags && Array.isArray(post.tags) && post.tags.some(t => /웨이팅|대기|줄|waiting|웨이트/i.test(String(t).trim())));
               return false;
             });
           });
@@ -866,12 +868,14 @@ const MapScreen = () => {
       if (selectedFilters.length > 0) {
         validPosts = validPosts.filter(post => {
           const category = post.category || 'general';
+          const cats = Array.isArray(post.categories) ? post.categories : [];
+          const hasCat = (slug) => category === slug || cats.includes(slug);
           // 활성화된 필터 중 하나라도 매칭되면 표시
           return selectedFilters.some(filter => {
-            if (filter === 'bloom') return category === 'bloom';
-            if (filter === 'food') return category === 'food';
-            if (filter === 'scenic') return category === 'scenic' || category === 'landmark';
-            if (filter === 'waiting') return category === 'waiting' || (post.tags && Array.isArray(post.tags) && post.tags.some(t => /웨이팅|대기|줄|waiting|웨이트/i.test(String(t).trim())));
+            if (filter === 'bloom') return hasCat('bloom');
+            if (filter === 'food') return hasCat('food');
+            if (filter === 'scenic') return hasCat('scenic') || hasCat('landmark');
+            if (filter === 'waiting') return hasCat('waiting') || (post.tags && Array.isArray(post.tags) && post.tags.some(t => /웨이팅|대기|줄|waiting|웨이트/i.test(String(t).trim())));
             return false;
           });
         });

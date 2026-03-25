@@ -178,7 +178,7 @@ const generateAITagsViaSupabase = async (imageFile, location = '', exifData = nu
     if (data && !data.success && data.detail) {
       logger.warn('AI 태그 서버 응답:', data.message || 'error', data.detail?.slice?.(0, 200));
     }
-    if (data && (data.success || data.category)) {
+    if (data && (data.success || data.category || (Array.isArray(data.categories) && data.categories.length))) {
       const hasTags = Array.isArray(data.tags) && data.tags.length > 0;
       logger.log('✅ Supabase AI 응답:', hasTags ? `${data.tags.length}개 태그` : '태그 없음', data.category ? `카테고리 ${data.category}` : '');
       return {
@@ -186,6 +186,7 @@ const generateAITagsViaSupabase = async (imageFile, location = '', exifData = nu
         tags: Array.isArray(data.tags) ? data.tags : [],
         caption: data.caption || null,
         method: data.method || 'supabase-edge-gemini',
+        categories: Array.isArray(data.categories) ? data.categories : [],
         category: data.category || null,
         categoryName: data.categoryName || null,
         categoryIcon: data.categoryIcon || null,
@@ -214,13 +215,14 @@ const generateAITagsViaBackend = async (imageFile, location = '', exifData = nul
   });
   const d = response.data;
   const hasTags = Array.isArray(d?.tags) && d.tags.length > 0;
-  const hasCategory = !!(d?.category || d?.categoryName);
+  const hasCategory = !!(d?.category || d?.categoryName || (Array.isArray(d?.categories) && d.categories.length));
   if (d?.success && (hasTags || hasCategory)) {
     return {
       success: true,
       tags: Array.isArray(d?.tags) ? d.tags : [],
       caption: d.caption || null,
       method: d.method || 'multimodal-ai',
+      categories: Array.isArray(d?.categories) ? d.categories : [],
       category: d.category || null,
       categoryName: d.categoryName || null,
       categoryIcon: d.categoryIcon || null,
@@ -240,7 +242,8 @@ export const generateAITags = async (imageFile, location = '', exifData = null) 
       (supa.success ||
         (Array.isArray(supa.tags) && supa.tags.length > 0) ||
         supa.category ||
-        supa.categoryName);
+        supa.categoryName ||
+        (Array.isArray(supa.categories) && supa.categories.length > 0));
     if (supaOk) {
       logger.log('🤖 Supabase AI 태그/카테고리 응답 사용');
       return { ...supa, success: supa.success !== false };

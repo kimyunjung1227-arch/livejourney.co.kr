@@ -15,6 +15,7 @@ import { getCurrentTimestamp, getTimeAgo } from '../utils/timeUtils';
 import { getBadgeCongratulationMessage, getBadgeDifficultyEffects } from '../utils/badgeMessages';
 import { logger } from '../utils/logger';
 import { extractExifData, convertGpsToAddress, formatExifDate } from '../utils/exifExtractor';
+import { slugsFromAnalysisResult } from '../utils/travelCategories';
 import { useHorizontalDragScroll } from '../hooks/useHorizontalDragScroll';
 const UploadScreen = () => {
   const navigate = useNavigate();
@@ -37,8 +38,9 @@ const UploadScreen = () => {
     note: '',
     coordinates: null,
     aiCategory: 'scenic',
-    aiCategoryName: '추천 장소',
-    aiCategoryIcon: '📍',
+    aiCategories: ['scenic'],
+    aiCategoryName: '추천장소',
+    aiCategoryIcon: '🏞️',
     exifData: null, // EXIF 데이터 (날짜, GPS 등)
     photoDate: null, // 사진 촬영 날짜
     verifiedLocation: null // EXIF에서 추출한 검증된 위치
@@ -190,6 +192,10 @@ const UploadScreen = () => {
         note,
         coordinates: post.coordinates || prev.coordinates,
         aiCategory: post.category || prev.aiCategory,
+        aiCategories:
+          Array.isArray(post.categories) && post.categories.length > 0
+            ? post.categories
+            : [post.category || prev.aiCategory || 'scenic'],
         aiCategoryName: post.categoryName || prev.aiCategoryName,
         aiCategoryIcon: post.categoryIcon || prev.aiCategoryIcon,
         photoDate: post.photoDate || post.exifData?.photoDate || null,
@@ -382,20 +388,24 @@ const UploadScreen = () => {
         }
 
         setAutoTags(dedupeHashtags(hashtagged));
+        const slugList = slugsFromAnalysisResult(analysisResult);
         setFormData(prev => ({
           ...prev,
-          aiCategory: analysisResult.category ?? prev.aiCategory ?? 'scenic',
-          aiCategoryName: analysisResult.categoryName ?? prev.aiCategoryName ?? '추천 장소',
-          aiCategoryIcon: analysisResult.categoryIcon ?? prev.aiCategoryIcon ?? '📍'
+          aiCategories: slugList,
+          aiCategory: slugList[0] ?? analysisResult.category ?? prev.aiCategory ?? 'scenic',
+          aiCategoryName: analysisResult.categoryName ?? prev.aiCategoryName ?? '추천장소',
+          aiCategoryIcon: analysisResult.categoryIcon ?? prev.aiCategoryIcon ?? '🏞️'
         }));
 
       } else {
         if (hasCategory) {
+          const slugList = slugsFromAnalysisResult(analysisResult);
           setFormData(prev => ({
             ...prev,
-            aiCategory: analysisResult.category ?? prev.aiCategory ?? 'scenic',
-            aiCategoryName: analysisResult.categoryName ?? prev.aiCategoryName ?? '추천 장소',
-            aiCategoryIcon: analysisResult.categoryIcon ?? prev.aiCategoryIcon ?? '📍'
+            aiCategories: slugList,
+            aiCategory: slugList[0] ?? analysisResult.category ?? prev.aiCategory ?? 'scenic',
+            aiCategoryName: analysisResult.categoryName ?? prev.aiCategoryName ?? '추천장소',
+            aiCategoryIcon: analysisResult.categoryIcon ?? prev.aiCategoryIcon ?? '🏞️'
           }));
         }
         // 분석 실패 시 날씨 중심 기본 태그 제공 (5개)
@@ -435,8 +445,9 @@ const UploadScreen = () => {
           setFormData(prev => ({
             ...prev,
             aiCategory: 'scenic',
-            aiCategoryName: '추천 장소',
-            aiCategoryIcon: '📍'
+            aiCategories: ['scenic'],
+            aiCategoryName: '추천장소',
+            aiCategoryIcon: '🏞️'
           }));
         }
       }
@@ -473,8 +484,9 @@ const UploadScreen = () => {
       setFormData(prev => ({
         ...prev,
         aiCategory: 'scenic',
-        aiCategoryName: '추천 장소',
-        aiCategoryIcon: '📍'
+        aiCategories: ['scenic'],
+        aiCategoryName: '추천장소',
+        aiCategoryIcon: '🏞️'
       }));
     } finally {
       setLoadingAITags(false);
@@ -921,6 +933,7 @@ const UploadScreen = () => {
             region,
             tags: formData.tags,
             category: formData.aiCategory,
+            categories: Array.isArray(formData.aiCategories) ? formData.aiCategories : [formData.aiCategory],
             categoryName: formData.aiCategoryName,
             thumbnail: finalImages.length > 0 ? finalImages[0] : prev.thumbnail,
             imageCount: finalImages.length,
@@ -951,7 +964,7 @@ const UploadScreen = () => {
       const uploadedVideoUrls = [];
 
       const aiCategory = formData.aiCategory || 'scenic';
-      const aiCategoryName = formData.aiCategoryName || '추천 장소';
+      const aiCategoryName = formData.aiCategoryName || '추천장소';
 
       logger.debug('AI category:', aiCategoryName);
 
@@ -1115,6 +1128,7 @@ const UploadScreen = () => {
             isNew: true,
             isLocal: false,
             category: aiCategory,
+            categories: Array.isArray(formData.aiCategories) ? formData.aiCategories : [aiCategory],
             categoryName: aiCategoryName,
             coordinates: formData.coordinates || (formData.exifData?.gpsCoordinates ? {
               lat: formData.exifData.gpsCoordinates.lat,

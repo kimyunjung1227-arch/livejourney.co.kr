@@ -74,6 +74,28 @@ function parseCategoryFromContent(content: string): { category: string; category
   };
 }
 
+function parseCategoriesFromContent(content: string): Array<{ category: string; categoryName: string; categoryIcon: string }> {
+  const lines = content.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  for (const line of lines) {
+    const upper = line.toUpperCase();
+    if (upper.startsWith('CATEGORIES:')) {
+      const raw = line.replace(/^CATEGORIES:\s*/i, '').trim();
+      const parts = raw.split(/[,，\s]+/).map((s) => s.toLowerCase().trim()).filter(Boolean);
+      const out: Array<{ category: string; categoryName: string; categoryIcon: string }> = [];
+      const seen = new Set<string>();
+      for (const p of parts) {
+        if (!CATEGORY_KEYS.includes(p) || seen.has(p)) continue;
+        seen.add(p);
+        const m = CATEGORY_MAP[p];
+        out.push({ category: p, categoryName: m.name, categoryIcon: m.icon });
+      }
+      if (out.length) return out;
+    }
+  }
+  const single = parseCategoryFromContent(content);
+  return [{ category: single.category, categoryName: single.categoryName, categoryIcon: single.categoryIcon }];
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { status: 200, headers: cors });
@@ -121,12 +143,9 @@ Deno.serve(async (req) => {
       : '';
 
     const prompt =
-      '이 사진을 보고 여행/장소 기준으로 (1) 카테고리와 (2) 해시태그를 아래 형식대로만 답하세요. 다른 설명 금지.\n\n' +
-      'CATEGORY: 다음 중 정확히 하나만 영어로 입력 — bloom, food, scenic, landmark, waiting, general\n' +
-      '  - bloom: 사진의 주된 피사체가 꽃·벚꽃·개화·매화 등 식물 개화일 때만 사용. 다리·강·도시·하늘만 있으면 bloom 아님.\n' +
-      '  - scenic: 다리, 강, 바다, 하늘, 도시 전경, 풍경, 자연 경치, 인물+배경 등. 꽃이 주제가 아니면 scenic.\n' +
-      '  - food=맛집·음식, landmark=관광지·명소, waiting=웨이팅·대기, general=일반\n' +
-      'NAME: 위 카테고리에 맞는 한글 이름 한 줄 (예: 추천장소, 개화정보, 웨이팅, 맛집정보)\n' +
+      '이 사진을 보고 여행/장소 기준으로 (1) 카테고리(복수 가능)와 (2) 해시태그를 아래 형식대로만 답하세요. 다른 설명 금지.\n\n' +
+      'CATEGORIES: bloom, food, scenic, landmark, waiting, general 중 해당되는 것을 영어로 쉼표로 나열. ' +
+      '꽃·벚꽃·개화가 보이면 bloom과 scenic을 함께 적어도 됨 (예: bloom,scenic). 웨이팅·줄이면 waiting. 음식·맛집이면 food.\n' +
       'TAGS: #태그1 #태그2 #태그3 ... 한글 위주 5~12개, 짧고 구체적으로\n\n' +
       locationText +
       exifText;
@@ -198,17 +217,19 @@ Deno.serve(async (req) => {
     const textPart = candidates?.[0]?.content?.parts?.[0]?.text;
     const content = typeof textPart === 'string' ? textPart : '';
     const tags = parseTagsFromContent(content);
-    const { category, categoryName, categoryIcon } = parseCategoryFromContent(content);
+    const categories = parseCategoriesFromContent(content);
+    const primary = categories[0] || parseCategoryFromContent(content);
     const hasTags = tags.length > 0;
-    const hasCategory = !!category && CATEGORY_KEYS.includes(category);
+    const hasCategory = categories.length > 0 && CATEGORY_KEYS.includes(primary.category);
 
     return new Response(
       JSON.stringify({
         success: hasTags || hasCategory,
         tags,
-        category,
-        categoryName,
-        categoryIcon,
+        categories,
+        category: primary.category,
+        categoryName: categories.map((c) => c.categoryName).join(', '),
+        categoryIcon: primary.categoryIcon,
         caption: content.slice(0, 200) || null,
         method: 'supabase-edge-gemini',
       }),

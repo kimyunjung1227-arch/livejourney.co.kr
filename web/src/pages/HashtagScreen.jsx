@@ -7,6 +7,7 @@ import { getDisplayImageUrl } from '../api/upload';
 import PostThumbnail from '../components/PostThumbnail';
 import { fetchPostsSupabase } from '../api/postsSupabase';
 import { getTags } from '../api/posts';
+import { tagTranslations } from '../utils/tagTranslations';
 
 const DEFAULT_HASHTAGS = ['바다', '힐링', '맛집', '자연', '꽃', '일출', '카페', '여행', '휴양', '등산', '야경', '축제', '해변', '산', '전통', '한옥', '감귤', '벚꽃', '단풍', '도시'];
 const MAX_TAGS_SHOWN = 30;
@@ -165,26 +166,27 @@ const HashtagScreen = () => {
           className="screen-body flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain"
           style={{ minHeight: 0, WebkitOverflowScrolling: 'touch' }}
         >
-          {/* 태그 목록 (사용자 태그 기반, 상위 6개 + 펼치기) */}
+          {/* 해시태그 — 게시물 상세와 동일 스타일 (스카이 링크 + 선택 시 밑줄) */}
           <div className="px-4 pt-3 pb-2">
-            <h2 className="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-2">태그</h2>
-            <div className="flex flex-wrap gap-2">
+            <p className="text-[11px] font-medium text-gray-400 dark:text-gray-500 mb-2">해시태그</p>
+            <div className="flex flex-wrap gap-x-3 gap-y-2">
               {visibleTags.map(({ key, display, count }) => {
                 const isSelected =
                   selectedTag && (selectedTag || '').replace(/^#+/, '').trim().toLowerCase() === key;
+                const korean = tagTranslations[display.toLowerCase()] || display;
                 return (
                   <button
                     key={key}
                     type="button"
                     onClick={() => setSelectedTag(isSelected ? null : display)}
-                    className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-                      isSelected
-                        ? 'bg-primary text-white'
-                        : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 hover:bg-primary/20'
+                    className={`text-sm font-medium transition-colors text-sky-700 hover:underline dark:text-sky-400 ${
+                      isSelected ? 'underline underline-offset-2 font-semibold' : ''
                     }`}
                   >
-                    #{display}
-                    {count > 0 && <span className="opacity-80 ml-0.5">({count})</span>}
+                    #{korean}
+                    {count > 0 && (
+                      <span className="text-xs font-normal text-sky-600/70 dark:text-sky-400/70 ml-0.5">({count})</span>
+                    )}
                   </button>
                 );
               })}

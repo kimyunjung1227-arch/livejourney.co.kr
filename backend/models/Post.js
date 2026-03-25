@@ -60,6 +60,11 @@ const postSchema = new mongoose.Schema({
     type: String,
     default: '일반'
   },
+  /** 다중 카테고리 (예: 개화정보 + 추천장소 동시) — 단일 category는 호환용 첫 값 */
+  categories: [{
+    type: String,
+    enum: ['bloom', 'landmark', 'food', 'scenic', 'waiting', 'general']
+  }],
 
   // AI 분류 정보
   aiLabels: [{
@@ -169,6 +174,7 @@ const postSchema = new mongoose.Schema({
 
 // 인덱스 설정
 postSchema.index({ location: 1, category: 1 });
+postSchema.index({ categories: 1 });
 postSchema.index({ user: 1, createdAt: -1 });
 postSchema.index({ tags: 1 });
 postSchema.index({ likes: -1 }); // 인기 게시물용

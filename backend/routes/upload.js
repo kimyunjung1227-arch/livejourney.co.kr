@@ -167,6 +167,7 @@ router.post('/analyze-tags', upload.single('image'), async (req, res) => {
       return res.json({
         success: false,
         tags: [],
+        categories: Array.isArray(aiResult?.categories) ? aiResult.categories : [],
         category: aiResult?.category || null,
         categoryName: aiResult?.categoryName || null,
         categoryIcon: aiResult?.categoryIcon || null,
@@ -179,6 +180,7 @@ router.post('/analyze-tags', upload.single('image'), async (req, res) => {
       tags: aiResult.tags || [],
       caption: aiResult.caption || null,
       method: aiResult.method || 'gemini-ai',
+      categories: Array.isArray(aiResult.categories) ? aiResult.categories : [],
       category: aiResult.category || null,
       categoryName: aiResult.categoryName || null,
       categoryIcon: aiResult.categoryIcon || null,

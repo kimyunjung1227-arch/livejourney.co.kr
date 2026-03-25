@@ -16,107 +16,9 @@ import { follow, unfollow, isFollowing } from '../utils/followSystem';
 import { recordConversion, CONVERSION_TYPES } from '../utils/conversionEvents';
 import { logger } from '../utils/logger';
 import { buildMediaItemsFromPost } from '../utils/postMedia';
+import { tagTranslations } from '../utils/tagTranslations';
+import { getCategoryChipsFromPost } from '../utils/travelCategories';
 import 'swiper/css';
-
-// 영어 태그를 한국어로 번역
-const tagTranslations = {
-  // 자연/풍경
-  'nature': '자연',
-  'landscape': '풍경',
-  'mountain': '산',
-  'beach': '해변',
-  'forest': '숲',
-  'river': '강',
-  'lake': '호수',
-  'sunset': '일몰',
-  'sunrise': '일출',
-  'sky': '하늘',
-  'cloud': '구름',
-  'tree': '나무',
-  'flower': '꽃',
-  'cherry blossom': '벚꽃',
-  'autumn': '가을',
-  'spring': '봄',
-  'summer': '여름',
-  'winter': '겨울',
-  'snow': '눈',
-  'rain': '비',
-
-  // 음식
-  'food': '음식',
-  'restaurant': '맛집',
-  'cafe': '카페',
-  'coffee': '커피',
-  'dessert': '디저트',
-  'korean food': '한식',
-  'japanese food': '일식',
-  'chinese food': '중식',
-  'western food': '양식',
-  'street food': '길거리음식',
-  'seafood': '해산물',
-  'meat': '고기',
-  'vegetable': '채소',
-  'fruit': '과일',
-  'bread': '빵',
-  'noodle': '면요리',
-  'rice': '밥',
-
-  // 건물/장소
-  'building': '건물',
-  'architecture': '건축',
-  'temple': '사찰',
-  'palace': '궁궐',
-  'castle': '성',
-  'tower': '타워',
-  'bridge': '다리',
-  'park': '공원',
-  'garden': '정원',
-  'street': '거리',
-  'alley': '골목',
-  'market': '시장',
-  'shop': '상점',
-  'mall': '쇼핑몰',
-
-  // 활동
-  'travel': '여행',
-  'trip': '여행',
-  'hiking': '등산',
-  'camping': '캠핑',
-  'picnic': '피크닉',
-  'festival': '축제',
-  'event': '이벤트',
-  'concert': '공연',
-  'exhibition': '전시',
-  'shopping': '쇼핑',
-  'walking': '산책',
-
-  // 동물
-  'animal': '동물',
-  'dog': '강아지',
-  'cat': '고양이',
-  'bird': '새',
-  'fish': '물고기',
-
-  // 기타
-  'photo': '사진',
-  'photography': '사진',
-  'art': '예술',
-  'culture': '문화',
-  'history': '역사',
-  'traditional': '전통',
-  'modern': '현대',
-  'vintage': '빈티지',
-  'night': '밤',
-  'day': '낮',
-  'morning': '아침',
-  'evening': '저녁',
-  'beautiful': '아름다운',
-  'pretty': '예쁜',
-  'cute': '귀여운',
-  'cool': '멋진',
-  'amazing': '놀라운',
-  'scenic': '경치좋은'
-};
 
 const PostDetailScreen = () => {
   const navigate = useNavigate();
@@ -995,6 +897,7 @@ const PostDetailScreen = () => {
   }, [photoDate, post]);
   const categoryName = useMemo(() => post?.categoryName || null, [post]);
   const categoryIcon = useMemo(() => post?.categoryIcon || null, [post]);
+  const categoryChips = useMemo(() => getCategoryChipsFromPost(post), [post]);
   // EXIF에서 검증된 위치 정보
   const verifiedLocation = useMemo(() => post?.verifiedLocation || post?.exifData?.gpsCoordinates ? locationText : null, [post, locationText]);
   const hasExifData = useMemo(() => !!(post?.exifData || post?.photoDate || post?.verifiedLocation), [post]);
@@ -1452,7 +1355,19 @@ const PostDetailScreen = () => {
                   <span className="font-medium text-zinc-800 dark:text-zinc-200">
                     {captureLabel || post?.time || (post?.createdAt ? getTimeAgo(post.createdAt) : '방금 전')}
                   </span>
-                  {(categoryName || categoryIcon) ? (
+                  {categoryChips.length > 0 ? (
+                    <>
+                      <span className="mx-2 text-gray-300 dark:text-gray-600">·</span>
+                      <span className="font-medium text-zinc-800 dark:text-zinc-200 inline-flex flex-wrap items-center gap-x-2 gap-y-1">
+                        {categoryChips.map((c, idx) => (
+                          <span key={`${c.slug}-${idx}`} className="inline-flex items-center gap-0.5" title={c.name}>
+                            {c.icon ? <span aria-hidden="true">{c.icon}</span> : null}
+                            <span>{c.name}</span>
+                          </span>
+                        ))}
+                      </span>
+                    </>
+                  ) : (categoryName || categoryIcon) ? (
                     <>
                       <span className="mx-2 text-gray-300 dark:text-gray-600">·</span>
                       <span className="font-medium text-zinc-800 dark:text-zinc-200 inline-flex items-center gap-1 flex-wrap">
