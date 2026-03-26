@@ -582,10 +582,17 @@ const MapScreen = () => {
   const setPinDetailViewRef = useRef(() => {});
   const myTrustScore = getTrustRawScore();
   const { grade: myTrustGrade } = getTrustGrade(myTrustScore);
-  const allMissions = useMemo(() => getSOSMissions(), [missionTick]);
+  const allMissions = useMemo(() => {
+    const raw = getSOSMissions();
+    if (!Array.isArray(raw)) return [];
+    return raw.filter((m) => m && typeof m === 'object');
+  }, [missionTick]);
   const nearbyMissions = useMemo(() => getNearbyMissions(allMissions, currentLocation, 8), [allMissions, currentLocation]);
   const myMissionReward = useMemo(() => getMissionRewards('current-user'), [missionTick]);
-  const myMissionBadges = useMemo(() => getMissionBadges(myMissionReward), [myMissionReward]);
+  const myMissionBadges = useMemo(() => {
+    const badges = getMissionBadges(myMissionReward);
+    return Array.isArray(badges) ? badges : [];
+  }, [myMissionReward]);
   const sosLocationSuggestions = useMemo(() => {
     const q = (sosLocationSearch || '').trim().toLowerCase();
     if (!q || q.length < 1) return [];
@@ -4441,10 +4448,12 @@ const MapScreen = () => {
                         </div>
                       )}
                       {allMissions.map((mission) => {
+                        if (!mission || typeof mission !== 'object') return null;
+                        const missionResponses = Array.isArray(mission.responses) ? mission.responses : [];
                         const trustScoreMin = mission.minimumTrustScore || 0;
                         const canRespond = mission.status === 'open';
-                        const responses = (mission.responses || []).filter((r) => !hideUntrustedResponses || Number(r.responderTrustScore || 0) >= trustScoreMin);
-                        const best = (mission.responses || []).find((r) => r.id === mission.bestResponseId);
+                        const responses = missionResponses.filter((r) => !hideUntrustedResponses || Number(r?.responderTrustScore || 0) >= trustScoreMin);
+                        const best = missionResponses.find((r) => r?.id === mission.bestResponseId);
                         return (
                           <div key={mission.id} style={{ border: '1px solid #e5e7eb', borderRadius: '10px', padding: '9px' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px' }}>
