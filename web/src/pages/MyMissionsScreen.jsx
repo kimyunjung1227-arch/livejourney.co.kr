@@ -74,7 +74,9 @@ const MyMissionsScreen = () => {
     const matched = localPosts.find((p) => p.id === resp.linkedPostId || p.thumbnail === resp.photoUrl);
     const targetId = matched?.id || resp.linkedPostId;
     if (targetId) {
-      navigate(`/post/${targetId}`, { state: matched ? { post: matched } : undefined });
+      navigate(`/post/${targetId}`, {
+        state: matched ? { post: matched, allPosts: localPosts } : undefined
+      });
       return;
     }
     if (resp.photoUrl) window.open(resp.photoUrl, '_blank', 'noopener,noreferrer');
@@ -141,7 +143,7 @@ const MyMissionsScreen = () => {
                             className="absolute bottom-1.5 right-1.5 w-7 h-7 rounded-full bg-white/95 border border-rose-200 text-rose-500 flex items-center justify-center shadow-sm"
                             title="채택"
                           >
-                            <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>favorite</span>
+                            <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>thumb_up</span>
                           </button>
                         )}
                         {resp.status === 'accepted' && (
@@ -149,7 +151,7 @@ const MyMissionsScreen = () => {
                             className="absolute bottom-1.5 right-1.5 w-7 h-7 rounded-full bg-rose-500/95 text-white flex items-center justify-center shadow-md"
                             style={{ animation: heartFxResponseId === resp.id ? 'heartPop 0.5s ease-out' : undefined }}
                           >
-                            <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>favorite</span>
+                            <span className="material-symbols-outlined" style={{ fontSize: '15px' }}>thumb_up</span>
                           </div>
                         )}
                         {heartFxResponseId === resp.id && (
@@ -164,9 +166,6 @@ const MyMissionsScreen = () => {
                         )}
                       </div>
                       <p className="text-[10px] text-gray-600 dark:text-gray-300 truncate">{resp.note || '현장 정보'}</p>
-                      {resp.status === 'accepted' ? (
-                        <div className="text-[11px] text-rose-500">채택됨</div>
-                      ) : null}
                     </div>
                   ))}
                 </div>

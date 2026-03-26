@@ -1769,7 +1769,7 @@ const UploadScreen = () => {
                         style={{
                           width: '40px',
                           height: '40px',
-                          borderRadius: '10px',
+                          borderRadius: '9999px',
                           border: 'none',
                           background: 'white',
                           boxShadow: '0 2px 8px rgba(0,0,0,0.15)',

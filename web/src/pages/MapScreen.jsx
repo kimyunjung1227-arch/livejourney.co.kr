@@ -998,7 +998,7 @@ const MapScreen = () => {
   };
 
   // 게시물에서 장소명 검색 (모든 필드 검색)
-  const searchInPosts = (query) => {
+  function searchInPosts(query) {
     const queryLower = query.toLowerCase().trim();
     const queryWithoutHash = queryLower.replace(/^#+/, ''); // # 제거
 
@@ -1107,7 +1107,7 @@ const MapScreen = () => {
 
     // 매칭되는 게시물이 없으면 빈 배열 반환
     return [];
-  };
+  }
 
   // Kakao Places API를 사용한 장소 검색 (단일 결과)
   const searchPlaceWithKakao = (query, callback) => {
