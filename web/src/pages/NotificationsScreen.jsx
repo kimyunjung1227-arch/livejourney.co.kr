@@ -54,13 +54,16 @@ const NotificationsScreen = () => {
       loadNotifications();
     }
 
-    // SOS 요청 알림인 경우 해당 위치로 이동
+    // SOS 요청 알림인 경우 미션 업로드 화면으로 이동
     if (notification.data && notification.data.type === 'sos_request' && notification.data.sosRequest) {
       const sosRequest = notification.data.sosRequest;
-      navigate('/map', {
+      navigate('/upload', {
         state: {
-          sosLocation: sosRequest.coordinates,
-          sosRequest: sosRequest
+          fromMission: true,
+          missionId: notification.data?.missionId || `mission-${sosRequest.id || Date.now()}`,
+          missionQuestion: sosRequest.question,
+          missionLocationName: sosRequest.coordinates ? '요청 위치' : '근처 지역',
+          missionCoordinates: sosRequest.coordinates
         }
       });
       return;

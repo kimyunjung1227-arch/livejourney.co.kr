@@ -17,6 +17,7 @@ import { logger } from '../utils/logger';
 import { extractExifData, convertGpsToAddress, formatExifDate } from '../utils/exifExtractor';
 import { slugsFromAnalysisResult } from '../utils/travelCategories';
 import { useHorizontalDragScroll } from '../hooks/useHorizontalDragScroll';
+import { addMissionResponse } from '../utils/sosMissionStore';
 const UploadScreen = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -127,6 +128,22 @@ const UploadScreen = () => {
   setBadgeAnimationKeyRef.current = setBadgeAnimationKey;
   const reanalysisTimerRef = useRef(null);
   const [editFormReady, setEditFormReady] = useState(!editingPostId);
+  const missionContext = location.state?.fromMission ? {
+    missionId: location.state?.missionId,
+    missionQuestion: location.state?.missionQuestion,
+    missionLocationName: location.state?.missionLocationName,
+    missionCoordinates: location.state?.missionCoordinates
+  } : null;
+
+  useEffect(() => {
+    if (!missionContext) return;
+    setFormData((prev) => ({
+      ...prev,
+      location: prev.location || missionContext.missionLocationName || '',
+      note: prev.note || `미션 응답: ${missionContext.missionQuestion || ''}`.trim(),
+      coordinates: prev.coordinates || missionContext.missionCoordinates || null
+    }));
+  }, [missionContext]);
 
   const lastEditRouteIdRef = useRef(null);
 
@@ -1147,6 +1164,21 @@ const UploadScreen = () => {
             verifiedLocation: formData.verifiedLocation || null // EXIF에서 검증된 위치
           };
 
+          if (missionContext?.missionId) {
+            addMissionResponse(missionContext.missionId, {
+              id: `resp-${Date.now()}`,
+              responderId: currentUserId,
+              responderName: username,
+              note: formData.note || `${formData.location} 현장 정보`,
+              photoUrl: finalImages[0] || '',
+              linkedPostId: uploadedPost.id,
+              locationName: missionContext.missionLocationName || formData.location,
+              coordinates: missionContext.missionCoordinates || formData.coordinates || null,
+              status: 'pending',
+              createdAt: new Date().toISOString()
+            });
+          }
+
           // localStorage에도 이미지/동영상 URL 저장 (표시용; 서버 또는 blob URL)
           const sanitizedPost = {
             ...uploadedPost,
@@ -1529,6 +1561,12 @@ const UploadScreen = () => {
           WebkitOverflowScrolling: 'touch',
           minHeight: 0
         }}>
+          {missionContext && (
+            <div className="mt-3 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2">
+              <p className="text-[11px] font-semibold text-sky-700">미션 정보 제공 업로드</p>
+              <p className="text-xs text-sky-900 mt-1 truncate">{missionContext.missionLocationName || '근처 지역'} · {missionContext.missionQuestion || '지금 상황 미션'}</p>
+            </div>
+          )}
           <div className="pt-4 space-y-5">
             {/* 사진 / 동영상 + 업로드 가이드 버튼 한 줄 */}
             <div className="flex items-center justify-between px-1 mb-1">
