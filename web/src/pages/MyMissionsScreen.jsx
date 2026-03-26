@@ -71,7 +71,12 @@ const MyMissionsScreen = () => {
 
   const handleOpenResponseDetail = (resp) => {
     const localPosts = JSON.parse(localStorage.getItem('uploadedPosts') || '[]');
-    const matched = localPosts.find((p) => p.id === resp.linkedPostId || p.thumbnail === resp.photoUrl);
+    const matched = localPosts.find((p) => {
+      if (p.id === resp.linkedPostId) return true;
+      if (p.thumbnail && resp.photoUrl && p.thumbnail === resp.photoUrl) return true;
+      if (Array.isArray(p.images) && resp.photoUrl && p.images.includes(resp.photoUrl)) return true;
+      return false;
+    });
     const targetId = matched?.id || resp.linkedPostId;
     if (targetId) {
       navigate(`/post/${targetId}`, {

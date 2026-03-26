@@ -29,6 +29,18 @@ export const addMissionResponse = (missionId, response) => {
   saveSOSMissions(next);
 };
 
+export const updateMissionResponseLinkedPostId = (missionId, responseId, linkedPostId) => {
+  if (!missionId || !responseId || !linkedPostId) return;
+  const next = getSOSMissions().map((m) => {
+    if (m.id !== missionId) return m;
+    const responses = (Array.isArray(m.responses) ? m.responses : []).map((r) =>
+      r.id === responseId ? { ...r, linkedPostId } : r
+    );
+    return { ...m, responses };
+  });
+  saveSOSMissions(next);
+};
+
 export const updateMissionResponseStatus = (missionId, responseId, status) => {
   const next = getSOSMissions().map((m) => {
     if (m.id !== missionId) return m;

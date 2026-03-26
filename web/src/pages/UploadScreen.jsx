@@ -17,7 +17,7 @@ import { logger } from '../utils/logger';
 import { extractExifData, convertGpsToAddress, formatExifDate } from '../utils/exifExtractor';
 import { slugsFromAnalysisResult } from '../utils/travelCategories';
 import { useHorizontalDragScroll } from '../hooks/useHorizontalDragScroll';
-import { addMissionResponse } from '../utils/sosMissionStore';
+import { addMissionResponse, updateMissionResponseLinkedPostId } from '../utils/sosMissionStore';
 const UploadScreen = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -1201,9 +1201,10 @@ const UploadScreen = () => {
             verifiedLocation: formData.verifiedLocation || null // EXIF에서 검증된 위치
           };
 
+          const missionResponseId = missionContext?.missionId ? `resp-${Date.now()}` : null;
           if (missionContext?.missionId) {
             addMissionResponse(missionContext.missionId, {
-              id: `resp-${Date.now()}`,
+              id: missionResponseId,
               responderId: currentUserId,
               responderName: username,
               note: formData.note || `${formData.location} 현장 정보`,
@@ -1273,6 +1274,9 @@ const UploadScreen = () => {
                     localStorage.setItem('uploadedPosts', JSON.stringify(current));
                   }
                 } catch (_) {}
+                if (missionContext?.missionId && missionResponseId) {
+                  updateMissionResponseLinkedPostId(missionContext.missionId, missionResponseId, supabasePostId);
+                }
               }
             } else {
               logger.warn('Supabase 게시물 저장 실패:', result?.error, result?.code);
