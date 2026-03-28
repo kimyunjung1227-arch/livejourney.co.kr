@@ -194,3 +194,16 @@
   display: flex !important;
   /* Show when selected */
 }
+
+@keyframes hot-feed-card-enter {
+  from {
+    opacity: 0.65;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.hot-feed-card-enter {
+  animation: hot-feed-card-enter 0.35s ease-out;
+}
