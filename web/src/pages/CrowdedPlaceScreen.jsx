@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import BottomNavigation from '../components/BottomNavigation';
 import { filterActivePosts48, getTimeAgo } from '../utils/timeUtils';
@@ -9,7 +9,19 @@ import { getDisplayImageUrl } from '../api/upload';
 import { fetchPostsSupabase } from '../api/postsSupabase';
 import { rankHotspotPosts } from '../utils/hotnessEngine';
 import { toggleBookmark, isPostBookmarked } from '../utils/socialInteractions';
-import { getLocationSubtitle, getHotAtmosphere } from '../utils/hotPlaceDisplay';
+import { getDongCategoryLine, getPhotoCaptionLine } from '../utils/hotPlaceDisplay';
+import { getWeatherByRegion } from '../api/weather';
+
+function getTrendingBadgeText(post, variantIndex) {
+    const rank = post._rank;
+    const v = variantIndex % 6;
+    if (v === 0 && rank != null) return `TRENDING #${rank}`;
+    if (v === 1) return '급상승';
+    if (v === 2 && rank != null) return `HOT #${rank}`;
+    if (v === 3) return '실시간 인기';
+    if (v === 4 && rank != null) return `TOP ${rank}`;
+    return rank != null ? `핫플 ${rank}위` : '실시간 핫플';
+}
 
 const FILTERS = [
     { id: '전체', label: '전체', icon: null },
@@ -37,7 +49,52 @@ const CrowdedPlaceScreen = () => {
     const [activeFilter, setActiveFilter] = useState('전체');
     const [refreshKey, setRefreshKey] = useState(0);
     const [bookmarkRefresh, setBookmarkRefresh] = useState(0);
+    const [weatherByRegion, setWeatherByRegion] = useState({});
+    const [badgeTick, setBadgeTick] = useState(0);
     const contentRef = useRef(null);
+
+    useEffect(() => {
+        const id = setInterval(() => setBadgeTick((t) => t + 1), 2600);
+        return () => clearInterval(id);
+    }, []);
+
+    const crowdedRegionsKey = useMemo(() => {
+        const keys = crowdedData.map((p) => (p?.region || p?.location || '').trim().split(/\s+/)[0]).filter(Boolean);
+        return [...new Set(keys)].sort().join('|');
+    }, [crowdedData]);
+
+    useEffect(() => {
+        const regions = new Set();
+        crowdedData.forEach((p) => {
+            if (p && !p.weather && (p.region || p.location)) {
+                const r = (p.region || p.location || '').trim().split(/\s+/)[0] || p.region || p.location;
+                if (r) regions.add(r);
+            }
+        });
+        if (regions.size === 0) return undefined;
+        let cancelled = false;
+        const map = {};
+        Promise.all(
+            Array.from(regions).map(async (region) => {
+                try {
+                    const res = await getWeatherByRegion(region);
+                    if (!cancelled && res?.success && res.weather) return { region, weather: res.weather };
+                } catch (_) {
+                    /* ignore */
+                }
+                return null;
+            })
+        ).then((results) => {
+            if (cancelled) return;
+            results.forEach((r) => {
+                if (r) map[r.region] = r.weather;
+            });
+            setWeatherByRegion((prev) => ({ ...prev, ...map }));
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [crowdedRegionsKey]);
 
     const handleBookmark = (e, post) => {
         e.stopPropagation();
@@ -149,15 +206,15 @@ const CrowdedPlaceScreen = () => {
             {/* 컨텐츠 */}
             <div ref={contentRef} className="screen-content flex-1 overflow-y-auto">
                 {/* 상단 타이틀 — 실시간 급상승 핫플 피드 */}
-                <section className="px-5 pt-4 pb-1">
-                    <h2 className="text-xl font-bold leading-tight text-text-main dark:text-white">
+                <section className="px-5 pt-3 pb-0.5">
+                    <h2 className="text-lg font-bold leading-tight text-text-main dark:text-white">
                         실시간 급상승 핫플 🔥
                     </h2>
-                    <p className="text-text-sub dark:text-slate-400 text-xs mt-1">지금 가장 핫한 장소를 확인해보세요</p>
+                    <p className="text-text-sub dark:text-slate-400 text-[11px] mt-0.5">지금 가장 핫한 장소를 확인해보세요</p>
                 </section>
 
                 {/* 필터 — 칩 사이즈를 줄여 상단 영역 압축 */}
-                <div className="flex gap-1.5 overflow-x-auto px-5 py-3 scrollbar-hide">
+                <div className="flex gap-1.5 overflow-x-auto px-5 py-2 scrollbar-hide">
                     {FILTERS.map((f) => {
                         const isActive = activeFilter === f.id;
                         return (
@@ -186,62 +243,63 @@ const CrowdedPlaceScreen = () => {
                         <p className="text-xs text-slate-400 dark:text-slate-500">좋아요가 쌓이거나 최근 게시물이 생기면 이곳에 표시돼요.</p>
                     </div>
                 ) : (
-                    <div className="flex flex-col gap-3 px-4 pb-16">
+                    <div className="flex flex-col gap-2 px-4 pb-16">
                         {filteredPosts.map((post) => {
-                            const likeCount = Number(post.likes ?? post.likeCount ?? 0) || 0;
-                            const rank = post._rank;
-                            const title = post.location || post.placeName || post.detailedLocation || '핫플레이스';
+                            const title =
+                                (post.placeName || '').trim() ||
+                                (post.location || '').trim() ||
+                                (post.detailedLocation || '').trim() ||
+                                '핫플레이스';
                             const isBookmarked = bookmarkRefresh >= 0 && isPostBookmarked(post.id);
-                            const locationSub = getLocationSubtitle(post, title);
-                            const atmosphere = getHotAtmosphere(post);
+                            const dongCatLine = getDongCategoryLine(post);
+                            const captionLine = getPhotoCaptionLine(post);
+                            const regionKey = (post.region || post.location || '').trim().split(/\s+/)[0] || post.region || post.location;
+                            const weather = post.weather || weatherByRegion[regionKey] || null;
+                            const hasWeather = weather && (weather.icon || weather.temperature != null);
                             return (
                                 <div
                                     key={post.id}
                                     onClick={() => navigate(`/post/${post.id}`, { state: { post, allPosts: crowdedData } })}
-                                    className="group flex flex-col bg-white dark:bg-slate-800 rounded-2xl shadow-md border border-slate-100 dark:border-slate-700 overflow-hidden cursor-pointer"
+                                    style={{ maxHeight: 'calc((100dvh - 200px) / 2)' }}
+                                    className="group flex min-h-0 flex-col bg-white dark:bg-slate-800 rounded-2xl shadow-md border border-slate-100 dark:border-slate-700 overflow-hidden cursor-pointer"
                                 >
-                                    {/* 사진: 메인 핫플과 유사 — 좌상단 TRENDING, 우하단 분위기 */}
-                                    <div className="relative w-full aspect-[4/3] bg-slate-200 overflow-hidden rounded-t-2xl">
-                                        {rank != null && (
-                                            <div className="absolute top-3 left-3 z-10 px-2.5 py-1 rounded-md bg-slate-900/80 text-white text-[10px] font-extrabold tracking-tight shadow-md">
-                                                TRENDING #{rank}
+                                    <div className="relative w-full shrink-0 overflow-hidden rounded-t-2xl bg-slate-200" style={{ aspectRatio: '16/9', maxHeight: 'min(22vh, 200px)' }}>
+                                        <div className="absolute top-2 left-2 z-10 max-w-[58%] px-2 py-1 rounded-md bg-slate-900/82 text-white text-[10px] font-extrabold tracking-tight shadow-md">
+                                            {getTrendingBadgeText(post, badgeTick)}
+                                        </div>
+                                        {hasWeather ? (
+                                            <div className="absolute top-2 right-2 z-10 inline-flex items-center gap-0.5 px-2 py-1 rounded-md bg-black/55 text-white text-[10px] font-semibold shadow-md backdrop-blur-[2px]">
+                                                <span className="leading-none">{weather.icon || '🌤️'}</span>
+                                                <span>{weather.temperature != null && weather.temperature !== '-' ? `${weather.temperature}°` : ''}</span>
+                                                <span className="truncate max-w-[4.5rem] opacity-95">{weather.condition && weather.condition !== '-' ? weather.condition : ''}</span>
                                             </div>
-                                        )}
+                                        ) : null}
                                         {post.thumbnailIsVideo && post.firstVideoUrl ? (
                                             <video
                                                 src={post.firstVideoUrl}
                                                 muted
                                                 playsInline
                                                 preload="metadata"
-                                                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.02]"
+                                                className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.02]"
                                             />
                                         ) : post.image ? (
-                                            <img src={post.image} alt={post.location || ''} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.02]" />
+                                            <img src={post.image} alt={post.location || ''} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.02]" />
                                         ) : (
-                                            <div className="w-full h-full flex items-center justify-center text-slate-400">
+                                            <div className="flex h-full min-h-[100px] w-full items-center justify-center text-slate-400">
                                                 <span className="material-symbols-outlined text-4xl">image</span>
                                             </div>
                                         )}
-                                        <div className="absolute inset-0 bg-black/5 pointer-events-none" />
-                                        <div
-                                            className={`absolute bottom-3 right-3 z-10 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-bold text-white shadow-md ${
-                                                atmosphere === 'crowded' ? 'bg-blue-500' : 'bg-amber-500'
-                                            }`}
-                                        >
-                                            <span className="material-symbols-outlined text-[16px]">
-                                                {atmosphere === 'crowded' ? 'groups' : 'sentiment_satisfied'}
-                                            </span>
-                                            {atmosphere === 'crowded' ? '사람 몰림' : '여유로움'}
-                                        </div>
+                                        <div className="pointer-events-none absolute inset-0 bg-black/5" />
                                     </div>
-                                    <div className="p-3.5 pb-3">
+                                    <div className="min-h-0 flex-1 p-2.5 pb-2">
                                         <div className="flex justify-between items-start gap-2">
                                             <div className="min-w-0 flex-1">
-                                                <h3 className="text-base font-bold text-text-main dark:text-white leading-snug">{title}</h3>
-                                                {locationSub ? (
-                                                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-2 leading-relaxed">
-                                                        {locationSub}
-                                                    </p>
+                                                <h3 className="text-[15px] font-bold leading-snug text-text-main dark:text-white line-clamp-2">{title}</h3>
+                                                {dongCatLine ? (
+                                                    <p className="mt-0.5 text-[11px] leading-snug text-slate-500 dark:text-slate-400 line-clamp-2">{dongCatLine}</p>
+                                                ) : null}
+                                                {captionLine ? (
+                                                    <p className="mt-1 text-[11px] leading-relaxed text-slate-600 dark:text-slate-300 line-clamp-3">{captionLine}</p>
                                                 ) : null}
                                             </div>
                                             <button
@@ -255,7 +313,7 @@ const CrowdedPlaceScreen = () => {
                                                 </span>
                                             </button>
                                         </div>
-                                        <div className="mt-3 flex items-center justify-between gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+                                        <div className="mt-1.5 flex items-center justify-between gap-2 text-[10px] text-slate-500 dark:text-slate-400">
                                             <span className="flex items-center gap-1 min-w-0 truncate">
                                                 <span className="material-symbols-outlined text-primary text-[15px] flex-shrink-0">trending_up</span>
                                                 <span className="font-medium text-slate-600 dark:text-slate-300">실시간 급상승 중</span>
