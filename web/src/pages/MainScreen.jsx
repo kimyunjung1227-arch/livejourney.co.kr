@@ -5,7 +5,6 @@ import BottomNavigation from '../components/BottomNavigation';
 import { getUnreadCount } from '../utils/notifications';
 import { getTimeAgo, filterRecentPosts, filterActivePosts48 } from '../utils/timeUtils';
 import { getInterestPlaces, toggleInterestPlace } from '../utils/interestPlaces';
-import { getRegionDefaultImage } from '../utils/regionDefaultImages';
 import { logger } from '../utils/logger';
 import { getRecommendedRegions, RECOMMENDATION_TYPES } from '../utils/recommendationEngine';
 import { useHorizontalDragScroll } from '../hooks/useHorizontalDragScroll';
@@ -675,7 +674,7 @@ const MainScreen = () => {
                     justifyContent: 'space-between',
                     alignItems: 'center',
                     gap: '10px',
-                    padding: '12px 16px',
+                    padding: '14px 16px 16px',
                     background: '#ffffff',
                     backdropFilter: 'blur(10px)',
                     position: 'sticky',
@@ -743,151 +742,25 @@ const MainScreen = () => {
 
                 {/* 상단 배너는 현재 사용하지 않음 */}
 
-                {/* 관심 지역/장소 — 라벨 없이 원형 목록만 */}
-                <div style={{ padding: '2px 16px 4px', background: '#ffffff' }}>
-                    <div
-                        style={{ display: 'flex', gap: '10px', padding: '0 0 4px 0', overflowX: 'auto', scrollbarWidth: 'none', cursor: 'grab', scrollSnapType: 'x mandatory' }}
-                        className="hide-scrollbar"
-                        onMouseDown={handleDragStart}
-                    >
-                        {interestPlaces.map((place, idx) => {
-                            const isSelected = selectedInterest === place.name;
-                            return (
-                                <div
-                                    key={idx}
-                                    style={{
-                                        display: 'flex',
-                                        flexDirection: 'column',
-                                        alignItems: 'center',
-                                        gap: 4,
-                                        flexShrink: 0,
-                                        position: 'relative',
-                                        scrollSnapAlign: 'start',
-                                        minWidth: 56,
-                                    }}
-                                >
-                                        <div style={{ position: 'relative' }}>
-                                            <div
-                                                role="button"
-                                                tabIndex={0}
-                                                onClick={withDragCheck(() => setSelectedInterest(isSelected ? null : place.name))}
-                                                onKeyDown={(e) => {
-                                                    if (e.key === 'Enter' || e.key === ' ') {
-                                                        e.preventDefault();
-                                                        setSelectedInterest(isSelected ? null : place.name);
-                                                    }
-                                                }}
-                                                style={{
-                                                    width: 48,
-                                                    height: 48,
-                                                    minWidth: 48,
-                                                    minHeight: 48,
-                                                    borderRadius: '50%',
-                                                    border: isSelected
-                                                        ? '2px solid rgba(15,23,42,0.9)'
-                                                        : '1px solid rgba(148,163,184,0.7)',
-                                                    overflow: 'hidden',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center',
-                                                    cursor: 'pointer',
-                                                    background: '#E5E7EB',
-                                                }}
-                                            >
-                                                <img
-                                                    src={getRegionDefaultImage(place.name)}
-                                                    alt={place.name}
-                                                    style={{
-                                                        width: '100%',
-                                                        height: '100%',
-                                                        objectFit: 'cover',
-                                                        display: 'block',
-                                                    }}
-                                                />
-                                            </div>
-                                            {isSelected && (
-                                                <button
-                                                    type="button"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        withDragCheck(() => setDeleteConfirmPlace(place.name))();
-                                                    }}
-                                                    style={{
-                                                        position: 'absolute',
-                                                        top: -4,
-                                                        right: 0,
-                                                        transform: 'translate(30%, -40%)',
-                                                        width: 56,
-                                                        height: 56,
-                                                        minWidth: 56,
-                                                        minHeight: 56,
-                                                        padding: 0,
-                                                        border: 'none',
-                                                        background: 'transparent',
-                                                        cursor: 'pointer',
-                                                        display: 'inline-flex',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'center',
-                                                        zIndex: 2,
-                                                    }}
-                                                    aria-label={`${place.name} 관심 지역 삭제`}
-                                                >
-                                                    <span style={{
-                                                        display: 'inline-flex',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'center',
-                                                        width: 28,
-                                                        height: 28,
-                                                        borderRadius: '999px',
-                                                        backgroundColor: '#ffffff',
-                                                        border: '1px solid #ffeded',
-                                                        color: '#ff4d4f',
-                                                        fontSize: 18,
-                                                        lineHeight: 0,
-                                                        fontWeight: 700,
-                                                        boxShadow: '0 2px 6px rgba(0,0,0,0.12)',
-                                                    }}>
-                                                        ×
-                                                    </span>
-                                                </button>
-                                            )}
-                                        </div>
-                                    <span
-                                        style={{
-                                            fontSize: 11,
-                                            color: isSelected ? '#0F172A' : '#94A3B8',
-                                            fontWeight: isSelected ? 600 : 400,
-                                            maxWidth: 56,
-                                            overflow: 'hidden',
-                                            textOverflow: 'ellipsis',
-                                            whiteSpace: 'nowrap',
-                                            textAlign: 'center',
-                                        }}
-                                    >
-                                        {place.name}
-                                    </span>
-                                </div>
-                            );
-                        })}
-                    </div>
-                </div>
-
-                {/* 지금 여기는 — 관심 지역 선택 시 숨김, 한 화면에 핫플까지 보이도록 높이 축소 */}
+                {/* 지금 여기는 — 관심 지역 선택 시 숨김 · 세로 비중 큰(3:4) 카드 + 섹션 여백 */}
                 {!selectedInterest && (
-                    <div style={{ padding: '8px 16px 6px', background: '#ffffff' }}>
-                    <div style={{ padding: '0 0 4px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <h2 style={{ margin: 0, fontSize: '17px', fontWeight: 700, color: '#111827' }}>지금 여기는</h2>
+                    <div style={{ padding: '20px 16px 20px', background: '#ffffff', marginBottom: 4 }}>
+                    <div style={{ padding: '0 0 12px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: '#111827', letterSpacing: '-0.02em' }}>지금 여기는</h2>
+                            <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.06em', color: '#dc2626', background: '#fee2e2', padding: '4px 8px', borderRadius: 6 }}>LIVE</span>
                         </div>
                         <button
+                            type="button"
                             onClick={() => navigate('/realtime-feed')}
-                            className="border-none bg-transparent text-primary hover:text-primary-dark dark:hover:text-primary-soft text-sm font-semibold cursor-pointer py-1.5 px-2.5 min-h-[36px] flex items-center gap-1"
+                            className="border-none bg-transparent text-primary hover:text-primary-dark dark:hover:text-primary-soft text-sm font-semibold cursor-pointer py-1.5 px-2 min-h-[36px] flex items-center gap-0.5"
                         >
                             <span>더보기</span>
+                            <span className="material-symbols-outlined" style={{ fontSize: 18 }}>chevron_right</span>
                         </button>
                     </div>
                     <div
-                    style={{ display: 'flex', gap: '7px', padding: '0 0 6px 0', overflowX: 'auto', scrollbarWidth: 'none', scrollSnapType: 'x mandatory', WebkitOverflowScrolling: 'touch', cursor: 'grab', background: '#ffffff' }}
+                    style={{ display: 'flex', gap: '12px', padding: '0 0 4px 0', overflowX: 'auto', scrollbarWidth: 'none', scrollSnapType: 'x mandatory', WebkitOverflowScrolling: 'touch', cursor: 'grab', background: '#ffffff' }}
                         className="hide-scrollbar"
                         onMouseDown={handleDragStart}
                     >
@@ -914,8 +787,8 @@ const MainScreen = () => {
                                     key={post.id}
                                     onClick={withDragCheck(() => navigate(`/post/${post.id}`, { state: { post, allPosts: realtimeData } }))}
                                     style={{
-                                        minWidth: '52%',
-                                        width: '52%',
+                                        minWidth: '56%',
+                                        width: '56%',
                                         overflow: 'visible',
                                         flexShrink: 0,
                                         cursor: 'pointer',
@@ -923,7 +796,19 @@ const MainScreen = () => {
                                         scrollSnapStop: 'always'
                                     }}
                                 >
-                                    <div style={{ width: '100%', height: '148px', background: '#e5e7eb', position: 'relative', borderRadius: '14px', overflow: 'hidden', marginBottom: '2px' }}>
+                                    <div
+                                        className="main-realtime-card-media"
+                                        style={{
+                                            width: '100%',
+                                            aspectRatio: '3/4',
+                                            maxHeight: 'min(56vw, 38vh)',
+                                            background: '#e5e7eb',
+                                            position: 'relative',
+                                            borderRadius: '16px',
+                                            overflow: 'hidden',
+                                            marginBottom: '10px',
+                                        }}
+                                    >
                                         {firstVideo ? (
                                             <video
                                                 ref={(el) => {
@@ -963,10 +848,10 @@ const MainScreen = () => {
                                             </span>
                                         </div>
                                     </div>
-                                    {/* 사진 정보 하단 — 설명만 표시 (minHeight 제거로 실시간 핫플까지 한 화면에 노출) */}
-                                    <div style={{ padding: '4px 10px 6px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                                    {/* 사진 정보 하단 — 이미지 밖 영역 */}
+                                    <div style={{ padding: '0 4px 4px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px', flexShrink: 0 }}>
-                                            <div style={{ color: '#111827', fontSize: '14px', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>
+                                            <div style={{ color: '#111827', fontSize: '15px', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>
                                                 {post.location || '어딘가의 지금'}
                                             </div>
                                             <span style={{ fontSize: '11px', color: '#6b7280', flexShrink: 0 }}>
@@ -974,7 +859,7 @@ const MainScreen = () => {
                                             </span>
                                         </div>
                                         {(post.content || post.note) && (
-                                            <div style={{ color: '#4b5563', fontSize: '12px', lineHeight: 1.4, marginTop: '4px', maxHeight: '2.8em', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                                            <div style={{ color: '#4b5563', fontSize: '12px', lineHeight: 1.45, marginTop: '6px', maxHeight: '2.9em', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
                                                 {post.content || post.note}
                                             </div>
                                         )}
@@ -1072,12 +957,12 @@ const MainScreen = () => {
                         )}
                     </div>
                 ) : (
-                <div style={{ padding: '0 16px 20px', background: '#ffffff', minHeight: '100%' }}>
+                <div style={{ padding: '12px 16px 24px', background: '#ffffff', minHeight: '100%' }}>
 
-                        {/* 실시간 핫플 — 단일 카드 자동 슬라이드 (16:9 등으로 세로 높이 절약, 첫 진입 한 화면 노출) */}
-                        <div style={{ marginBottom: '0', paddingTop: '0', paddingBottom: '12px', background: '#ffffff' }}>
-                            <div style={{ padding: '0 0 6px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#ffffff' }}>
-                                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#111827' }}>실시간 핫플</h3>
+                        {/* 실시간 핫플 — 컴팩트(한 화면 노출), 설명은 이미지 아래만 */}
+                        <div style={{ marginBottom: '0', paddingTop: '8px', paddingBottom: '16px', background: '#ffffff' }}>
+                            <div style={{ padding: '0 0 10px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#ffffff' }}>
+                                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#111827', letterSpacing: '-0.02em' }}>실시간 핫플</h3>
                                 <button
                                     type="button"
                                     onClick={() => navigate('/crowded-place')}
@@ -1115,16 +1000,16 @@ const MainScreen = () => {
                                             background: '#fff',
                                             borderRadius: '14px',
                                             overflow: 'hidden',
-                                            boxShadow: '0 3px 16px rgba(15, 23, 42, 0.07)',
-                                            border: '1px solid #f1f5f9',
+                                            boxShadow: '0 2px 12px rgba(15, 23, 42, 0.06)',
+                                            border: '1px solid #eef2f7',
                                         }}
                                     >
                                         <div
                                             className="main-hot-feed-media"
                                             style={{
                                                 width: '100%',
-                                                aspectRatio: '16/9',
-                                                maxHeight: 'min(42vw, 28dvh, 200px)',
+                                                aspectRatio: '2/1',
+                                                maxHeight: 'min(30vw, 17dvh, 118px)',
                                                 position: 'relative',
                                                 background: '#e5e7eb',
                                                 overflow: 'hidden',
@@ -1170,13 +1055,13 @@ const MainScreen = () => {
                                                 <div style={{ width: '100%', height: '100%', background: '#e5e7eb' }} />
                                             )}
                                         </div>
-                                        <div style={{ padding: '10px 12px 8px' }}>
-                                            <h4 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#111827', lineHeight: 1.25 }}>{title}</h4>
-                                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, marginTop: 6 }}>
-                                                <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#22c55e', marginTop: 4, flexShrink: 0 }} />
-                                                <p style={{ margin: 0, fontSize: '12px', color: '#374151', lineHeight: 1.4, fontWeight: 500, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{statusLine}</p>
+                                        <div style={{ padding: '8px 10px 6px' }}>
+                                            <h4 style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: '#111827', lineHeight: 1.25 }}>{title}</h4>
+                                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, marginTop: 4 }}>
+                                                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e', marginTop: 4, flexShrink: 0 }} />
+                                                <p style={{ margin: 0, fontSize: '11px', color: '#374151', lineHeight: 1.4, fontWeight: 500, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{statusLine}</p>
                                             </div>
-                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 10, gap: 8 }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8, gap: 8 }}>
                                                 <div style={{ display: 'flex', alignItems: 'center', minWidth: 0, flex: 1, gap: 6 }}>
                                                     <div style={{ display: 'flex', alignItems: 'center', paddingLeft: 2 }}>
                                                         {avatars.slice(0, 3).map((url, ai) => (
@@ -1214,7 +1099,7 @@ const MainScreen = () => {
                                                 </button>
                                             </div>
                                             {crowdedData.length > 1 && (
-                                                <div style={{ display: 'flex', justifyContent: 'center', gap: 5, marginTop: 8 }}>
+                                                <div style={{ display: 'flex', justifyContent: 'center', gap: 5, marginTop: 6 }}>
                                                     {crowdedData.map((dotPost, di) => (
                                                         <button
                                                             key={String(dotPost.id)}
@@ -1243,8 +1128,8 @@ const MainScreen = () => {
                         </div>
 
                         {/* ✨ 추천 여행지 */}
-                        <div style={{ marginBottom: '24px', background: '#ffffff' }}>
-                            <div style={{ padding: '0 0 12px 0' }}>
+                        <div style={{ marginBottom: '24px', marginTop: '8px', background: '#ffffff' }}>
+                            <div style={{ padding: '12px 0 12px 0' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                     <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: '#374151' }}>추천 여행지</h3>
                                 </div>
