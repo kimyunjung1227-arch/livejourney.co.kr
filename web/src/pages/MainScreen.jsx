@@ -3,8 +3,9 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom';
 import BottomNavigation from '../components/BottomNavigation';
 import { getUnreadCount } from '../utils/notifications';
-import { getTimeAgo, filterRecentPosts, filterActivePosts48 } from '../utils/timeUtils';
+import { getTimeAgo, filterRecentPosts } from '../utils/timeUtils';
 import { getInterestPlaces, toggleInterestPlace } from '../utils/interestPlaces';
+import { getRegionDefaultImage } from '../utils/regionDefaultImages';
 import { logger } from '../utils/logger';
 import { getRecommendedRegions, RECOMMENDATION_TYPES } from '../utils/recommendationEngine';
 import { useHorizontalDragScroll } from '../hooks/useHorizontalDragScroll';
@@ -12,23 +13,9 @@ import './MainScreen.css';
 import { getCombinedPosts } from '../utils/mockData';
 import { fetchPostsSupabase } from '../api/postsSupabase';
 import { getDisplayImageUrl } from '../api/upload';
-import { getPostAccuracyCount, toggleLike, isPostLiked } from '../utils/socialInteractions';
-import { rankHotspotPosts } from '../utils/hotnessEngine';
-import { updatePostLikesSupabase } from '../api/postsSupabase';
+import { getPostAccuracyCount } from '../utils/socialInteractions';
 import { getWeatherByRegion } from '../api/weather';
 import { loadMagazineTopics } from '../utils/magazinesConfig';
-
-const getAvatarUrls = (post) => {
-    const urls = [];
-    const commenters = Array.isArray(post.comments) ? post.comments : [];
-    commenters.forEach((c) => {
-        const avatar = c.avatar || c.user?.avatar;
-        if (avatar && !urls.includes(avatar)) urls.push(avatar);
-    });
-    const uploaderAvatar = post.user?.avatar || post.avatar;
-    if (uploaderAvatar && !urls.includes(uploaderAvatar)) urls.unshift(uploaderAvatar);
-    return urls.slice(0, 3);
-};
 
 const MainScreen = () => {
     const navigate = useNavigate();
@@ -55,7 +42,6 @@ const MainScreen = () => {
     const [selectedInterestLabels, setSelectedInterestLabels] = useState([]);
     const [deleteConfirmPlace, setDeleteConfirmPlace] = useState(null);
     const [selectedRecommendTag, setSelectedRecommendTag] = useState('active');
-    const [hotFeedSlideIndex, setHotFeedSlideIndex] = useState(0);
 
     const { handleDragStart, hasMovedRef } = useHorizontalDragScroll();
     const videoRefs = useRef(new Map());
@@ -381,27 +367,31 @@ const MainScreen = () => {
         });
         setRealtimeData(byLatest.slice(0, 20));
 
-        // "실시간 핫플": CrowdedPlace(더보기) 화면과 동일하게 48h 내 게시물 + 핫니스 랭킹 순서
-        const posts48 = filterActivePosts48(allPosts);
-        const transformed48 = posts48.map(transformPost);
-        const preFiltered = transformed48.filter((p) => {
-            const hasLikes = (p.likes || 0) > 0;
-            const isRecent = p.time && (p.time.includes('방금') || p.time.includes('분 전') || p.time.includes('시간 전'));
-            return hasLikes || isRecent;
-        });
-        const toRank = preFiltered.length > 0 ? preFiltered : transformed48;
-        const ranked = rankHotspotPosts(toRank, { verifyFirst: true, maxItems: 100 });
-        const crowdedRanked = ranked.map((r) => ({
-            ...r.post,
-            _rank: r.rank,
-            _impactLabel: r.impactLabel,
-            accuracyCount: getPostAccuracyCount(r.post.id),
-        }));
-        const crowdedFallback = transformed48.slice(0, 50).map((p) => ({
-            ...p,
-            accuracyCount: getPostAccuracyCount(p.id),
-        }));
-        setCrowdedData(crowdedRanked.length > 0 ? crowdedRanked : crowdedFallback);
+        // "실시간 급상승 핫플": 다양한 카테고리에서 인기 게시물 선택
+        // 좋아요 수가 높거나 최근 게시물을 우선적으로 선택
+        const hotPosts = transformedAll
+            .filter(p => {
+                // 다양한 카테고리 포함: waiting, blooming, food, spots 등
+                const hasLikes = (p.likes || 0) > 0;
+                const isRecent = p.time && (p.time.includes('방금') || p.time.includes('분 전') || p.time.includes('시간 전'));
+                return hasLikes || isRecent;
+            })
+            .sort((a, b) => {
+                // 좋아요 수 기준 정렬, 같으면 최신순
+                if (b.likes !== a.likes) return b.likes - a.likes;
+                const timeA = a.time || '';
+                const timeB = b.time || '';
+                if (timeA.includes('방금')) return -1;
+                if (timeB.includes('방금')) return 1;
+                if (timeA.includes('분 전') && !timeB.includes('분 전')) return -1;
+                if (timeB.includes('분 전') && !timeA.includes('분 전')) return 1;
+                return 0;
+            })
+            .slice(0, 15); // 상위 15개 선택
+
+        const crowdedWithAccuracy = (hotPosts.length > 0 ? hotPosts : transformedAll.slice(20, 35))
+            .map(p => ({ ...p, accuracyCount: getPostAccuracyCount(p.id) }));
+        setCrowdedData(crowdedWithAccuracy);
 
         // 추천 여행지: 현재는 Supabase/로컬에서 집계한 posts 기반으로 계산
         const recs = getRecommendedRegions(allPosts, selectedRecommendTag);
@@ -472,79 +462,6 @@ const MainScreen = () => {
             setDeleteConfirmPlace(null);
         }
     }, [deleteConfirmPlace, loadInterestPlaces, selectedInterest]);
-
-    const crowdedIdsKey = useMemo(() => crowdedData.map((p) => String(p.id)).join(','), [crowdedData]);
-
-    const hotFeedPost = useMemo(() => {
-        if (!crowdedData.length) return null;
-        const i = hotFeedSlideIndex % crowdedData.length;
-        return crowdedData[i];
-    }, [crowdedData, hotFeedSlideIndex]);
-
-    const hotFeedCardProps = useMemo(() => {
-        if (!hotFeedPost) return null;
-        const post = hotFeedPost;
-        const situationText = (post.note || post.content)
-            ? String(post.note || post.content).trim().replace(/\s+/g, ' ').slice(0, 42) + (String(post.note || post.content).trim().length > 42 ? '…' : '')
-            : (post.reasonTags && post.reasonTags[0])
-                ? `지금 ${String(post.reasonTags[0]).replace(/#/g, '').replace(/_/g, ' ')}`
-                : '';
-        const statusLine = post._impactLabel || situationText || '지금 많은 분들이 찾고 있어요!';
-        const title = post.location || post.placeName || post.detailedLocation || '핫플레이스';
-        const regionKey = (post.region || post.location || '').trim().split(/\s+/)[0] || post.region || post.location;
-        const weather = post.weather || weatherByRegion[regionKey] || null;
-        const hasWeather = weather && (weather.icon || weather.temperature);
-        const likeCount = Number(post.likes ?? post.likeCount ?? 0) || 0;
-        const commentCount = Array.isArray(post.comments) ? post.comments.length : 0;
-        const photoCount = Math.max(1, Math.min(99, (likeCount + commentCount * 2) % 28 + 4));
-        const avatars = getAvatarUrls(post);
-        const regionShort = post.region || (post.location || '').trim().split(/\s+/).slice(0, 2).join(' ') || '위치';
-        return {
-            post,
-            statusLine,
-            title,
-            regionKey,
-            weather,
-            hasWeather,
-            photoCount,
-            avatars,
-            regionShort,
-        };
-    }, [hotFeedPost, weatherByRegion]);
-
-    useEffect(() => {
-        setHotFeedSlideIndex(0);
-    }, [crowdedIdsKey]);
-
-    useEffect(() => {
-        if (crowdedData.length <= 1) return undefined;
-        const id = setInterval(() => {
-            setHotFeedSlideIndex((i) => (i + 1) % crowdedData.length);
-        }, 5000);
-        return () => clearInterval(id);
-    }, [crowdedData.length, crowdedIdsKey]);
-
-    const handleHotFeedLike = useCallback((e, post) => {
-        e.stopPropagation();
-        const wasLiked = isPostLiked(post.id);
-        const baseLikes = typeof post.likes === 'number'
-            ? post.likes
-            : (typeof post.likeCount === 'number' ? post.likeCount : 0);
-        const result = toggleLike(post.id, baseLikes);
-        if (result.existsInStorage) {
-            setCrowdedData((prev) =>
-                prev.map((p) => (p && p.id === post.id ? { ...p, likes: result.newCount, likeCount: result.newCount } : p))
-            );
-        } else {
-            const delta = wasLiked ? -1 : 1;
-            updatePostLikesSupabase(post.id, delta);
-            setCrowdedData((prev) =>
-                prev.map((p) =>
-                    (p && p.id === post.id ? { ...p, likes: result.newCount, likeCount: result.newCount } : p)
-                )
-            );
-        }
-    }, []);
 
     useEffect(() => {
         fetchPosts();
@@ -674,7 +591,7 @@ const MainScreen = () => {
                     justifyContent: 'space-between',
                     alignItems: 'center',
                     gap: '10px',
-                    padding: '14px 16px 16px',
+                    padding: '12px 16px',
                     background: '#ffffff',
                     backdropFilter: 'blur(10px)',
                     position: 'sticky',
@@ -742,25 +659,151 @@ const MainScreen = () => {
 
                 {/* 상단 배너는 현재 사용하지 않음 */}
 
-                {/* 지금 여기는 — 관심 지역 선택 시 숨김 · 세로 비중 큰(3:4) 카드 + 섹션 여백 */}
+                {/* 관심 지역/장소 — 라벨 없이 원형 목록만 */}
+                <div style={{ padding: '4px 16px 8px', background: '#ffffff' }}>
+                    <div
+                        style={{ display: 'flex', gap: '10px', padding: '0 0 4px 0', overflowX: 'auto', scrollbarWidth: 'none', cursor: 'grab', scrollSnapType: 'x mandatory' }}
+                        className="hide-scrollbar"
+                        onMouseDown={handleDragStart}
+                    >
+                        {interestPlaces.map((place, idx) => {
+                            const isSelected = selectedInterest === place.name;
+                            return (
+                                <div
+                                    key={idx}
+                                    style={{
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'center',
+                                        gap: 4,
+                                        flexShrink: 0,
+                                        position: 'relative',
+                                        scrollSnapAlign: 'start',
+                                        minWidth: 56,
+                                    }}
+                                >
+                                        <div style={{ position: 'relative' }}>
+                                            <div
+                                                role="button"
+                                                tabIndex={0}
+                                                onClick={withDragCheck(() => setSelectedInterest(isSelected ? null : place.name))}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter' || e.key === ' ') {
+                                                        e.preventDefault();
+                                                        setSelectedInterest(isSelected ? null : place.name);
+                                                    }
+                                                }}
+                                                style={{
+                                                    width: 48,
+                                                    height: 48,
+                                                    minWidth: 48,
+                                                    minHeight: 48,
+                                                    borderRadius: '50%',
+                                                    border: isSelected
+                                                        ? '2px solid rgba(15,23,42,0.9)'
+                                                        : '1px solid rgba(148,163,184,0.7)',
+                                                    overflow: 'hidden',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    cursor: 'pointer',
+                                                    background: '#E5E7EB',
+                                                }}
+                                            >
+                                                <img
+                                                    src={getRegionDefaultImage(place.name)}
+                                                    alt={place.name}
+                                                    style={{
+                                                        width: '100%',
+                                                        height: '100%',
+                                                        objectFit: 'cover',
+                                                        display: 'block',
+                                                    }}
+                                                />
+                                            </div>
+                                            {isSelected && (
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        withDragCheck(() => setDeleteConfirmPlace(place.name))();
+                                                    }}
+                                                    style={{
+                                                        position: 'absolute',
+                                                        top: -4,
+                                                        right: 0,
+                                                        transform: 'translate(30%, -40%)',
+                                                        width: 56,
+                                                        height: 56,
+                                                        minWidth: 56,
+                                                        minHeight: 56,
+                                                        padding: 0,
+                                                        border: 'none',
+                                                        background: 'transparent',
+                                                        cursor: 'pointer',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        zIndex: 2,
+                                                    }}
+                                                    aria-label={`${place.name} 관심 지역 삭제`}
+                                                >
+                                                    <span style={{
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        width: 28,
+                                                        height: 28,
+                                                        borderRadius: '999px',
+                                                        backgroundColor: '#ffffff',
+                                                        border: '1px solid #ffeded',
+                                                        color: '#ff4d4f',
+                                                        fontSize: 18,
+                                                        lineHeight: 0,
+                                                        fontWeight: 700,
+                                                        boxShadow: '0 2px 6px rgba(0,0,0,0.12)',
+                                                    }}>
+                                                        ×
+                                                    </span>
+                                                </button>
+                                            )}
+                                        </div>
+                                    <span
+                                        style={{
+                                            fontSize: 11,
+                                            color: isSelected ? '#0F172A' : '#94A3B8',
+                                            fontWeight: isSelected ? 600 : 400,
+                                            maxWidth: 56,
+                                            overflow: 'hidden',
+                                            textOverflow: 'ellipsis',
+                                            whiteSpace: 'nowrap',
+                                            textAlign: 'center',
+                                        }}
+                                    >
+                                        {place.name}
+                                    </span>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+
+                {/* 지금 여기는 — 관심 지역 선택 시 숨김, 한 화면에 핫플까지 보이도록 높이 축소 */}
                 {!selectedInterest && (
-                    <div style={{ padding: '20px 16px 20px', background: '#ffffff', marginBottom: 4 }}>
-                    <div style={{ padding: '0 0 12px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                            <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: '#111827', letterSpacing: '-0.02em' }}>지금 여기는</h2>
-                            <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.06em', color: '#dc2626', background: '#fee2e2', padding: '4px 8px', borderRadius: 6 }}>LIVE</span>
+                    <div style={{ padding: '12px 16px 14px', background: '#ffffff' }}>
+                    <div style={{ padding: '0 0 8px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: '#111827' }}>지금 여기는</h2>
                         </div>
                         <button
-                            type="button"
                             onClick={() => navigate('/realtime-feed')}
-                            className="border-none bg-transparent text-primary hover:text-primary-dark dark:hover:text-primary-soft text-sm font-semibold cursor-pointer py-1.5 px-2 min-h-[36px] flex items-center gap-0.5"
+                            className="border-none bg-transparent text-primary hover:text-primary-dark dark:hover:text-primary-soft text-sm font-semibold cursor-pointer py-1.5 px-2.5 min-h-[36px] flex items-center gap-1"
                         >
                             <span>더보기</span>
-                            <span className="material-symbols-outlined" style={{ fontSize: 18 }}>chevron_right</span>
                         </button>
                     </div>
                     <div
-                    style={{ display: 'flex', gap: '12px', padding: '0 0 4px 0', overflowX: 'auto', scrollbarWidth: 'none', scrollSnapType: 'x mandatory', WebkitOverflowScrolling: 'touch', cursor: 'grab', background: '#ffffff' }}
+                    style={{ display: 'flex', gap: '7px', padding: '0 0 12px 0', overflowX: 'auto', scrollbarWidth: 'none', scrollSnapType: 'x mandatory', WebkitOverflowScrolling: 'touch', cursor: 'grab', background: '#ffffff' }}
                         className="hide-scrollbar"
                         onMouseDown={handleDragStart}
                     >
@@ -787,8 +830,8 @@ const MainScreen = () => {
                                     key={post.id}
                                     onClick={withDragCheck(() => navigate(`/post/${post.id}`, { state: { post, allPosts: realtimeData } }))}
                                     style={{
-                                        minWidth: '56%',
-                                        width: '56%',
+                                        minWidth: '52%',
+                                        width: '52%',
                                         overflow: 'visible',
                                         flexShrink: 0,
                                         cursor: 'pointer',
@@ -796,19 +839,7 @@ const MainScreen = () => {
                                         scrollSnapStop: 'always'
                                     }}
                                 >
-                                    <div
-                                        className="main-realtime-card-media"
-                                        style={{
-                                            width: '100%',
-                                            aspectRatio: '3/4',
-                                            maxHeight: 'min(56vw, 38vh)',
-                                            background: '#e5e7eb',
-                                            position: 'relative',
-                                            borderRadius: '16px',
-                                            overflow: 'hidden',
-                                            marginBottom: '10px',
-                                        }}
-                                    >
+                                    <div style={{ width: '100%', height: '200px', background: '#e5e7eb', position: 'relative', borderRadius: '14px', overflow: 'hidden', marginBottom: '4px' }}>
                                         {firstVideo ? (
                                             <video
                                                 ref={(el) => {
@@ -848,10 +879,10 @@ const MainScreen = () => {
                                             </span>
                                         </div>
                                     </div>
-                                    {/* 사진 정보 하단 — 이미지 밖 영역 */}
-                                    <div style={{ padding: '0 4px 4px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                                    {/* 사진 정보 하단 — 설명만 표시 */}
+                                    <div style={{ padding: '6px 14px 10px', minHeight: '100px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px', flexShrink: 0 }}>
-                                            <div style={{ color: '#111827', fontSize: '15px', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>
+                                            <div style={{ color: '#111827', fontSize: '14px', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>
                                                 {post.location || '어딘가의 지금'}
                                             </div>
                                             <span style={{ fontSize: '11px', color: '#6b7280', flexShrink: 0 }}>
@@ -859,7 +890,7 @@ const MainScreen = () => {
                                             </span>
                                         </div>
                                         {(post.content || post.note) && (
-                                            <div style={{ color: '#4b5563', fontSize: '12px', lineHeight: 1.45, marginTop: '6px', maxHeight: '2.9em', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                                            <div style={{ color: '#4b5563', fontSize: '13px', lineHeight: 1.45, marginTop: '6px', height: '2.9em', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
                                                 {post.content || post.note}
                                             </div>
                                         )}
@@ -957,82 +988,68 @@ const MainScreen = () => {
                         )}
                     </div>
                 ) : (
-                <div style={{ padding: '12px 16px 24px', background: '#ffffff', minHeight: '100%' }}>
+                <div style={{ padding: '0 16px 20px', background: '#ffffff', minHeight: '100%' }}>
 
-                        {/* 실시간 핫플 — 컴팩트(한 화면 노출), 설명은 이미지 아래만 */}
-                        <div style={{ marginBottom: '0', paddingTop: '8px', paddingBottom: '16px', background: '#ffffff' }}>
-                            <div style={{ padding: '0 0 10px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#ffffff' }}>
-                                <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#111827', letterSpacing: '-0.02em' }}>실시간 핫플</h3>
+                        {/* 실시간 급상승 핫플 — 참고 디자인: 4:3 카드, 위치 뱃지 좌하단, 좋아요/댓글 우하단 */}
+                        <div style={{ marginBottom: '0', paddingTop: '0', paddingBottom: '20px', background: '#ffffff' }}>
+                            <div style={{ padding: '0 0 8px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#ffffff' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 600, color: '#374151' }}>실시간 급상승 핫플</h3>
+                                </div>
                                 <button
-                                    type="button"
                                     onClick={() => navigate('/crowded-place')}
-                                    className="border-none bg-transparent text-primary hover:text-primary-dark dark:hover:text-primary-soft text-sm font-semibold cursor-pointer py-1 px-2 min-h-[32px] flex items-center gap-0.5"
+                                    className="border-none bg-transparent text-primary hover:text-primary-dark dark:hover:text-primary-soft text-sm font-semibold cursor-pointer py-1.5 px-2.5 min-h-[36px] flex items-center gap-1"
                                 >
                                     <span>더보기</span>
-                                    <span className="material-symbols-outlined" style={{ fontSize: 18 }}>chevron_right</span>
                                 </button>
                             </div>
-                            {!hotFeedCardProps ? (
-                                <div style={{ textAlign: 'center', padding: '32px 12px', color: '#94a3b8', fontSize: '14px' }}>
-                                    아직 실시간 핫플 게시물이 없어요.
-                                </div>
-                            ) : (
-                                (() => {
-                                    const {
-                                        post,
-                                        statusLine,
-                                        title,
-                                        weather,
-                                        hasWeather,
-                                        photoCount,
-                                        avatars,
-                                        regionShort,
-                                    } = hotFeedCardProps;
-                                    const liked = isPostLiked(post.id);
-                                    const slideIdx = crowdedData.length ? hotFeedSlideIndex % crowdedData.length : 0;
+                            <div
+                                style={{
+                                    display: 'flex',
+                                    gap: '10px',
+                                    paddingBottom: '4px',
+                                    background: '#ffffff',
+                                    overflowX: 'auto',
+                                    scrollbarWidth: 'none',
+                                    WebkitOverflowScrolling: 'touch',
+                                    cursor: 'grab'
+                                }}
+                                className="hide-scrollbar"
+                                onMouseDown={handleDragStart}
+                            >
+                                {crowdedData.map(post => {
+                                    const situationText = (post.note || post.content)
+                                        ? String(post.note || post.content).trim().replace(/\s+/g, ' ').slice(0, 28) + (String(post.note || post.content).trim().length > 28 ? '…' : '')
+                                        : (post.reasonTags && post.reasonTags[0])
+                                            ? '지금 ' + String(post.reasonTags[0]).replace(/#/g, '').replace(/_/g, ' ')
+                                            : '';
+
+                                    // 핫플 해시태그 (최대 3개): AI 분석 태그 우선, 없으면 reasonTags, 그래도 없으면 기본 태그
+                                    const rawTags = Array.isArray(post.aiHotTags) && post.aiHotTags.length > 0
+                                        ? post.aiHotTags
+                                        : (Array.isArray(post.reasonTags) && post.reasonTags.length > 0
+                                            ? post.reasonTags
+                                            : ['분위기 깡패', '뷰맛집', '열기 가득', '줄서있는 곳']);
+                                    const hotTags = rawTags
+                                        .map((t) => String(t).replace(/#/g, '').replace(/_/g, ' ').trim())
+                                        .filter(Boolean)
+                                        .slice(0, 3);
                                     return (
                                     <div
-                                        key={`${post.id}-${slideIdx}`}
-                                        className="hot-feed-card-enter"
+                                        key={post.id}
                                         onClick={withDragCheck(() => navigate(`/post/${post.id}`, { state: { post, allPosts: crowdedData } }))}
                                         style={{
                                             cursor: 'pointer',
-                                            background: '#fff',
-                                            borderRadius: '14px',
-                                            overflow: 'hidden',
-                                            boxShadow: '0 2px 12px rgba(15, 23, 42, 0.06)',
-                                            border: '1px solid #eef2f7',
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            minWidth: '42%',
+                                            maxWidth: '42%',
+                                            flexShrink: 0,
+                                            overflow: 'visible',
+                                            background: 'transparent'
                                         }}
                                     >
-                                        <div
-                                            className="main-hot-feed-media"
-                                            style={{
-                                                width: '100%',
-                                                aspectRatio: '2/1',
-                                                maxHeight: 'min(30vw, 17dvh, 118px)',
-                                                position: 'relative',
-                                                background: '#e5e7eb',
-                                                overflow: 'hidden',
-                                            }}
-                                        >
-                                            <div style={{ position: 'absolute', top: 8, left: 8, zIndex: 10, display: 'inline-flex', alignItems: 'center', gap: 3, background: '#ef4444', color: '#fff', padding: '4px 8px', borderRadius: 9999, fontSize: 10, fontWeight: 700, boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}>
-                                                <span className="material-symbols-outlined" style={{ fontSize: 14, fontVariationSettings: '"FILL" 1' }}>local_fire_department</span>
-                                                {post.surgeIndicator || '급상승'}
-                                            </div>
-                                            {hasWeather ? (
-                                                <div style={{ position: 'absolute', top: 8, right: 8, zIndex: 10, display: 'inline-flex', alignItems: 'center', gap: 4, background: 'rgba(15,23,42,0.55)', backdropFilter: 'blur(6px)', color: '#f9fafb', padding: '4px 8px', borderRadius: 9999, fontSize: 10, fontWeight: 600, maxWidth: '58%' }}>
-                                                    {weather.icon && <span style={{ fontSize: 12 }}>{weather.icon}</span>}
-                                                    <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                                        {weather.temperature}
-                                                        {weather.condition && weather.condition !== '-' ? ` ${weather.condition}` : ''}
-                                                    </span>
-                                                </div>
-                                            ) : (
-                                                <div style={{ position: 'absolute', top: 8, right: 8, zIndex: 10, display: 'inline-flex', alignItems: 'center', gap: 3, background: 'rgba(15,23,42,0.55)', backdropFilter: 'blur(6px)', color: '#f9fafb', padding: '4px 8px', borderRadius: 9999, fontSize: 10, fontWeight: 600, maxWidth: '58%' }}>
-                                                    <span className="material-symbols-outlined" style={{ fontSize: 13 }}>location_on</span>
-                                                    <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{regionShort}</span>
-                                                </div>
-                                            )}
+                                        <div style={{ width: '100%', aspectRatio: '4/3', overflow: 'hidden', background: '#eee', position: 'relative', borderRadius: '14px' }}>
                                             {(Array.isArray(post.videos) && post.videos.length > 0) ? (
                                                 <video
                                                     ref={(el) => {
@@ -1048,88 +1065,54 @@ const MainScreen = () => {
                                                     style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
                                                 />
                                             ) : post.thumbnailIsVideo && post.firstVideoUrl ? (
-                                                <video src={post.firstVideoUrl} muted loop playsInline style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                                                <video src={post.firstVideoUrl} muted playsInline preload="metadata" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                                             ) : (Array.isArray(post.images) && post.images.length > 0) || post.image || post.thumbnail ? (
-                                                <img src={getDisplayImageUrl(post.images?.[0] || post.image || post.thumbnail)} alt={title} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                                                <img src={getDisplayImageUrl(post.images?.[0] || post.image || post.thumbnail)} alt={post.location} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                                             ) : (
                                                 <div style={{ width: '100%', height: '100%', background: '#e5e7eb' }} />
                                             )}
                                         </div>
-                                        <div style={{ padding: '8px 10px 6px' }}>
-                                            <h4 style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: '#111827', lineHeight: 1.25 }}>{title}</h4>
-                                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, marginTop: 4 }}>
-                                                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e', marginTop: 4, flexShrink: 0 }} />
-                                                <p style={{ margin: 0, fontSize: '11px', color: '#374151', lineHeight: 1.4, fontWeight: 500, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{statusLine}</p>
+                                        <div style={{ padding: '6px 2px 10px' }}>
+                                            <div style={{ fontSize: '13px', fontWeight: 700, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                {post.location}
                                             </div>
-                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8, gap: 8 }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', minWidth: 0, flex: 1, gap: 6 }}>
-                                                    <div style={{ display: 'flex', alignItems: 'center', paddingLeft: 2 }}>
-                                                        {avatars.slice(0, 3).map((url, ai) => (
-                                                            <img
-                                                                key={`${post.id}-av-${ai}`}
-                                                                src={url}
-                                                                alt=""
-                                                                style={{
-                                                                    width: 24,
-                                                                    height: 24,
-                                                                    borderRadius: '50%',
-                                                                    border: '2px solid #fff',
-                                                                    marginLeft: ai === 0 ? 0 : -8,
-                                                                    objectFit: 'cover',
-                                                                    flexShrink: 0,
-                                                                    background: '#e2e8f0',
-                                                                }}
-                                                            />
-                                                        ))}
-                                                        {avatars.length === 0 && (
-                                                            <span style={{ width: 24, height: 24, borderRadius: '50%', background: '#e2e8f0', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11 }} aria-hidden>👤</span>
-                                                        )}
-                                                    </div>
-                                                    <span style={{ fontSize: 11, color: '#64748b', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                        {photoCount}명이 지금 사진 찍는 중
-                                                    </span>
-                                                </div>
-                                                <button
-                                                    type="button"
-                                                    aria-label="좋아요"
-                                                    onClick={(e) => handleHotFeedLike(e, post)}
-                                                    style={{ background: 'none', border: 'none', padding: 4, cursor: 'pointer', flexShrink: 0, color: liked ? '#f43f5e' : '#94a3b8' }}
-                                                >
-                                                    <span className="material-symbols-outlined" style={{ fontSize: 22, fontVariationSettings: liked ? '"FILL" 1' : '"FILL" 0' }}>favorite</span>
-                                                </button>
-                                            </div>
-                                            {crowdedData.length > 1 && (
-                                                <div style={{ display: 'flex', justifyContent: 'center', gap: 5, marginTop: 6 }}>
-                                                    {crowdedData.map((dotPost, di) => (
-                                                        <button
-                                                            key={String(dotPost.id)}
-                                                            type="button"
-                                                            onClick={(e) => { e.stopPropagation(); setHotFeedSlideIndex(di); }}
+                                            {situationText && (
+                                                <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#4b5563', lineHeight: 1.35, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                    {situationText}
+                                                </p>
+                                            )}
+                                            {hotTags.length > 0 && (
+                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '6px' }}>
+                                                    {hotTags.map((tag, i) => (
+                                                        <span
+                                                            key={`${post.id}-tag-${i}`}
                                                             style={{
-                                                                width: di === slideIdx ? 18 : 6,
-                                                                height: 6,
-                                                                borderRadius: 999,
-                                                                border: 'none',
-                                                                padding: 0,
-                                                                background: di === slideIdx ? '#26C6DA' : '#e2e8f0',
-                                                                cursor: 'pointer',
-                                                                transition: 'width 0.2s ease',
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                padding: '3px 7px',
+                                                                borderRadius: '9999px',
+                                                                background: '#f1f5f9',
+                                                                color: '#0f172a',
+                                                                fontSize: '11px',
+                                                                fontWeight: 600,
                                                             }}
-                                                            aria-label={`${di + 1}번째 핫플`}
-                                                        />
+                                                        >
+                                                            #{tag}
+                                                        </span>
                                                     ))}
                                                 </div>
                                             )}
+                                            <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '4px' }}>{post.time || post.captureLabel || ''}</div>
                                         </div>
                                     </div>
                                     );
-                                })()
-                            )}
+                                })}
+                            </div>
                         </div>
 
                         {/* ✨ 추천 여행지 */}
-                        <div style={{ marginBottom: '24px', marginTop: '8px', background: '#ffffff' }}>
-                            <div style={{ padding: '12px 0 12px 0' }}>
+                        <div style={{ marginBottom: '24px', background: '#ffffff' }}>
+                            <div style={{ padding: '0 0 12px 0' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                     <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: '#374151' }}>추천 여행지</h3>
                                 </div>

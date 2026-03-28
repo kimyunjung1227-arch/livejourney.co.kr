@@ -194,26 +194,3 @@
   display: flex !important;
   /* Show when selected */
 }
-
-@keyframes hot-feed-card-enter {
-  from {
-    opacity: 0.65;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-.hot-feed-card-enter {
-  animation: hot-feed-card-enter 0.35s ease-out;
-}
-
-/* 실시간 핫플 미디어: 낮은 2:1 + max-height로 한 화면 안에 맞춤 */
-.main-hot-feed-media {
-  min-height: 0;
-}
-
-/* 지금 여기는: 3:4 세로 비중, max-height로 뷰포트와 균형 */
-.main-realtime-card-media {
-  min-height: 0;
-}
