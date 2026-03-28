@@ -532,11 +532,12 @@ const MainScreen = () => {
         setHotFeedSlideIndex(0);
     }, [crowdedIdsKey]);
 
+    // 핫플이 여러 개일 때 순차(라운드로빈) 자동 전환
     useEffect(() => {
         if (crowdedData.length <= 1) return undefined;
         const id = setInterval(() => {
             setHotFeedSlideIndex((n) => (n + 1) % crowdedData.length);
-        }, 5000);
+        }, 4500);
         return () => clearInterval(id);
     }, [crowdedData.length, crowdedIdsKey]);
 
@@ -1129,11 +1130,10 @@ const MainScreen = () => {
                                         onClick={withDragCheck(() => navigate(`/post/${post.id}`, { state: { post, allPosts: crowdedData } }))}
                                         style={{
                                             cursor: 'pointer',
-                                            background: '#fff',
-                                            borderRadius: '16px',
-                                            overflow: 'hidden',
-                                            boxShadow: '0 3px 18px rgba(15, 23, 42, 0.08)',
-                                            border: '1px solid #eef2f7',
+                                            background: 'transparent',
+                                            border: 'none',
+                                            boxShadow: 'none',
+                                            overflow: 'visible',
                                         }}
                                     >
                                         <div
@@ -1141,10 +1141,12 @@ const MainScreen = () => {
                                             style={{
                                                 width: '100%',
                                                 aspectRatio: '4/3',
-                                                maxHeight: 'min(58vw, 38dvh, 260px)',
+                                                maxHeight: 'min(46vw, 28dvh, 188px)',
                                                 position: 'relative',
                                                 background: '#e5e7eb',
                                                 overflow: 'hidden',
+                                                borderRadius: 14,
+                                                boxShadow: '0 2px 14px rgba(15, 23, 42, 0.07)',
                                             }}
                                         >
                                             <div style={{ position: 'absolute', top: 8, left: 8, zIndex: 10, display: 'inline-flex', alignItems: 'center', gap: 4, background: badgeBg, color: '#fff', padding: '4px 9px', borderRadius: 9999, fontSize: 10, fontWeight: 800, boxShadow: '0 2px 8px rgba(0,0,0,0.12)' }}>
@@ -1187,13 +1189,13 @@ const MainScreen = () => {
                                                 <div style={{ width: '100%', height: '100%', background: '#e5e7eb' }} />
                                             )}
                                         </div>
-                                        <div style={{ padding: '14px 14px 12px' }}>
+                                        <div style={{ padding: '10px 2px 4px', background: 'transparent', border: 'none', boxShadow: 'none' }}>
                                             <h4 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#111827', lineHeight: 1.3 }}>{title}</h4>
-                                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, marginTop: 10 }}>
+                                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, marginTop: 8 }}>
                                                 <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#22c55e', marginTop: 5, flexShrink: 0 }} />
-                                                <p style={{ margin: 0, fontSize: '12px', color: '#374151', lineHeight: 1.45, fontWeight: 500, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{statusLine}</p>
+                                                <p style={{ margin: 0, fontSize: '12px', color: '#374151', lineHeight: 1.5, fontWeight: 500, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{statusLine}</p>
                                             </div>
-                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, gap: 8 }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 10, gap: 8 }}>
                                                 <div style={{ display: 'flex', alignItems: 'center', minWidth: 0, flex: 1, gap: 8 }}>
                                                     <div style={{ display: 'flex', alignItems: 'center', paddingLeft: 2 }}>
                                                         {avatars.slice(0, 3).map((url, ai) => (
