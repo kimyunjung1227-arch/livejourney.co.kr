@@ -70,6 +70,7 @@ const MainScreen = () => {
     const [deleteConfirmPlace, setDeleteConfirmPlace] = useState(null);
     const [selectedRecommendTag, setSelectedRecommendTag] = useState('active');
     const [hotFeedSlideIndex, setHotFeedSlideIndex] = useState(0);
+    const [hotFeedSocialIdx, setHotFeedSocialIdx] = useState(0);
 
     const { handleDragStart, hasMovedRef } = useHorizontalDragScroll();
     const videoRefs = useRef(new Map());
@@ -498,12 +499,6 @@ const MainScreen = () => {
     const hotFeedCardProps = useMemo(() => {
         if (!hotFeedPost) return null;
         const post = hotFeedPost;
-        const situationText = (post.note || post.content)
-            ? String(post.note || post.content).trim().replace(/\s+/g, ' ').slice(0, 48) + (String(post.note || post.content).trim().length > 48 ? '…' : '')
-            : (post.reasonTags && post.reasonTags[0])
-                ? `지금 ${String(post.reasonTags[0]).replace(/#/g, '').replace(/_/g, ' ')}`
-                : '';
-        const statusLine = post._impactLabel || situationText || '지금 많은 분들이 찾고 있어요!';
         const title = post.location || post.placeName || post.detailedLocation || '핫플레이스';
         const regionKey = (post.region || post.location || '').trim().split(/\s+/)[0] || post.region || post.location;
         const weather = post.weather || weatherByRegion[regionKey] || null;
@@ -511,20 +506,40 @@ const MainScreen = () => {
         const likeCount = Number(post.likes ?? post.likeCount ?? 0) || 0;
         const commentCount = Array.isArray(post.comments) ? post.comments.length : 0;
         const photoCount = Math.max(1, Math.min(99, (likeCount + commentCount * 2) % 28 + 4));
+        const viewingCount = Math.max(2, Math.min(99, (likeCount + commentCount * 2) % 35 + 6));
         const avatars = getAvatarUrls(post);
         const regionShort = post.region || (post.location || '').trim().split(/\s+/).slice(0, 2).join(' ') || '위치';
         const categoryLabel = getHotCategoryLabel(post);
+        const tagHint = (post.reasonTags && post.reasonTags[0])
+            ? String(post.reasonTags[0]).replace(/#/g, '').replace(/_/g, ' ').trim()
+            : ((Array.isArray(post.aiHotTags) && post.aiHotTags[0])
+                ? String(post.aiHotTags[0]).replace(/#/g, '').trim()
+                : '');
+        let whyHotLine = '';
+        if (post._impactLabel) {
+            whyHotLine = post._impactLabel;
+        } else if (categoryLabel === '급상승') {
+            whyHotLine = tagHint ? `최근 이 장소에 관심이 급증했어요. ${tagHint}` : '최근 관심이 급증한 실시간 핫플이에요.';
+        } else if (categoryLabel === '사람 많음') {
+            whyHotLine = tagHint ? `지금 현장 반응이 뜨거워요. ${tagHint}` : '지금 많은 분들이 몰리는 곳이에요.';
+        } else if (categoryLabel === '인기') {
+            whyHotLine = tagHint ? `꾸준히 사랑받는 장소예요. ${tagHint}` : '꾸준히 인기 있는 핫플이에요.';
+        } else {
+            whyHotLine = tagHint ? `실시간으로 올라온 정보예요. ${tagHint}` : '실시간으로 올라온 핫플 정보예요.';
+        }
         return {
             post,
-            statusLine,
             title,
             regionKey,
             weather,
             hasWeather,
             photoCount,
+            viewingCount,
+            likeCount,
             avatars,
             regionShort,
             categoryLabel,
+            whyHotLine,
         };
     }, [hotFeedPost, weatherByRegion]);
 
@@ -540,6 +555,19 @@ const MainScreen = () => {
         }, 4500);
         return () => clearInterval(id);
     }, [crowdedData.length, crowdedIdsKey]);
+
+    useEffect(() => {
+        setHotFeedSocialIdx(0);
+    }, [hotFeedPost?.id, crowdedIdsKey]);
+
+    // 조회수·좋아요·사진 찍는 중 문구 순차 표시
+    useEffect(() => {
+        if (!hotFeedPost) return undefined;
+        const id = setInterval(() => {
+            setHotFeedSocialIdx((i) => (i + 1) % 3);
+        }, 2800);
+        return () => clearInterval(id);
+    }, [hotFeedPost?.id]);
 
     const handleHotFeedLike = useCallback((e, post) => {
         e.stopPropagation();
@@ -1111,15 +1139,23 @@ const MainScreen = () => {
                                 (() => {
                                     const {
                                         post,
-                                        statusLine,
                                         title,
                                         weather,
                                         hasWeather,
                                         photoCount,
+                                        viewingCount,
+                                        likeCount,
                                         avatars,
                                         regionShort,
                                         categoryLabel,
+                                        whyHotLine,
                                     } = hotFeedCardProps;
+                                    const socialLines = [
+                                        `지금 약 ${viewingCount}명이 이 피드를 보고 있어요`,
+                                        `좋아요 ${likeCount}개를 받았어요`,
+                                        `${photoCount}명이 지금 사진 찍는 중이에요`,
+                                    ];
+                                    const socialText = socialLines[hotFeedSocialIdx % 3];
                                     const liked = isPostLiked(post.id);
                                     const slideIdx = crowdedData.length ? hotFeedSlideIndex % crowdedData.length : 0;
                                     const badgeBg = categoryLabel === '급상승' ? '#ef4444' : categoryLabel === '사람 많음' ? '#ea580c' : categoryLabel === '인기' ? '#7c3aed' : '#64748b';
@@ -1141,7 +1177,7 @@ const MainScreen = () => {
                                             style={{
                                                 width: '100%',
                                                 aspectRatio: '4/3',
-                                                maxHeight: 'min(46vw, 28dvh, 188px)',
+                                                maxHeight: 'min(54vw, 36dvh, 228px)',
                                                 position: 'relative',
                                                 background: '#e5e7eb',
                                                 overflow: 'hidden',
@@ -1191,11 +1227,11 @@ const MainScreen = () => {
                                         </div>
                                         <div style={{ padding: '10px 2px 4px', background: 'transparent', border: 'none', boxShadow: 'none' }}>
                                             <h4 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#111827', lineHeight: 1.3 }}>{title}</h4>
-                                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, marginTop: 8 }}>
-                                                <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#22c55e', marginTop: 5, flexShrink: 0 }} />
-                                                <p style={{ margin: 0, fontSize: '12px', color: '#374151', lineHeight: 1.5, fontWeight: 500, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{statusLine}</p>
-                                            </div>
-                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 10, gap: 8 }}>
+                                            {regionShort && String(title).trim() !== String(regionShort).trim() && (
+                                                <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#64748b', fontWeight: 500 }}>{regionShort}</p>
+                                            )}
+                                            <p style={{ margin: '8px 0 0 0', fontSize: '12px', color: '#374151', lineHeight: 1.5, fontWeight: 500, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{whyHotLine}</p>
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, gap: 8 }}>
                                                 <div style={{ display: 'flex', alignItems: 'center', minWidth: 0, flex: 1, gap: 8 }}>
                                                     <div style={{ display: 'flex', alignItems: 'center', paddingLeft: 2 }}>
                                                         {avatars.slice(0, 3).map((url, ai) => (
@@ -1219,8 +1255,11 @@ const MainScreen = () => {
                                                             <span style={{ width: 26, height: 26, borderRadius: '50%', background: '#e2e8f0', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11 }} aria-hidden>👤</span>
                                                         )}
                                                     </div>
-                                                    <span style={{ fontSize: 11, color: '#64748b', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                        {photoCount}명이 지금 사진 찍는 중
+                                                    <span
+                                                        key={`social-${post.id}-${hotFeedSocialIdx}`}
+                                                        style={{ fontSize: 11, color: '#64748b', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}
+                                                    >
+                                                        {socialText}
                                                     </span>
                                                 </div>
                                                 <button
