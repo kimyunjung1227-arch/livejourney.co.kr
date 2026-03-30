@@ -1,27 +1,30 @@
 /** 지금 여기는 더보기·지역 상세 2열 그리드 카드 공통 인라인 스타일 */
 
+export const feedGridCardBox = {
+  width: '100%',
+  overflow: 'hidden',
+  borderRadius: 18,
+  background: '#ffffff',
+  border: '1px solid rgba(226, 232, 240, 0.95)',
+  boxShadow: '0 2px 14px rgba(15, 23, 42, 0.08)',
+};
+
 export const feedGridImageBox = {
   width: '100%',
-  paddingBottom: '125%',
+  paddingBottom: '80%',
   height: 0,
   position: 'relative',
   background: '#e5e7eb',
-  borderRadius: '14px',
   overflow: 'hidden',
-  marginBottom: '4px',
 };
 
 export const feedGridInfoBox = {
-  padding: '10px 12px 10px',
+  padding: '10px 12px 12px',
   minHeight: 0,
   display: 'flex',
   flexDirection: 'column',
   gap: '2px',
   overflow: 'hidden',
-  background: '#ffffff',
-  border: '1px solid rgba(226, 232, 240, 0.95)',
-  borderRadius: 14,
-  boxShadow: '0 1px 8px rgba(15, 23, 42, 0.06)',
 };
 
 export const feedGridTitleStyle = {

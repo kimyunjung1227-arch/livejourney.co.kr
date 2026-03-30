@@ -11,6 +11,7 @@ import { fetchPostsSupabase } from '../api/postsSupabase';
 import { getWeatherByRegion } from '../api/weather';
 import { getGridCoverDisplay } from '../utils/postMedia';
 import {
+  feedGridCardBox,
   feedGridImageBox,
   feedGridInfoBox,
   feedGridTitleStyle,
@@ -255,10 +256,10 @@ const RealtimeFeedScreen = () => {
                   key={`${post.id}-${index}`}
                   onClick={() => navigate(`/post/${post.id}`, { state: { post, allPosts: realtimeData } })}
                   style={{
-                    overflow: 'visible',
+                    ...feedGridCardBox,
                     cursor: 'pointer',
                     display: 'flex',
-                    flexDirection: 'column'
+                    flexDirection: 'column',
                   }}
                 >
                   <div style={feedGridImageBox}>
@@ -266,7 +267,7 @@ const RealtimeFeedScreen = () => {
                       <img
                         src={post.gridCover.src}
                         alt={post.location}
-                        style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'block', borderRadius: '14px' }}
+                        style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
                       />
                     ) : post.gridCover?.mode === 'video' && post.gridCover.src ? (
                       <video
@@ -274,10 +275,10 @@ const RealtimeFeedScreen = () => {
                         muted
                         playsInline
                         preload="metadata"
-                        style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'block', borderRadius: '14px' }}
+                        style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
                       />
                     ) : (
-                      <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#cbd5e1', borderRadius: '14px' }}>
+                      <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#cbd5e1' }}>
                         <span className="material-symbols-outlined" style={{ fontSize: '22px' }}>image</span>
                       </div>
                     )}
