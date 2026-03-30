@@ -151,6 +151,74 @@ const MagazineDetailScreen = () => {
     load();
   }, [topic, publishedMagazine]);
 
+  const locationSections = useMemo(() => {
+    if (!Array.isArray(posts) || posts.length === 0) return [];
+
+    const map = new Map();
+    posts.forEach((p) => {
+      const key = getLocationKey(p);
+      if (!key) return;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(p);
+    });
+
+    const sections = Array.from(map.entries()).map(([locKey, list]) => {
+      const regionKey = getRegionKey(locKey);
+      const uniqMedia = [...new Set(list.flatMap(mediaUrlsFromPost))].filter(Boolean);
+      const sliderMedia = uniqMedia.slice(0, 19);
+      const hasMoreMedia = uniqMedia.length > 19;
+
+      const first = list[0] || null;
+      const { username, avatar } = first ? getPostAuthor(first) : { username: '여행자', avatar: null };
+      const createdAt = first?.timestamp || first?.createdAt;
+      const timeLabel = createdAt ? getTimeAgo(createdAt) : '';
+
+      const chips = list.flatMap((p) => getCategoryChipsFromPost(p)).filter(Boolean);
+      const chipMap = new Map();
+      chips.forEach((c) => {
+        if (c?.slug && !chipMap.has(c.slug)) chipMap.set(c.slug, c);
+      });
+      const topChips = Array.from(chipMap.values()).slice(0, 3);
+
+      const landmarks = getLandmarksByRegion(regionKey);
+      const around = landmarks.filter((l) => l?.name && !locKey.includes(l.name)).slice(0, 4);
+
+      const allTextPosts = Array.isArray(allPosts) ? allPosts : [];
+      const byRecency = (a, b) => {
+        const now = Date.now();
+        const ta = new Date(a?.timestamp || a?.createdAt || now).getTime();
+        const tb = new Date(b?.timestamp || b?.createdAt || now).getTime();
+        return tb - ta;
+      };
+      const aroundWithImage = around
+        .map((l) => {
+          const keys = [l?.name, ...(Array.isArray(l?.keywords) ? l.keywords : [])]
+            .filter(Boolean)
+            .map((s) => String(s).toLowerCase());
+          const matched = allTextPosts
+            .filter((p) => keys.some((k) => k && toSearchText(p).includes(k)))
+            .sort(byRecency)[0];
+          const img = matched ? mediaUrlsFromPost(matched)[0] : '';
+          return { ...l, image: img || '' };
+        })
+        .slice(0, 3);
+
+      return {
+        locKey,
+        regionKey,
+        sliderMedia,
+        hasMoreMedia,
+        author: { username, avatar, timeLabel },
+        topChips,
+        around: aroundWithImage,
+        mediaCount: uniqMedia.length,
+        postCount: list.length,
+      };
+    });
+
+    return sections.sort((a, b) => (b.mediaCount - a.mediaCount) || (b.postCount - a.postCount));
+  }, [posts, allPosts]);
+
   const publishedSections = useMemo(() => {
     if (!publishedMagazine || !Array.isArray(publishedMagazine.sections)) return [];
     const allTextPosts = Array.isArray(allPosts) ? allPosts : [];
@@ -212,72 +280,6 @@ const MagazineDetailScreen = () => {
   }, [publishedMagazine, allPosts, normalizeSpace, getRegionKey]);
 
   const sectionsToRender = publishedMagazine ? publishedSections : locationSections;
-
-  const locationSections = useMemo(() => {
-    if (!Array.isArray(posts) || posts.length === 0) return [];
-
-    const map = new Map();
-    posts.forEach((p) => {
-      const key = getLocationKey(p);
-      if (!key) return;
-      if (!map.has(key)) map.set(key, []);
-      map.get(key).push(p);
-    });
-
-    const sections = Array.from(map.entries()).map(([locKey, list]) => {
-      const regionKey = getRegionKey(locKey);
-      const uniqMedia = [...new Set(list.flatMap(mediaUrlsFromPost))].filter(Boolean);
-      const sliderMedia = uniqMedia.slice(0, 19);
-      const hasMoreMedia = uniqMedia.length > 19;
-
-      const first = list[0] || null;
-      const { username, avatar } = first ? getPostAuthor(first) : { username: '여행자', avatar: null };
-      const createdAt = first?.timestamp || first?.createdAt;
-      const timeLabel = createdAt ? getTimeAgo(createdAt) : '';
-
-      const chips = list.flatMap((p) => getCategoryChipsFromPost(p)).filter(Boolean);
-      const chipMap = new Map();
-      chips.forEach((c) => {
-        if (c?.slug && !chipMap.has(c.slug)) chipMap.set(c.slug, c);
-      });
-      const topChips = Array.from(chipMap.values()).slice(0, 3);
-
-      const landmarks = getLandmarksByRegion(regionKey);
-      const around = landmarks.filter((l) => l?.name && !locKey.includes(l.name)).slice(0, 4);
-
-      const allTextPosts = Array.isArray(allPosts) ? allPosts : [];
-      const byRecency = (a, b) => {
-        const now = Date.now();
-        const ta = new Date(a?.timestamp || a?.createdAt || now).getTime();
-        const tb = new Date(b?.timestamp || b?.createdAt || now).getTime();
-        return tb - ta;
-      };
-      const aroundWithImage = around
-        .map((l) => {
-          const keys = [l?.name, ...(Array.isArray(l?.keywords) ? l.keywords : [])].filter(Boolean).map((s) => String(s).toLowerCase());
-          const matched = allTextPosts
-            .filter((p) => keys.some((k) => k && toSearchText(p).includes(k)))
-            .sort(byRecency)[0];
-          const img = matched ? mediaUrlsFromPost(matched)[0] : '';
-          return { ...l, image: img || '' };
-        })
-        .slice(0, 3);
-
-      return {
-        locKey,
-        regionKey,
-        sliderMedia,
-        hasMoreMedia,
-        author: { username, avatar, timeLabel },
-        topChips,
-        around: aroundWithImage,
-        mediaCount: uniqMedia.length,
-        postCount: list.length,
-      };
-    });
-
-    return sections.sort((a, b) => (b.mediaCount - a.mediaCount) || (b.postCount - a.postCount));
-  }, [posts, allPosts]);
 
   if (!topic) {
     if (publishedMagazine) {
