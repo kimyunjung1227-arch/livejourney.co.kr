@@ -7,6 +7,8 @@ import { getCombinedPosts } from '../utils/mockData';
 import { getTimeAgo } from '../utils/timeUtils';
 import { getDisplayImageUrl } from '../api/upload';
 import { logger } from '../utils/logger';
+import { getLandmarksByRegion } from '../utils/regionLandmarks';
+import { getCategoryChipsFromPost } from '../utils/travelCategories';
 
 const MagazineDetailScreen = () => {
   const navigate = useNavigate();
@@ -17,6 +19,33 @@ const MagazineDetailScreen = () => {
   const topic = useMemo(() => getMagazineTopicById(id), [id]);
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  const normalizeSpace = (s) => String(s || '').replace(/\s+/g, ' ').trim();
+  const getLocationKey = (p) =>
+    normalizeSpace(p?.detailedLocation || p?.placeName || p?.location || '');
+  const getRegionKey = (locKey) => normalizeSpace(locKey).split(' ')[0] || '';
+  const getPostAuthor = (p) => {
+    const u = p?.user;
+    const username =
+      (typeof u === 'string' ? u : u?.username) ||
+      p?.userName ||
+      p?.author?.name ||
+      '여행자';
+    const avatar =
+      (typeof u === 'object' ? (u?.profileImage || u?.avatar || u?.photoURL) : null) ||
+      p?.userAvatar ||
+      null;
+    return { username: String(username || '여행자'), avatar: avatar ? String(avatar) : null };
+  };
+  const mediaUrlsFromPost = (p) => {
+    const raw = [];
+    if (Array.isArray(p?.images)) raw.push(...p.images);
+    else if (p?.images) raw.push(p.images);
+    if (p?.image) raw.push(p.image);
+    if (p?.thumbnail) raw.push(p.thumbnail);
+    const urls = raw.map((v) => getDisplayImageUrl(v)).filter(Boolean);
+    return [...new Set(urls)];
+  };
 
   // 수국 등 키워드 기반으로 사용자 피드 큐레이션
   useEffect(() => {
@@ -85,6 +114,54 @@ const MagazineDetailScreen = () => {
 
     load();
   }, [topic]);
+
+  const locationSections = useMemo(() => {
+    if (!Array.isArray(posts) || posts.length === 0) return [];
+
+    const map = new Map();
+    posts.forEach((p) => {
+      const key = getLocationKey(p);
+      if (!key) return;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(p);
+    });
+
+    const sections = Array.from(map.entries()).map(([locKey, list]) => {
+      const regionKey = getRegionKey(locKey);
+      const uniqMedia = [...new Set(list.flatMap(mediaUrlsFromPost))].filter(Boolean);
+      const cover = uniqMedia.slice(0, 2);
+      const rest = uniqMedia.slice(2);
+
+      const first = list[0] || null;
+      const { username, avatar } = first ? getPostAuthor(first) : { username: '여행자', avatar: null };
+      const createdAt = first?.timestamp || first?.createdAt;
+      const timeLabel = createdAt ? getTimeAgo(createdAt) : '';
+
+      const chips = list.flatMap((p) => getCategoryChipsFromPost(p)).filter(Boolean);
+      const chipMap = new Map();
+      chips.forEach((c) => {
+        if (c?.slug && !chipMap.has(c.slug)) chipMap.set(c.slug, c);
+      });
+      const topChips = Array.from(chipMap.values()).slice(0, 3);
+
+      const landmarks = getLandmarksByRegion(regionKey);
+      const around = landmarks.filter((l) => l?.name && !locKey.includes(l.name)).slice(0, 4);
+
+      return {
+        locKey,
+        regionKey,
+        cover,
+        rest,
+        author: { username, avatar, timeLabel },
+        topChips,
+        around,
+        mediaCount: uniqMedia.length,
+        postCount: list.length,
+      };
+    });
+
+    return sections.sort((a, b) => (b.mediaCount - a.mediaCount) || (b.postCount - a.postCount));
+  }, [posts]);
 
   if (!topic) {
     return (
@@ -158,124 +235,128 @@ const MagazineDetailScreen = () => {
             )}
           </section>
 
-          {/* 큐레이션된 사용자 피드 (인스타 피드처럼 한 장씩 스크롤) */}
-          <section className="px-0 pb-8 pt-1">
+          {/* 위치 기반 큐레이션 */}
+          <section className="px-0 pb-10 pt-1">
             {loading ? (
               <div className="py-10 flex items-center justify-center text-[13px] text-gray-500">
-                실시간 수국 사진을 모으는 중이에요...
+                실시간 사진을 모으는 중이에요...
               </div>
-            ) : posts.length === 0 ? (
+            ) : locationSections.length === 0 ? (
               <div className="py-10 flex flex-col items-center justify-center text-center text-[13px] text-gray-500 px-6">
-                <p className="mb-1">아직 이 테마에 맞는 수국 사진이 없어요.</p>
-                <p>지금 여기를 통해 첫 번째 수국 사진을 올려보세요!</p>
+                <p className="mb-1">아직 이 매거진에 포함되는 사진이 없어요.</p>
+                <p>지금 여기를 통해 첫 번째 사진을 올려보세요.</p>
               </div>
             ) : (
-              <div className="flex flex-col gap-8 pt-3 pb-6">
-                {posts.map((post) => {
-                  const imageUrl = getDisplayImageUrl(
-                    (Array.isArray(post.images) && post.images[0]) ||
-                      post.image ||
-                      post.thumbnail ||
-                      ''
-                  );
-                  const createdAt = post.timestamp || post.createdAt;
-                  const timeLabel = createdAt ? getTimeAgo(createdAt) : '';
-                  const username =
-                    post.user?.username ||
-                    post.userName ||
-                    (post.author && post.author.name) ||
-                    '여행자';
-                  const firstLine =
-                    (post.note || post.content || '').split('\n')[0] ||
-                    (post.location || '');
-                  const tags = Array.isArray(post.tags)
-                    ? post.tags
-                        .map((t) =>
-                          typeof t === 'string'
-                            ? t.trim().replace(/^#/, '')
-                            : String(t || '').trim()
-                        )
-                        .filter(Boolean)
-                    : [];
-                  const likeCount = Number(post.likes ?? post.likeCount ?? 0) || 0;
-                  const commentCount = Array.isArray(post.comments)
-                    ? post.comments.length
-                    : 0;
+              <div className="flex flex-col gap-6 pt-4 pb-8">
+                {locationSections.slice(0, 10).map((sec) => {
+                  const region = sec.regionKey || '서울';
+                  const coverA = sec.cover[0] || '';
+                  const coverB = sec.cover[1] || '';
+                  const has2 = !!coverA && !!coverB;
+
+                  const goMore = (e) => {
+                    e?.stopPropagation?.();
+                    navigate(`/region/${encodeURIComponent(region)}`, {
+                      state: { region: { name: region }, focusLocation: sec.locKey },
+                    });
+                  };
 
                   return (
-                    <article
-                      key={post.id}
-                      className="px-4"
-                    >
-                      {/* 상단 텍스트 영역 */}
-                      <div className="mb-3">
-                        <div className="flex items-center justify-between mb-1">
-                          <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-[13px] font-semibold text-gray-700">
-                              {username.charAt(0)}
-                            </div>
-                            <div>
-                              <div className="text-[13px] font-semibold text-gray-900">
-                                {username}
-                              </div>
-                              <div className="text-[11px] text-gray-500">
-                                {timeLabel}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        <h3 className="text-[15px] font-bold text-gray-900 mb-1">
-                          {post.location || firstLine}
-                        </h3>
-                        {firstLine && (
-                          <p className="text-[13px] text-gray-700 leading-snug line-clamp-2">
-                            {firstLine}
+                    <article key={sec.locKey} className="px-4">
+                      <div className="flex items-center justify-between gap-3 mb-2">
+                        <div className="min-w-0">
+                          <h3 className="text-[16px] font-extrabold text-gray-900 dark:text-gray-50 truncate">
+                            {sec.locKey}
+                          </h3>
+                          <p className="text-[12px] text-gray-500 dark:text-gray-400 mt-0.5">
+                            지금 이 위치 사진을 모아서 소개해요.
                           </p>
-                        )}
-                        {tags.length > 0 && (
-                          <div className="mt-1 flex flex-wrap gap-1.5">
-                            {tags.slice(0, 3).map((tag) => (
-                              <span
-                                key={tag}
-                                className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-700"
-                              >
-                                #{tag}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* 사진 영역 */}
-                      {imageUrl && (
+                        </div>
                         <button
                           type="button"
-                          onClick={() => navigate(`/post/${post.id}`, { state: { post } })}
-                          className="block w-full rounded-2xl overflow-hidden bg-gray-200"
+                          onClick={goMore}
+                          className="shrink-0 inline-flex items-center gap-1 rounded-full bg-white dark:bg-gray-900 border border-zinc-200 dark:border-zinc-700 px-3 py-1.5 text-[12px] font-semibold text-primary"
                         >
-                          <img
-                            src={imageUrl}
-                            alt={post.location || firstLine || '여행 사진'}
-                            className="w-full h-auto max-h-[520px] object-cover"
-                          />
+                          더보기
+                          <span className="material-symbols-outlined text-[16px]">chevron_right</span>
                         </button>
-                      )}
+                      </div>
 
-                      {/* 좋아요/댓글 영역 */}
-                      <div className="mt-2 flex items-center justify-between text-[12px] text-gray-500">
-                        <div className="flex items-center gap-4">
-                          <span className="inline-flex items-center gap-1">
-                            <span className="material-symbols-outlined text-[16px] text-rose-500">
-                              favorite
-                            </span>
-                            <span>{likeCount}</span>
-                          </span>
-                          <span className="inline-flex items-center gap-1">
-                            <span className="material-symbols-outlined text-[16px]">
-                              chat_bubble
-                            </span>
-                            <span>{commentCount}</span>
-                          </span>
+                      <div className="w-full overflow-hidden rounded-2xl bg-white dark:bg-gray-900 border border-zinc-100 dark:border-zinc-800 shadow-[0_2px_14px_rgba(15,23,42,0.06)]">
+                        <div className="relative w-full bg-gray-100 dark:bg-gray-800" style={{ aspectRatio: '4/3' }}>
+                          {has2 ? (
+                            <div className="absolute inset-0 grid grid-cols-2">
+                              <img src={coverA} alt="" className="w-full h-full object-cover" loading="lazy" />
+                              <img src={coverB} alt="" className="w-full h-full object-cover" loading="lazy" />
+                            </div>
+                          ) : coverA ? (
+                            <img src={coverA} alt="" className="absolute inset-0 w-full h-full object-cover" loading="lazy" />
+                          ) : (
+                            <div className="absolute inset-0 flex items-center justify-center text-gray-300">
+                              <span className="material-symbols-outlined text-5xl">image</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {sec.rest.length > 0 && (
+                          <div className="px-3 pt-2 pb-2">
+                            <div className="flex gap-2 overflow-x-auto scrollbar-hide">
+                              {sec.rest.slice(0, 12).map((src, i) => (
+                                <img
+                                  key={`${sec.locKey}-rest-${i}`}
+                                  src={src}
+                                  alt=""
+                                  className="h-[54px] w-[54px] flex-shrink-0 rounded-xl object-cover border border-zinc-100 dark:border-zinc-800"
+                                  loading="lazy"
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="px-3 pb-3">
+                          <div className="flex items-center gap-2 pt-2">
+                            {sec.author.avatar ? (
+                              <img src={sec.author.avatar} alt="" className="w-7 h-7 rounded-full object-cover bg-gray-200" />
+                            ) : (
+                              <div className="w-7 h-7 rounded-full bg-gray-200 flex items-center justify-center text-[12px] font-bold text-gray-700">
+                                {sec.author.username.charAt(0)}
+                              </div>
+                            )}
+                            <div className="min-w-0">
+                              <div className="text-[12px] font-semibold text-gray-900 dark:text-gray-50 truncate">
+                                {sec.author.username}
+                              </div>
+                              <div className="text-[11px] text-gray-500 dark:text-gray-400">
+                                {sec.author.timeLabel || '방금'}
+                              </div>
+                            </div>
+                          </div>
+
+                          <p className="mt-2 text-[12px] leading-relaxed text-gray-700 dark:text-gray-200 line-clamp-2">
+                            {sec.topChips.length > 0
+                              ? `${sec.topChips.map((c) => c.name).join(' · ')} 정보를 지금 확인해요.`
+                              : '이 위치의 현재 분위기를 지금 확인해요.'}
+                          </p>
+
+                          <div className="mt-2">
+                            <div className="text-[12px] font-extrabold text-gray-900 dark:text-gray-50 mb-1">
+                              위치 주변 추천
+                            </div>
+                            <div className="flex flex-wrap gap-1.5">
+                              {(sec.around.length > 0 ? sec.around : getLandmarksByRegion(region).slice(0, 3)).map((l) => (
+                                <span
+                                  key={`${sec.locKey}-around-${l.id}`}
+                                  className="inline-flex items-center rounded-full bg-gray-100 dark:bg-gray-800 px-2 py-1 text-[11px] font-semibold text-gray-700 dark:text-gray-200"
+                                >
+                                  {l.name}
+                                </span>
+                              ))}
+                              <span className="inline-flex items-center rounded-full bg-emerald-50 dark:bg-emerald-900/30 px-2 py-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-200">
+                                맛집을 지금 찾을 수 있어요
+                              </span>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </article>
