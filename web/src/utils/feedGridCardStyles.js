@@ -32,7 +32,7 @@ export const feedGridTitleStyle = {
 
 export const feedGridDescStyle = {
   fontSize: '12px',
-  color: '#4b5563',
+  color: '#475569',
   marginTop: 0,
   lineHeight: 1.35,
   maxHeight: '2.7em',
@@ -40,6 +40,10 @@ export const feedGridDescStyle = {
   display: '-webkit-box',
   WebkitLineClamp: 2,
   WebkitBoxOrient: 'vertical',
+  background: 'rgba(15, 23, 42, 0.04)',
+  border: '1px solid rgba(15, 23, 42, 0.06)',
+  borderRadius: 10,
+  padding: '6px 8px',
 };
 
 export const feedGridMetaRow = {
