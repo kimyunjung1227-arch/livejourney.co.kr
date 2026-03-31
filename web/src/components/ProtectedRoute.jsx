@@ -3,9 +3,9 @@ import { Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 const ProtectedRoute = ({ children }) => {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, authLoading } = useAuth();
 
-  if (loading) {
+  if (authLoading) {
     return (
       <div style={{ 
         display: 'flex', 
