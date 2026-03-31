@@ -363,6 +363,16 @@ const MagazineDetailScreen = () => {
                   <span className="material-symbols-outlined text-[22px]">delete</span>
                 </button>
               ) : null}
+
+              {/* 뒤로가기 (가볍게) */}
+              <button
+                type="button"
+                onClick={() => navigate(-1)}
+                className="absolute top-3 left-3 z-10 inline-flex items-center justify-center rounded-full bg-black/45 text-white w-10 h-10 backdrop-blur-[6px]"
+                aria-label="뒤로가기"
+              >
+                <span className="material-symbols-outlined text-[20px]">arrow_back</span>
+              </button>
             </div>
           </section>
 
@@ -445,7 +455,7 @@ const MagazineDetailScreen = () => {
                         )}
 
                         {/* 위치 설명 (사진 바깥) */}
-                        <p className="mt-3 mb-2 text-[13px] leading-relaxed text-gray-700 dark:text-gray-200">
+                        <p className="mt-3 mb-2 text-[15px] font-medium leading-relaxed text-gray-800 dark:text-gray-100">
                           {sec.description || '실시간으로 올라온 사진으로만 구성했어요.'}
                         </p>
 
@@ -532,12 +542,12 @@ const MagazineDetailScreen = () => {
                       </div>
 
                       {/* 사진 피드(한 장씩 좌우 슬라이드, 최대 19장) */}
-                        <div className="w-full overflow-hidden rounded-lg bg-white dark:bg-gray-900 border border-zinc-100 dark:border-zinc-800 shadow-[0_2px_14px_rgba(15,23,42,0.06)]">
+                      <div className="w-full overflow-hidden rounded-[4px] bg-white dark:bg-gray-900 border border-zinc-100 dark:border-zinc-800 shadow-[0_2px_12px_rgba(15,23,42,0.05)]">
                         <div className="flex overflow-x-auto snap-x snap-mandatory scrollbar-hide">
                           {(media.length ? media : ['']).slice(0, 19).map((src, i) => (
                             <div
                               key={`${sec.locKey}-slide-${i}`}
-                              className="snap-center flex-shrink-0 w-full bg-gray-100 dark:bg-gray-800"
+                              className="relative snap-center flex-shrink-0 w-full bg-gray-100 dark:bg-gray-800"
                               style={{ aspectRatio: '4/3' }}
                             >
                               {src ? (
@@ -547,76 +557,62 @@ const MagazineDetailScreen = () => {
                                   <span className="material-symbols-outlined text-5xl">image</span>
                                 </div>
                               )}
-                            </div>
-                          ))}
-                        </div>
 
-                        {/* 사진 정보(업로더 프로필만) */}
-                        <div className="px-3 py-3">
-                          <div className="flex items-center gap-2">
-                            {sec.author.avatar ? (
-                              <img src={sec.author.avatar} alt="" className="w-7 h-7 rounded-full object-cover bg-gray-200" />
-                            ) : (
-                              <div className="w-7 h-7 rounded-full bg-gray-200 flex items-center justify-center text-[12px] font-bold text-gray-700">
-                                {sec.author.username.charAt(0)}
-                              </div>
-                            )}
-                            <div className="min-w-0">
-                              <div className="text-[12px] font-semibold text-gray-900 dark:text-gray-50 truncate">
-                                {sec.author.username}
-                              </div>
-                              <div className="text-[11px] text-gray-500 dark:text-gray-400">
-                                {sec.author.timeLabel || '방금'}
-                              </div>
-                            </div>
-                            {sec.hasMoreMedia && (
-                              <span className="ml-auto text-[11px] font-semibold text-gray-400 dark:text-gray-500">
-                                사진은 19장까지 보여줘요
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* 위치 설명(사진 피드와 분리) */}
-                      <div className="mt-2 px-1">
-                        <div className="text-[13px] font-semibold text-gray-900 dark:text-gray-50 mb-1">
-                          위치에 대한 설명
-                        </div>
-                        <p className="m-0 text-[13px] leading-relaxed text-gray-700 dark:text-gray-200 line-clamp-2">
-                          {sec.topChips.length > 0
-                            ? `지금 ${sec.topChips.map((c) => c.name).join(' · ')} 정보를 확인해요.`
-                            : '지금 이 위치의 현재 분위기를 확인해요.'}
-                        </p>
-                      </div>
-
-                      {/* 주변 맛집/명소(가볍게, 작은 사진 3개) */}
-                      <div className="mt-2 px-1">
-                        <div className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 mb-1">
-                          위치 주변 맛집, 가볼만한 곳
-                        </div>
-                        <div className="flex gap-2">
-                          {(Array.isArray(sec.around) ? sec.around : []).slice(0, 3).map((l) => (
-                            <div
-                              key={`${sec.locKey}-around-${l.id}`}
-                              className="flex-1 overflow-hidden rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-gray-900"
-                            >
-                              <div className="w-full bg-gray-100 dark:bg-gray-800" style={{ aspectRatio: '4/3' }}>
-                                {l.image ? (
-                                  <img src={l.image} alt="" className="w-full h-full object-cover" loading="lazy" />
+                              {/* 작성자 프로필 (우하단) */}
+                              <div className="absolute bottom-2 right-2 z-10 inline-flex items-center gap-1.5 rounded-full bg-black/45 px-2 py-1 text-white backdrop-blur-[6px]">
+                                {sec.author.avatar ? (
+                                  <img src={sec.author.avatar} alt="" className="w-5 h-5 rounded-full object-cover bg-slate-200" />
                                 ) : (
-                                  <div className="w-full h-full flex items-center justify-center text-gray-300">
-                                    <span className="material-symbols-outlined">photo</span>
+                                  <div className="w-5 h-5 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-[10px] font-extrabold">
+                                    {sec.author.username.charAt(0)}
                                   </div>
                                 )}
-                              </div>
-                              <div className="px-2 py-1.5 text-[11px] font-semibold text-gray-700 dark:text-gray-200 truncate">
-                                {l.name}
+                                <span className="text-[10px] font-semibold max-w-[120px] truncate">{sec.author.username}</span>
                               </div>
                             </div>
                           ))}
                         </div>
                       </div>
+
+                      {/* 위치 설명 문구 제거: 발행 시 작성한 설명을 사용 */}
+
+                      {/* 주변 맛집/명소: 구분선 + 1장씩 크게 슬라이드 */}
+                      {(Array.isArray(sec.around) ? sec.around : []).length > 0 && (
+                        <div className="mt-4 pt-4 border-t border-zinc-200 dark:border-zinc-800">
+                          <div className="mb-2 text-[12px] font-extrabold text-gray-900 dark:text-gray-50">
+                            주변 맛집 · 명소
+                          </div>
+                          <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory scrollbar-hide pb-2">
+                            {(Array.isArray(sec.around) ? sec.around : []).slice(0, 10).map((l) => (
+                              <div
+                                key={`${sec.locKey}-around-${l.id}`}
+                                className="snap-center flex-shrink-0 w-[78%] max-w-[340px]"
+                              >
+                                <div className="w-full overflow-hidden rounded-[4px] bg-gray-100 dark:bg-gray-800" style={{ aspectRatio: '4/3' }}>
+                                  {l.image ? (
+                                    <img src={l.image} alt="" className="w-full h-full object-cover" loading="lazy" />
+                                  ) : (
+                                    <div className="w-full h-full flex items-center justify-center text-gray-300">
+                                      <span className="material-symbols-outlined text-[22px]">photo</span>
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="pt-2">
+                                  <div className="text-[12px] font-extrabold text-gray-900 dark:text-gray-50 truncate">{l.name}</div>
+                                  <button
+                                    type="button"
+                                    onClick={goMore}
+                                    className="mt-1 inline-flex items-center gap-0.5 text-[12px] font-semibold text-primary"
+                                  >
+                                    자세히 보기
+                                    <span className="material-symbols-outlined text-[18px]">chevron_right</span>
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </article>
                   );
                 })}
