@@ -1,18 +1,42 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import BottomNavigation from '../components/BottomNavigation';
 import { publishMagazine } from '../utils/magazinesStore';
 import { useAuth } from '../contexts/AuthContext';
 import { useAdminState } from '../utils/admin';
 
+const DRAFT_KEY = 'magazinePublishDraft';
+
 const MagazineWriteScreen = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { isAdmin, loading: adminLoading } = useAdminState(user);
   const [title, setTitle] = useState('');
-  const [subtitle, setSubtitle] = useState('');
+  const [content, setContent] = useState('');
   const [saving, setSaving] = useState(false);
-  const overview = subtitle;
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY);
+      if (!raw) return;
+      const d = JSON.parse(raw);
+      if (d?.title) setTitle(String(d.title));
+      if (d?.content) setContent(String(d.content));
+    } catch (_) {
+      // ignore
+    }
+  }, []);
+
+  const canSubmit = useMemo(() => !!title.trim() && !!content.trim(), [title, content]);
+
+  const saveDraft = useCallback(() => {
+    try {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({ title, content, savedAt: Date.now() }));
+      alert('임시저장되었습니다.');
+    } catch (_) {
+      alert('임시저장에 실패했습니다.');
+    }
+  }, [title, content]);
 
   const handleSubmit = useCallback(
     async (e) => {
@@ -21,19 +45,19 @@ const MagazineWriteScreen = () => {
         alert('제목을 입력해 주세요.');
         return;
       }
-      if (!overview.trim()) {
-        alert('개요를 입력해 주세요.');
+      if (!content.trim()) {
+        alert('내용을 입력해 주세요.');
         return;
       }
 
       setSaving(true);
       const res = await publishMagazine({
         title: title.trim(),
-        subtitle: overview.trim(),
+        subtitle: content.trim(),
         sections: [
           {
             location: title.trim(),
-            description: overview.trim(),
+            description: content.trim(),
             around: [],
           },
         ],
@@ -45,27 +69,44 @@ const MagazineWriteScreen = () => {
         return;
       }
 
+      try {
+        localStorage.removeItem(DRAFT_KEY);
+      } catch (_) {}
       navigate(`/magazine/${res.magazine.id}`, { replace: true, state: { magazine: res.magazine } });
     },
-    [title, overview, navigate]
+    [title, content, navigate]
   );
 
   return (
     <div className="screen-layout bg-background-light dark:bg-background-dark h-screen overflow-hidden">
       <div className="screen-content flex flex-col h-full">
         {/* 헤더 */}
-        <header className="screen-header flex-shrink-0 flex items-center justify-between px-4 py-3 bg-white dark:bg-gray-900 border-b border-zinc-200 dark:border-zinc-800 shadow-sm">
+        <header className="screen-header flex-shrink-0 flex items-center justify-between px-4 py-3 bg-white dark:bg-gray-900 border-b border-zinc-100 dark:border-zinc-800">
           <button
             type="button"
             onClick={() => navigate(-1)}
-            className="flex size-10 items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
+            className="flex size-10 items-center justify-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
+            aria-label="닫기"
           >
-            <span className="material-symbols-outlined text-[22px]">arrow_back</span>
+            <span className="material-symbols-outlined text-[22px]">close</span>
           </button>
-          <h1 className="text-[18px] font-bold text-text-primary-light dark:text-text-primary-dark m-0">
-            매거진 쓰기
-          </h1>
-          <div className="w-10" />
+          <button
+            type="button"
+            onClick={saveDraft}
+            className="text-[14px] font-semibold text-gray-700 dark:text-gray-200 px-2 py-2"
+          >
+            임시저장
+          </button>
+          <button
+            type="submit"
+            form="magazine-publish-form"
+            disabled={!canSubmit || saving}
+            className={`text-[14px] font-extrabold px-2 py-2 ${
+              !canSubmit || saving ? 'text-gray-300 dark:text-gray-600' : 'text-[#22c55e]'
+            }`}
+          >
+            등록
+          </button>
         </header>
 
         {/* 폼 */}
@@ -84,44 +125,25 @@ const MagazineWriteScreen = () => {
               </button>
             </div>
           ) : (
-          <form className="space-y-5" onSubmit={handleSubmit}>
+          <form id="magazine-publish-form" className="space-y-6" onSubmit={handleSubmit}>
             <div>
-              <label className="block mb-2 text-[14px] font-semibold text-gray-800 dark:text-gray-100">
-                제목
-              </label>
+              <label className="block mb-2 text-[13px] font-semibold text-gray-800 dark:text-gray-100">제목</label>
               <input
-                className="w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-3 text-[15px] font-semibold text-gray-900 dark:text-gray-50 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary-soft"
-                placeholder="예: 갑자기 떠나고 싶을 때! 가볍게 다녀오는 국내 여행지"
+                className="w-full border-b border-zinc-200 dark:border-zinc-700 bg-transparent px-0 py-3 text-[16px] font-semibold text-gray-900 dark:text-gray-50 focus:outline-none"
+                placeholder="제목"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
               />
             </div>
 
             <div>
-              <label className="block mb-2 text-[14px] font-semibold text-gray-800 dark:text-gray-100">
-                개요
-              </label>
-              <input
-                className="w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-3 text-[14px] text-gray-900 dark:text-gray-50 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary-soft"
-                placeholder="예: 당일치기로 훌쩍 다녀오기 좋은 근교 여행지를 모았어요."
-                value={subtitle}
-                onChange={(e) => setSubtitle(e.target.value)}
+              <label className="block mb-2 text-[13px] font-semibold text-gray-800 dark:text-gray-100">내용</label>
+              <textarea
+                className="w-full min-h-[240px] bg-transparent px-0 py-2 text-[15px] leading-relaxed text-gray-900 dark:text-gray-50 focus:outline-none resize-none"
+                placeholder="내용을 입력하세요."
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
               />
-            </div>
-
-            <div className="pt-2 pb-4">
-              <button
-                type="submit"
-                disabled={saving}
-                className={`w-full rounded-full min-h-[46px] text-[14px] font-semibold text-white ${
-                  saving ? 'bg-gray-400 cursor-not-allowed' : 'bg-primary hover:bg-primary-dark'
-                } transition-colors`}
-              >
-                {saving ? '저장 중...' : '매거진 발행하기'}
-              </button>
-              <p className="mt-2 text-[11px] text-gray-500 dark:text-gray-400 text-center">
-                발행한 매거진은 다른 기기에서도 보이도록 저장돼요.
-              </p>
             </div>
           </form>
           )}
