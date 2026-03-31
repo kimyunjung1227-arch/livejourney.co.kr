@@ -17,28 +17,64 @@ export const getBadgeDisplayName = (badge) => {
 
 const REGION_AWARE_NAMES = ['지역 가이드', '지역 지킴이', '지역 통신원', '지역 마스터'];
 
+const getPostText = (p) => String(p?.note ?? p?.content ?? p?.description ?? p?.caption ?? '').trim();
+const getPostCreatedAtMs = (p) => {
+  const t = p?.createdAt ?? p?.created ?? p?.timestamp ?? 0;
+  const ms = typeof t === 'string' ? new Date(t).getTime() : Number(t) || 0;
+  return Number.isFinite(ms) ? ms : 0;
+};
+const getPostCapturedAtMs = (p) => {
+  const t = p?.photoDate ?? p?.capturedAt ?? p?.captured_at ?? p?.captured ?? 0;
+  const ms = typeof t === 'string' ? new Date(t).getTime() : Number(t) || 0;
+  return Number.isFinite(ms) ? ms : 0;
+};
+const hasGps = (p) => !!(p?.coordinates || (p?.latitude != null && p?.longitude != null));
+const hasPhoto = (p) => Array.isArray(p?.images) ? p.images.length > 0 : !!p?.image || !!p?.thumbnail;
+const hasWeatherTag = (p) => {
+  const tagStr = Array.isArray(p?.tags) ? p.tags.join(' ') : String(p?.tags || '');
+  const cat = String(p?.categoryName || p?.category || '').trim();
+  const txt = `${tagStr} ${cat} ${getPostText(p)}`.toLowerCase();
+  return txt.includes('날씨') || txt.includes('#날씨');
+};
+const hasWaitingTag = (p) => {
+  const tagStr = Array.isArray(p?.tags) ? p.tags.join(' ') : String(p?.tags || '');
+  const cat = String(p?.categoryName || p?.category || '').trim();
+  const txt = `${tagStr} ${cat} ${getPostText(p)}`.toLowerCase();
+  return txt.includes('웨이팅') || txt.includes('#웨이팅') || txt.includes('대기') || txt.includes('#대기');
+};
+const isImportantInfoPost = (p) => {
+  const txt = getPostText(p);
+  return /(폐업|휴무|임시\s*휴무|통제|공사|우회|입장\s*마감|주차\s*불가|만차|혼잡|북적|대기\s*\d+|웨이팅|줄\s*\d+)/.test(txt);
+};
+const isNightPost = (p) => {
+  const ms = getPostCreatedAtMs(p);
+  if (!ms) return false;
+  const h = new Date(ms).getHours();
+  return h >= 20 || h <= 5;
+};
+
 /** 뱃지별 달성 조건 표시용: 목표 수치, 현재 수치 계산, 단위, 한 줄 설명 */
 export const BADGE_PROGRESS_DETAIL = {
   '첫 걸음': { shortCondition: '실시간 제보 1개', progressTarget: 1, getProgressCurrent: (s) => s.totalPosts || 0, progressUnit: '개' },
   '지역 가이드': { shortCondition: '해당 지역 제보 10회', progressTarget: 10, getProgressCurrent: (s) => s.maxRegionReports || 0, progressUnit: '회' },
-  '지역 지킴이': { shortCondition: '중요 정보 공유 5회', progressTarget: 5, getProgressCurrent: (s) => s.regionImportantInfo || 0, progressUnit: '회' },
-  '지역 통신원': { shortCondition: '3일 연속 실시간 중계', progressTarget: 3, getProgressCurrent: (s) => s.regionConsecutiveDays || 0, progressUnit: '일' },
-  '지역 마스터': { shortCondition: '지역 활동량 상위 1%', progressTarget: 1, getProgressCurrent: (s) => s.regionTop1Percent || 0, progressUnit: '달성' },
-  '날씨요정': { shortCondition: '기상 변화 10분 이내 제보 5회', progressTarget: 5, getProgressCurrent: (s) => s.weatherReports || 0, progressUnit: '회' },
-  '웨이팅 요정': { shortCondition: '대기 상황 공유 10회', progressTarget: 10, getProgressCurrent: (s) => s.waitingShares || 0, progressUnit: '회' },
-  '0.1초 셔터': { shortCondition: '즉시 라이브 업로드 5회', progressTarget: 5, getProgressCurrent: (s) => s.fastUploads || 0, progressUnit: '회' },
-  '베스트 나침반': { shortCondition: '총 조회수 10,000회', progressTarget: 10000, getProgressCurrent: (s) => s.totalInfoViews || 0, progressUnit: '회' },
-  '실패 구조대': { shortCondition: '감사 피드백 50회', progressTarget: 50, getProgressCurrent: (s) => (s.preventedFailFeedback || s.totalLikes || 0), progressUnit: '회' },
-  '라이트하우스': { shortCondition: '밤/악천후 유용 정보 5회', progressTarget: 5, getProgressCurrent: (s) => s.nightWeatherUseful || 0, progressUnit: '회' },
-  '팩트 체크 마스터': { shortCondition: '정보 수정·갱신 10회', progressTarget: 10, getProgressCurrent: (s) => s.factCheckEdits || 0, progressUnit: '회' },
-  '인간 GPS': { shortCondition: 'GPS 일치 100% + 제보 5개 이상', progressTarget: 5, getProgressCurrent: (s) => Math.min(s.totalPosts || 0, 5), progressUnit: '개' },
-  '트래블 셜록': { shortCondition: '디테일 정보 공유 5회', progressTarget: 5, getProgressCurrent: (s) => s.detailShares || 0, progressUnit: '회' },
-  '실시간 답변러': { shortCondition: '10분 이내 답변 5회', progressTarget: 5, getProgressCurrent: (s) => s.questionAnswersFast || 0, progressUnit: '회' },
-  '길 위의 천사': { shortCondition: '응원·격려 댓글 50회', progressTarget: 50, getProgressCurrent: (s) => (s.cheerAndComments || s.totalComments || 0), progressUnit: '회' },
-  '동행 가이드': { shortCondition: '사진 포함 답변 5회', progressTarget: 5, getProgressCurrent: (s) => s.helpfulAnswersWithPhoto || 0, progressUnit: '회' },
+  '지역 지킴이': { shortCondition: '중요 키워드 포함 제보 5회', progressTarget: 5, getProgressCurrent: (s) => s.regionImportantInfo || 0, progressUnit: '회' },
+  '지역 통신원': { shortCondition: '같은 지역 3일 연속 제보', progressTarget: 3, getProgressCurrent: (s) => s.regionConsecutiveDays || 0, progressUnit: '일' },
+  '지역 마스터': { shortCondition: '같은 지역 제보 30회', progressTarget: 30, getProgressCurrent: (s) => s.maxRegionReports || 0, progressUnit: '회' },
+  '날씨요정': { shortCondition: '#날씨 태그/카테고리 제보 5회', progressTarget: 5, getProgressCurrent: (s) => s.weatherReports || 0, progressUnit: '회' },
+  '웨이팅 요정': { shortCondition: '#웨이팅/#대기 제보 10회', progressTarget: 10, getProgressCurrent: (s) => s.waitingShares || 0, progressUnit: '회' },
+  '0.1초 셔터': { shortCondition: '촬영→업로드 10분 이내 5회', progressTarget: 5, getProgressCurrent: (s) => s.fastUploads || 0, progressUnit: '회' },
+  '베스트 나침반': { shortCondition: '내 게시물 좋아요 합계 50개', progressTarget: 50, getProgressCurrent: (s) => s.totalLikes || 0, progressUnit: '개' },
+  '실패 구조대': { shortCondition: '내 게시물 댓글 30개 받기', progressTarget: 30, getProgressCurrent: (s) => s.totalComments || 0, progressUnit: '개' },
+  '라이트하우스': { shortCondition: '밤(20~05시) 제보 5회', progressTarget: 5, getProgressCurrent: (s) => s.nightPosts || 0, progressUnit: '회' },
+  '팩트 체크 마스터': { shortCondition: '설명 120자 이상 제보 10회', progressTarget: 10, getProgressCurrent: (s) => s.detailShares || 0, progressUnit: '회' },
+  '인간 GPS': { shortCondition: 'GPS 포함 제보 5회', progressTarget: 5, getProgressCurrent: (s) => s.gpsVerifiedCount || 0, progressUnit: '회' },
+  '트래블 셜록': { shortCondition: '설명 60자 이상 제보 5회', progressTarget: 5, getProgressCurrent: (s) => s.detailShares60 || 0, progressUnit: '회' },
+  '실시간 답변러': { shortCondition: '내 게시물 댓글 10개 받기', progressTarget: 10, getProgressCurrent: (s) => s.totalComments || 0, progressUnit: '개' },
+  '길 위의 천사': { shortCondition: '내 게시물 댓글 50개 받기', progressTarget: 50, getProgressCurrent: (s) => s.totalComments || 0, progressUnit: '개' },
+  '동행 가이드': { shortCondition: '사진 포함 제보 10회', progressTarget: 10, getProgressCurrent: (s) => s.photoPosts || 0, progressUnit: '회' },
   '라이브 기록가': { shortCondition: '실시간 제보 100개', progressTarget: 100, getProgressCurrent: (s) => s.totalPosts || 0, progressUnit: '개' },
   '연속 중계 마스터': { shortCondition: '30일 연속 1회 이상 공유', progressTarget: 30, getProgressCurrent: (s) => s.consecutiveDays || 0, progressUnit: '일' },
-  '지도 개척자': { shortCondition: '신규 장소 첫 제보 1회', progressTarget: 1, getProgressCurrent: (s) => s.firstReportNewPlace || 0, progressUnit: '회' },
+  '지도 개척자': { shortCondition: '서로 다른 장소 10곳 제보', progressTarget: 10, getProgressCurrent: (s) => s.uniquePlaces || 0, progressUnit: '곳' },
 };
 
 export const BADGES = {
@@ -47,34 +83,34 @@ export const BADGES = {
 
   // 🗺️ 1. 지역 가이드 (Locality) — regionAware, 획득 시 region 저장
   '지역 가이드': { name: '지역 가이드', description: '해당 지역 실시간 제보 10회 이상. 가장 직관적인 로컬 전문가 인증', icon: '🗺️', category: '지역 가이드', difficulty: 2, gradient: 'from-indigo-600 to-blue-800', regionAware: true, condition: (s) => (s.maxRegionReports || 0) >= 10, getProgress: (s) => Math.min(100, ((s.maxRegionReports || 0) / 10) * 100) },
-  '지역 지킴이': { name: '지역 지킴이', description: '해당 지역의 중요 정보(폐업, 혼잡 등) 5회 이상 공유. 지역의 실패 없는 여행을 수호', icon: '🛡️', category: '지역 가이드', difficulty: 2, gradient: 'from-amber-600 to-amber-800', regionAware: true, condition: (s) => (s.regionImportantInfo || 0) >= 5, getProgress: (s) => Math.min(100, ((s.regionImportantInfo || 0) / 5) * 100) },
+  '지역 지킴이': { name: '지역 지킴이', description: '내 게시글 내용에 중요 키워드(폐업/휴무/혼잡/통제/공사 등)가 포함된 제보 5회 이상', icon: '🛡️', category: '지역 가이드', difficulty: 2, gradient: 'from-amber-600 to-amber-800', regionAware: true, condition: (s) => (s.regionImportantInfo || 0) >= 5, getProgress: (s) => Math.min(100, ((s.regionImportantInfo || 0) / 5) * 100) },
   '지역 통신원': { name: '지역 통신원', description: '해당 지역에서 3일 연속 실시간 중계. 지역 소식을 실시간으로 전하는 특파원', icon: '📡', category: '지역 가이드', difficulty: 3, gradient: 'from-cyan-500 to-blue-600', regionAware: true, condition: (s) => (s.regionConsecutiveDays || 0) >= 3, getProgress: (s) => Math.min(100, ((s.regionConsecutiveDays || 0) / 3) * 100) },
-  '지역 마스터': { name: '지역 마스터', description: '해당 지역 활동량 상위 1% 기록. 그 지역에 대해선 모르는 게 없는 권위자', icon: '👑', category: '지역 가이드', difficulty: 4, gradient: 'from-purple-600 to-fuchsia-700', regionAware: true, condition: (s) => (s.regionTop1Percent || 0) >= 1, getProgress: (s) => Math.min(100, (s.regionTop1Percent || 0) * 100) },
+  '지역 마스터': { name: '지역 마스터', description: '한 지역에서 실시간 제보 30회 이상. 해당 지역의 꾸준한 기록자', icon: '👑', category: '지역 가이드', difficulty: 4, gradient: 'from-purple-600 to-fuchsia-700', regionAware: true, condition: (s) => (s.maxRegionReports || 0) >= 30, getProgress: (s) => Math.min(100, ((s.maxRegionReports || 0) / 30) * 100) },
 
   // ⚡ 2. 실시간 정보 (Speed)
-  '날씨요정': { name: '날씨요정', description: '비/눈 등 기상 변화 시 10분 이내 현장 제보 5회. 친근하고 확실한 날씨 알림이', icon: '🌦️', category: '실시간 정보', difficulty: 2, gradient: 'from-cyan-400 to-blue-600', condition: (s) => (s.weatherReports || 0) >= 5, getProgress: (s) => Math.min(100, ((s.weatherReports || 0) / 5) * 100) },
+  '날씨요정': { name: '날씨요정', description: '게시글에 #날씨 태그를 추가하거나 날씨 카테고리로 올린 제보 5회', icon: '🌦️', category: '실시간 정보', difficulty: 2, gradient: 'from-cyan-400 to-blue-600', condition: (s) => (s.weatherReports || 0) >= 5, getProgress: (s) => Math.min(100, ((s.weatherReports || 0) / 5) * 100) },
   '웨이팅 요정': { name: '웨이팅 요정', description: '실시간 대기 줄 상황과 예상 시간 10회 공유. 헛걸음과 시간 낭비를 막아주는 구세주', icon: '⏱️', category: '실시간 정보', difficulty: 2, gradient: 'from-lime-400 to-green-600', condition: (s) => (s.waitingShares || 0) >= 10, getProgress: (s) => Math.min(100, ((s.waitingShares || 0) / 10) * 100) },
-  '0.1초 셔터': { name: '0.1초 셔터', description: '현장 도착 즉시 실시간 라이브 사진 업로드. 누구보다 빠르게 현장을 중계하는 유저', icon: '⚡', category: '실시간 정보', difficulty: 3, gradient: 'from-yellow-300 to-amber-500', condition: (s) => (s.fastUploads || 0) >= 5, getProgress: (s) => Math.min(100, ((s.fastUploads || 0) / 5) * 100) },
+  '0.1초 셔터': { name: '0.1초 셔터', description: '촬영시간(캡처시간)과 업로드시간 차이가 10분 이내인 제보 5회', icon: '⚡', category: '실시간 정보', difficulty: 3, gradient: 'from-yellow-300 to-amber-500', condition: (s) => (s.fastUploads || 0) >= 5, getProgress: (s) => Math.min(100, ((s.fastUploads || 0) / 5) * 100) },
 
   // 🏆 3. 도움 지수 (Impact)
-  '베스트 나침반': { name: '베스트 나침반', description: '실시간 게시글 총 조회수 10,000회 돌파. 많은 이들의 길잡이가 된 영향력 인증', icon: '🧭', category: '도움 지수', difficulty: 4, gradient: 'from-amber-400 to-yellow-600', condition: (s) => (s.totalInfoViews || 0) >= 10000, getProgress: (s) => Math.min(100, ((s.totalInfoViews || 0) / 10000) * 100) },
-  '실패 구조대': { name: '실패 구조대', description: '내 정보로 헛걸음을 피한 감사 피드백 50회. 라이브저니의 사명을 가장 잘 실천한 유저', icon: '🫀', category: '도움 지수', difficulty: 3, gradient: 'from-red-400 to-rose-600', condition: (s) => (s.preventedFailFeedback || s.totalLikes || 0) >= 50, getProgress: (s) => Math.min(100, ((s.preventedFailFeedback || s.totalLikes || 0) / 50) * 100) },
-  '라이트하우스': { name: '라이트하우스', description: '정보가 귀한 시점(밤, 악천후)에 유용한 정보 제공. 어려운 상황에서 타인의 여행을 밝혀준 존재', icon: '🗼', category: '도움 지수', difficulty: 3, gradient: 'from-cyan-400 to-blue-600', condition: (s) => (s.nightWeatherUseful || 0) >= 5, getProgress: (s) => Math.min(100, ((s.nightWeatherUseful || 0) / 5) * 100) },
+  '베스트 나침반': { name: '베스트 나침반', description: '내 게시물에 달린 좋아요 합계 50개 달성', icon: '🧭', category: '도움 지수', difficulty: 4, gradient: 'from-amber-400 to-yellow-600', condition: (s) => (s.totalLikes || 0) >= 50, getProgress: (s) => Math.min(100, ((s.totalLikes || 0) / 50) * 100) },
+  '실패 구조대': { name: '실패 구조대', description: '내 게시물 댓글을 30개 이상 받음 (정보가 도움이 됐다는 반응)', icon: '🫀', category: '도움 지수', difficulty: 3, gradient: 'from-red-400 to-rose-600', condition: (s) => (s.totalComments || 0) >= 30, getProgress: (s) => Math.min(100, ((s.totalComments || 0) / 30) * 100) },
+  '라이트하우스': { name: '라이트하우스', description: '밤 시간대(20~05시)에 올린 제보 5회', icon: '🗼', category: '도움 지수', difficulty: 3, gradient: 'from-cyan-400 to-blue-600', condition: (s) => (s.nightPosts || 0) >= 5, getProgress: (s) => Math.min(100, ((s.nightPosts || 0) / 5) * 100) },
 
   // ✅ 4. 정확한 정보 제공 (Trust)
-  '팩트 체크 마스터': { name: '팩트 체크 마스터', description: '잘못된 과거 정보를 최신으로 수정/갱신 10회. 정보의 최신성을 유지하는 커뮤니티의 기둥', icon: '✅', category: '정확한 정보', difficulty: 3, gradient: 'from-emerald-600 to-teal-700', condition: (s) => (s.factCheckEdits || 0) >= 10, getProgress: (s) => Math.min(100, ((s.factCheckEdits || 0) / 10) * 100) },
-  '인간 GPS': { name: '인간 GPS', description: '제보 위치와 실제 GPS 일치율 100% 유지. 데이터 신뢰도를 보장하는 물리적 인증', icon: '🛡️', category: '정확한 정보', difficulty: 2, gradient: 'from-slate-500 to-slate-700', condition: (s) => (s.gpsVerifiedCount || 0) >= (s.totalPosts || 1) && (s.totalPosts || 0) >= 5, getProgress: (s) => { const t = s.totalPosts || 0, v = s.gpsVerifiedCount || 0; if (t < 5) return Math.min(100, (t / 5) * 50); return Math.min(100, (v / Math.max(t, 1)) * 100); } },
-  '트래블 셜록': { name: '트래블 셜록', description: '주차 꿀팁, 숨은 입구 등 디테일한 정보 공유. 남들이 놓치는 세밀한 부분까지 챙기는 유저', icon: '🔍', category: '정확한 정보', difficulty: 2, gradient: 'from-amber-600 to-amber-800', condition: (s) => (s.detailShares || 0) >= 5, getProgress: (s) => Math.min(100, ((s.detailShares || 0) / 5) * 100) },
+  '팩트 체크 마스터': { name: '팩트 체크 마스터', description: '설명이 120자 이상인 “상세 제보”를 10회 작성', icon: '✅', category: '정확한 정보', difficulty: 3, gradient: 'from-emerald-600 to-teal-700', condition: (s) => (s.detailShares || 0) >= 10, getProgress: (s) => Math.min(100, ((s.detailShares || 0) / 10) * 100) },
+  '인간 GPS': { name: '인간 GPS', description: 'GPS(좌표) 포함 제보 5회 작성', icon: '🛡️', category: '정확한 정보', difficulty: 2, gradient: 'from-slate-500 to-slate-700', condition: (s) => (s.gpsVerifiedCount || 0) >= 5, getProgress: (s) => Math.min(100, ((s.gpsVerifiedCount || 0) / 5) * 100) },
+  '트래블 셜록': { name: '트래블 셜록', description: '설명이 60자 이상인 제보를 5회 작성', icon: '🔍', category: '정확한 정보', difficulty: 2, gradient: 'from-amber-600 to-amber-800', condition: (s) => (s.detailShares60 || 0) >= 5, getProgress: (s) => Math.min(100, ((s.detailShares60 || 0) / 5) * 100) },
 
   // 🤝 5. 친절한 여행자 (Kindness)
-  '실시간 답변러': { name: '실시간 답변러', description: '질문 게시글에 10분 이내로 답변 5회 이상. 여행자의 궁금증을 즉시 해결해 주는 해결사', icon: '💬', category: '친절한 여행자', difficulty: 2, gradient: 'from-sky-400 to-blue-500', condition: (s) => (s.questionAnswersFast || 0) >= 5, getProgress: (s) => Math.min(100, ((s.questionAnswersFast || 0) / 5) * 100) },
-  '길 위의 천사': { name: '길 위의 천사', description: '타인의 게시글에 응원 및 격려 댓글 50회 이상. 커뮤니티의 긍정적인 활력을 불어넣는 유저', icon: '👼', category: '친절한 여행자', difficulty: 1, gradient: 'from-yellow-400 to-orange-500', condition: (s) => (s.cheerAndComments || s.totalComments || 0) >= 50, getProgress: (s) => Math.min(100, ((s.cheerAndComments || s.totalComments || 0) / 50) * 100) },
-  '동행 가이드': { name: '동행 가이드', description: '사진을 포함한 정성스러운 답변으로 도움 제공. 가장 헌신적으로 정보를 나누는 친절한 유저', icon: '🤝', category: '친절한 여행자', difficulty: 3, gradient: 'from-violet-500 to-purple-600', condition: (s) => (s.helpfulAnswersWithPhoto || 0) >= 5, getProgress: (s) => Math.min(100, ((s.helpfulAnswersWithPhoto || 0) / 5) * 100) },
+  '실시간 답변러': { name: '실시간 답변러', description: '내 게시물이 댓글을 10개 이상 받음', icon: '💬', category: '친절한 여행자', difficulty: 2, gradient: 'from-sky-400 to-blue-500', condition: (s) => (s.totalComments || 0) >= 10, getProgress: (s) => Math.min(100, ((s.totalComments || 0) / 10) * 100) },
+  '길 위의 천사': { name: '길 위의 천사', description: '내 게시물이 댓글을 50개 이상 받음', icon: '👼', category: '친절한 여행자', difficulty: 1, gradient: 'from-yellow-400 to-orange-500', condition: (s) => (s.totalComments || 0) >= 50, getProgress: (s) => Math.min(100, ((s.totalComments || 0) / 50) * 100) },
+  '동행 가이드': { name: '동행 가이드', description: '사진이 포함된 제보를 10회 이상 업로드', icon: '🤝', category: '친절한 여행자', difficulty: 3, gradient: 'from-violet-500 to-purple-600', condition: (s) => (s.photoPosts || 0) >= 10, getProgress: (s) => Math.min(100, ((s.photoPosts || 0) / 10) * 100) },
 
   // 🔥 6. 기여도 (Loyalty)
   '라이브 기록가': { name: '라이브 기록가', description: '총 실시간 제보 게시글 100개 달성. 서비스의 성장을 이끄는 핵심 기여자', icon: '📝', category: '기여도', difficulty: 3, gradient: 'from-blue-600 to-indigo-700', condition: (s) => (s.totalPosts || 0) >= 100, getProgress: (s) => Math.min(100, ((s.totalPosts || 0) / 100) * 100) },
   '연속 중계 마스터': { name: '연속 중계 마스터', description: '30일 연속으로 실시간 상황 1회 이상 공유. 변함없는 성실함으로 신뢰를 쌓는 유저', icon: '📅', category: '기여도', difficulty: 4, gradient: 'from-emerald-500 to-green-700', condition: (s) => (s.consecutiveDays || 0) >= 30, getProgress: (s) => Math.min(100, ((s.consecutiveDays || 0) / 30) * 100) },
-  '지도 개척자': { name: '지도 개척자', description: '정보가 없던 새로운 장소의 첫 실시간 정보 등록. 라이브저니의 지도를 확장하는 선구자', icon: '🗺️', category: '기여도', difficulty: 2, gradient: 'from-amber-600 to-orange-700', condition: (s) => (s.firstReportNewPlace || 0) >= 1, getProgress: (s) => Math.min(100, ((s.firstReportNewPlace || 0) / 1) * 100) },
+  '지도 개척자': { name: '지도 개척자', description: '서로 다른 장소(위치 기준) 10곳에 제보 업로드', icon: '🗺️', category: '기여도', difficulty: 2, gradient: 'from-amber-600 to-orange-700', condition: (s) => (s.uniquePlaces || 0) >= 10, getProgress: (s) => Math.min(100, ((s.uniquePlaces || 0) / 10) * 100) },
 
   // 📊 신뢰지수 (stats.trustScore = Compass 누적, 등급 구간은 trustIndex TRUST_GRADES와 동일)
   '노마드': { name: '노마드', description: '가입 즉시. 정보 열람·기본 업로드', icon: '🧭', category: '신뢰지수', difficulty: 1, gradient: 'from-stone-400 to-amber-700', condition: (s) => (s.trustScore ?? 0) >= 0, getProgress: (s) => Math.min(100, ((s.trustScore ?? 0) / 1200) * 100) },
@@ -163,6 +199,27 @@ export const calculateUserStats = (posts = [], user = {}) => {
     0
   );
 
+  // 명확히 측정 가능한 "행동" 기반 통계
+  const gpsVerifiedCount = (posts || []).filter(hasGps).length;
+  const photoPosts = (posts || []).filter(hasPhoto).length;
+  const detailShares60 = (posts || []).filter((p) => getPostText(p).length >= 60).length;
+  const detailShares = (posts || []).filter((p) => getPostText(p).length >= 120).length;
+  const weatherReports = (posts || []).filter(hasWeatherTag).length;
+  const waitingShares = (posts || []).filter(hasWaitingTag).length;
+  const regionImportantInfo = (posts || []).filter(isImportantInfoPost).length;
+  const nightPosts = (posts || []).filter(isNightPost).length;
+  const uniquePlaces = new Set(
+    (posts || [])
+      .map((p) => String(p?.placeId || p?.placeName || p?.detailedLocation || p?.location || '').trim())
+      .filter(Boolean)
+  ).size;
+  const fastUploads = (posts || []).filter((p) => {
+    const created = getPostCreatedAtMs(p);
+    const captured = getPostCapturedAtMs(p);
+    if (!created || !captured) return false;
+    return Math.abs(created - captured) <= 10 * 60 * 1000;
+  }).length;
+
   const stats = {
     totalPosts: (posts || []).length,
     posts: posts || [],
@@ -174,28 +231,32 @@ export const calculateUserStats = (posts = [], user = {}) => {
 
     maxRegionReports,
     topRegionName,
-    regionImportantInfo: 0,
+    regionImportantInfo,
     regionConsecutiveDays,
     regionTop1Percent: 0,
 
-    weatherReports: 0,
-    waitingShares: 0,
-    fastUploads: 0,
+    weatherReports,
+    waitingShares,
+    fastUploads,
 
     totalInfoViews: 0,
     preventedFailFeedback: 0,
     nightWeatherUseful: 0,
 
-    gpsVerifiedCount: 0,
-    detailShares: 0,
+    gpsVerifiedCount,
+    detailShares,
+    detailShares60,
     factCheckEdits: 0,
 
     cheerAndComments: totalComments,
     questionAnswersFast: 0,
-    helpfulAnswersWithPhoto: 0,
+    helpfulAnswersWithPhoto: photoPosts,
 
     consecutiveDays,
     firstReportNewPlace: 0,
+    uniquePlaces,
+    photoPosts,
+    nightPosts,
 
     // 신뢰지수는 "현재 사용자 + posts(=Supabase+로컬 병합)" 기준으로 계산해야 누적이 유지됨
     trustScore: (() => {
