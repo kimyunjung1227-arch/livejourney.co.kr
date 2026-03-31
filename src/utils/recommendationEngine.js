@@ -182,87 +182,7 @@ export const getRecommendedRegions = (posts, recommendationType = 'blooming') =>
         }));
       break;
 
-    case 'popular':
-      // 방금/최근에 올라온 인기 지역 (최신성 중심)
-      recommended = regionStats
-        .filter(stat => stat.total > 0)
-        .sort((a, b) => {
-          // 1. 가장 최근 게시물 시점 (방금 올라온 순)
-          const ageA = a.lastPostAgeMinutes ?? 999999;
-          const ageB = b.lastPostAgeMinutes ?? 999999;
-          if (ageA !== ageB) return ageA - ageB;
-          // 2. 평균 좋아요
-          if (a.avgLikes !== b.avgLikes) return b.avgLikes - a.avgLikes;
-          // 3. 최근 24시간 게시물 수
-          return b.recent24hCount - a.recent24hCount;
-        })
-        .slice(0, 10)
-        .map(stat => ({
-          regionName: stat.regionName,
-          title: stat.regionName,
-          description: `${stat.lastPostTimeAgoLabel || '방금'} 올라온 여행지 | 평균 좋아요 ${stat.avgLikes}`,
-          image: stat.representativeImage,
-          badge: stat.isLive ? '⭐ 방금' : '⭐ 최신',
-          stats: {
-            avgLikes: stat.avgLikes,
-            total: stat.total,
-            popularityScore: stat.popularityScore,
-            lastPostTimeAgoLabel: stat.lastPostTimeAgoLabel,
-            isLive: stat.isLive
-          }
-        }));
-      break;
-
-    case 'food':
-      // 맛집 정보가 많은 곳
-      recommended = regionStats
-        .filter(stat => stat.foodCount > 0)
-        .sort((a, b) => {
-          // 맛집 게시물 수 우선, 같으면 최근 활동
-          if (a.foodCount !== b.foodCount) {
-            return b.foodCount - a.foodCount;
-          }
-          return b.activityScore - a.activityScore;
-        })
-        .slice(0, 10)
-        .map(stat => ({
-          regionName: stat.regionName,
-          title: stat.regionName,
-          description: `맛집정보 ${stat.foodCount}개 | 최근 게시물 ${stat.recentCount}개`,
-          image: stat.representativeImage,
-          badge: `🍜 맛집 ${stat.foodCount}개`,
-          stats: {
-            foodCount: stat.foodCount,
-            recentCount: stat.recentCount,
-            total: stat.total
-          }
-        }));
-      break;
-
-    case 'waiting':
-      // 웨이팅·대기 제보가 많은 곳
-      recommended = regionStats
-        .filter(stat => stat.waitingCount > 0)
-        .sort((a, b) => {
-          if (a.waitingCount !== b.waitingCount) {
-            return b.waitingCount - a.waitingCount;
-          }
-          return b.activityScore - a.activityScore;
-        })
-        .slice(0, 10)
-        .map(stat => ({
-          regionName: stat.regionName,
-          title: stat.regionName,
-          description: `웨이팅 제보 ${stat.waitingCount}개 | 최근 게시물 ${stat.recentCount}개`,
-          image: stat.representativeImage,
-          badge: `⏱ ${stat.waitingCount}건`,
-          stats: {
-            waitingCount: stat.waitingCount,
-            recentCount: stat.recentCount,
-            total: stat.total
-          }
-        }));
-      break;
+    // 'popular', 'food', 'waiting' 타입은 현재 UI에서 사용하지 않음
 
     case 'scenic':
       // 가볼만한 곳이 많은 곳
@@ -336,24 +256,6 @@ export const RECOMMENDATION_TYPES = [
     name: '🌸 개화정보',
     description: '개화·꽃 정보가 많이 올라온 지역',
     icon: '🌸'
-  },
-  {
-    id: 'popular',
-    name: '⭐ 방금 올라온 장소',
-    description: '방금(최근) 업로드된 장소',
-    icon: '⭐'
-  },
-  {
-    id: 'waiting',
-    name: '⏱ 웨이팅',
-    description: '대기·줄 상황 제보가 많은 곳',
-    icon: '⏱️'
-  },
-  {
-    id: 'food',
-    name: '🍜 맛집정보',
-    description: '맛집·음식 정보가 많은 곳',
-    icon: '🍜'
   },
   {
     id: 'scenic',

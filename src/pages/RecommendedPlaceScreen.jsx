@@ -160,11 +160,8 @@ const RecommendedPlaceScreen = () => {
                         </span>
                       )}
                     </div>
-                    <div style={{ fontSize: '13px', fontWeight: 700, color: '#111827', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {item.title}
-                    </div>
-                    <div style={{ fontSize: '12px', color: '#6b7280', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {item.description}
+                    <div style={{ fontSize: '13px', fontWeight: 700, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {item.regionName}
                     </div>
                   </div>
                 </div>
