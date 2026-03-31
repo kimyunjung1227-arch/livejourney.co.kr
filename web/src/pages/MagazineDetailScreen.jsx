@@ -326,44 +326,9 @@ const MagazineDetailScreen = () => {
   return (
     <div className="screen-layout bg-background-light dark:bg-background-dark h-screen overflow-hidden">
       <div className="screen-content flex flex-col h-full">
-          {/* 헤더 */}
-        <div className="screen-header flex-shrink-0 flex items-center justify-between px-4 py-3 bg-white dark:bg-gray-900 border-b border-zinc-200 dark:border-zinc-800 shadow-sm">
-          <button
-            onClick={() => navigate(-1)}
-            className="flex size-10 items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
-          >
-            <span className="material-symbols-outlined text-[22px]">arrow_back</span>
-          </button>
-          <h1 className="text-[18px] font-bold text-text-primary-light dark:text-text-primary-dark m-0">
-            여행 매거진
-          </h1>
-          {publishedMagazine ? (
-            <button
-              type="button"
-              onClick={async () => {
-                if (!window.confirm('이 매거진을 삭제할까요?')) return;
-                const res = await removePublishedMagazine(publishedMagazine.id);
-                if (!res.success) {
-                  alert('삭제에 실패했습니다.');
-                  return;
-                }
-                alert('삭제되었습니다.');
-                navigate('/magazine', { replace: true });
-              }}
-              className="flex size-10 items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-rose-600"
-              aria-label="매거진 삭제"
-              title="삭제"
-            >
-              <span className="material-symbols-outlined text-[22px]">delete</span>
-            </button>
-          ) : (
-            <div className="w-10" />
-          )}
-        </div>
-
-          {/* 스크롤 가능한 본문 */}
+        {/* 스크롤 가능한 본문 (헤더 없이 바로 사진) */}
         <main className="flex-1 overflow-y-auto">
-          {/* 헤드(대표 이미지 + 타이틀 오버레이) */}
+          {/* 상단 대표 사진 */}
           <section className="bg-black">
             <div className="relative w-full bg-gray-200 dark:bg-gray-800" style={{ aspectRatio: '4/3' }}>
               {heroImage ? (
@@ -378,37 +343,49 @@ const MagazineDetailScreen = () => {
                   <span className="material-symbols-outlined text-4xl">photo</span>
                 </div>
               )}
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/35 to-black/5" />
-              <div className="absolute inset-x-4 bottom-4">
-                <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-white/90 px-3 py-1 text-[11px] font-semibold text-gray-800 shadow-md dark:bg-black/70 dark:text-gray-100">
-                  <span className="text-[14px]">{publishedMagazine?.emoji || topic?.emoji || '📚'}</span>
-                  {publishedMagazine ? '발행 매거진' : '테마 매거진'}
-                </div>
-                <h2 className="m-0 text-[21px] font-extrabold leading-snug text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.7)]">
-                  {publishedMagazine?.title || topic.title}
-                </h2>
-                <p className="mt-1 max-w-[92%] text-[13px] font-medium leading-relaxed text-slate-100/90 line-clamp-3">
-                  {(publishedMagazine?.subtitle || topic.description) || '지금 올라오는 현장 사진으로만 구성된 여행 매거진이에요.'}
-                </p>
-              </div>
+              {publishedMagazine ? (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!window.confirm('이 매거진을 삭제할까요?')) return;
+                    const res = await removePublishedMagazine(publishedMagazine.id);
+                    if (!res.success) {
+                      alert('삭제에 실패했습니다.');
+                      return;
+                    }
+                    alert('삭제되었습니다.');
+                    navigate('/magazine', { replace: true });
+                  }}
+                  className="absolute top-3 right-3 z-10 inline-flex items-center justify-center rounded-full bg-black/55 text-white w-10 h-10 backdrop-blur-[6px]"
+                  aria-label="매거진 삭제"
+                  title="삭제"
+                >
+                  <span className="material-symbols-outlined text-[22px]">delete</span>
+                </button>
+              ) : null}
             </div>
           </section>
 
-          {/* 본문 인트로 (작성자 / 발행일 등) */}
-          <section className="px-4 pt-3 pb-2 bg-white dark:bg-gray-900 border-b border-zinc-100 dark:border-zinc-800">
-            <div className="flex items-center justify-between text-[11px] text-gray-500 dark:text-gray-400">
-              <span>
-                {publishedMagazine ? (publishedMagazine.author || 'LiveJourney 매거진') : 'LiveJourney 테마 매거진'}
-              </span>
-              {publishedMagazine?.createdAt && (
+          {/* 제목/개요 (사진 바깥) */}
+          <section className="px-4 pt-4 pb-3 bg-white dark:bg-gray-900 border-b border-zinc-100 dark:border-zinc-800">
+            <h2 className="m-0 text-[20px] font-extrabold leading-snug text-gray-900 dark:text-gray-50">
+              {publishedMagazine?.title || topic.title}
+            </h2>
+            <p className="mt-2 mb-0 text-[13px] font-medium leading-relaxed text-gray-700 dark:text-gray-200">
+              {(publishedMagazine?.subtitle || topic.description) || '지금 올라오는 현장 사진으로만 구성된 매거진이에요.'}
+            </p>
+            <div className="mt-2 flex items-center justify-between text-[11px] text-gray-500 dark:text-gray-400">
+              <span>{publishedMagazine ? (publishedMagazine.author || 'LiveJourney') : 'LiveJourney'}</span>
+              {publishedMagazine?.createdAt ? (
                 <span>
                   {new Date(publishedMagazine.createdAt).toLocaleDateString('ko-KR', {
                     year: 'numeric',
                     month: 'short',
                     day: 'numeric',
                   })}
-                  {' 발행'}
                 </span>
+              ) : (
+                <span />
               )}
             </div>
           </section>
@@ -463,16 +440,16 @@ const MagazineDetailScreen = () => {
 
                         {/* 섹션 대표 이미지 */}
                         {mainImage && (
-                          <div className="mb-3 overflow-hidden rounded-2xl border border-zinc-100 dark:border-zinc-800 shadow-[0_4px_18px_rgba(15,23,42,0.12)]">
+                          <div className="mb-3 overflow-hidden rounded-lg border border-zinc-100 dark:border-zinc-800 shadow-[0_4px_18px_rgba(15,23,42,0.12)]">
                             <div className="w-full bg-gray-100 dark:bg-gray-800" style={{ aspectRatio: '4/3' }}>
                               <img src={mainImage} alt="" className="w-full h-full object-cover" loading="lazy" />
                             </div>
                           </div>
                         )}
 
-                        {/* 추천 명소 리스트 (트리플처럼 세로 카드 + '자세히 보기') */}
+                        {/* 추천 명소 리스트 (섹션 본문과 구분) */}
                         {aroundSpots.length > 0 && (
-                          <div className="mt-3">
+                          <div className="mt-3 rounded-lg bg-slate-50 dark:bg-slate-950/30 border border-slate-100 dark:border-slate-800 p-3">
                             <div className="mb-2 text-[13px] font-extrabold text-gray-900 dark:text-gray-50">
                               📍 가볍게 떠나기 좋은 {sec.locKey} 추천 명소
                             </div>
@@ -482,9 +459,9 @@ const MagazineDetailScreen = () => {
                                   key={`${sec.locKey}-around-${l.id}`}
                                   type="button"
                                   onClick={goMore}
-                                  className="w-full flex items-stretch gap-3 rounded-2xl border border-zinc-100 dark:border-zinc-800 bg-white dark:bg-gray-900 overflow-hidden shadow-sm hover:shadow-md transition-shadow text-left"
+                                  className="w-full flex items-stretch gap-3 rounded-lg border border-zinc-100 dark:border-zinc-800 bg-white dark:bg-gray-900 overflow-hidden shadow-sm hover:shadow-md transition-shadow text-left"
                                 >
-                                  <div className="w-[92px] bg-gray-100 dark:bg-gray-800 flex-shrink-0" style={{ aspectRatio: '4/3' }}>
+                                  <div className="w-[128px] bg-gray-100 dark:bg-gray-800 flex-shrink-0" style={{ aspectRatio: '4/3' }}>
                                     {l.image ? (
                                       <img src={l.image} alt="" className="w-full h-full object-cover" loading="lazy" />
                                     ) : (
@@ -541,7 +518,7 @@ const MagazineDetailScreen = () => {
                       </div>
 
                       {/* 사진 피드(한 장씩 좌우 슬라이드, 최대 19장) */}
-                      <div className="w-full overflow-hidden rounded-2xl bg-white dark:bg-gray-900 border border-zinc-100 dark:border-zinc-800 shadow-[0_2px_14px_rgba(15,23,42,0.06)]">
+                        <div className="w-full overflow-hidden rounded-lg bg-white dark:bg-gray-900 border border-zinc-100 dark:border-zinc-800 shadow-[0_2px_14px_rgba(15,23,42,0.06)]">
                         <div className="flex overflow-x-auto snap-x snap-mandatory scrollbar-hide">
                           {(media.length ? media : ['']).slice(0, 19).map((src, i) => (
                             <div
