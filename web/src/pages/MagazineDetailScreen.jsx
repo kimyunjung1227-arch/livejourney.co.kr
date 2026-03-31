@@ -393,10 +393,10 @@ const MagazineDetailScreen = () => {
           {/* 제목/개요 (사진 바깥) */}
           <section className="px-4 pt-4 pb-3 bg-white dark:bg-gray-900 border-b border-zinc-100 dark:border-zinc-800">
             <h2 className="m-0 text-[20px] font-extrabold leading-snug text-gray-900 dark:text-gray-50">
-              {publishedMagazine?.title || topic.title}
+              {publishedMagazine?.title || topic?.title || '여행 매거진'}
             </h2>
             <p className="mt-2 mb-0 text-[13px] font-medium leading-relaxed text-gray-700 dark:text-gray-200">
-              {(publishedMagazine?.subtitle || topic.description) || '지금 올라오는 현장 사진으로만 구성된 매거진이에요.'}
+              {(publishedMagazine?.subtitle || topic?.description) || '지금 올라오는 현장 사진으로만 구성된 매거진이에요.'}
             </p>
             <div className="mt-2 flex items-center justify-between text-[11px] text-gray-500 dark:text-gray-400">
               <span>{publishedMagazine ? (publishedMagazine.author || 'LiveJourney') : 'LiveJourney'}</span>
