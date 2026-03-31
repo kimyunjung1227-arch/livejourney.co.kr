@@ -106,8 +106,8 @@ const MagazineWriteScreen = () => {
                 제목
               </label>
               <input
-                className="w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-3 text-[14px] text-gray-900 dark:text-gray-50 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary-soft"
-                placeholder="예: 지금 벚꽃이 만개한 장소 TOP 7"
+                className="w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-3 text-[15px] font-semibold text-gray-900 dark:text-gray-50 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary-soft"
+                placeholder="예: 갑자기 떠나고 싶을 때! 가볍게 다녀오는 국내 여행지"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
               />
@@ -119,7 +119,7 @@ const MagazineWriteScreen = () => {
               </label>
               <input
                 className="w-full rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-3 text-[14px] text-gray-900 dark:text-gray-50 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary-soft"
-                placeholder="예: 한산적으로 만개한 벚꽃 명소들을 한눈에 알아봐요."
+                placeholder="예: 당일치기로 훌쩍 다녀오기 좋은 근교 여행지를 모았어요."
                 value={subtitle}
                 onChange={(e) => setSubtitle(e.target.value)}
               />

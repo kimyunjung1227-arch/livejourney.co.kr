@@ -363,40 +363,54 @@ const MagazineDetailScreen = () => {
 
           {/* 스크롤 가능한 본문 */}
         <main className="flex-1 overflow-y-auto">
-          {/* 헤드(제목/소제목 + 커버 이미지) */}
-          <section className="px-4 pt-4 pb-3 bg-white dark:bg-gray-900 border-b border-zinc-100 dark:border-zinc-800">
-            <div className="mb-3">
-              <div className="inline-flex items-center gap-2 rounded-full bg-indigo-50 dark:bg-indigo-900/25 px-3 py-1 text-[12px] font-semibold text-indigo-600 dark:text-indigo-200">
-                <span className="text-[14px]">{publishedMagazine?.emoji || topic?.emoji || '📚'}</span>
-                {publishedMagazine ? '발행 매거진' : '테마 매거진'}
-              </div>
-            </div>
-
-            <div className="px-0 py-1">
-              <h2 className="m-0 text-[20px] font-extrabold text-gray-900 dark:text-gray-50 leading-snug">
-                {publishedMagazine?.title || topic.title}
-              </h2>
-            </div>
-
-            <div className="mt-1">
-              <p className="m-0 text-[13px] font-medium text-gray-600 dark:text-gray-300 leading-relaxed">
-                {(publishedMagazine?.subtitle || topic.description) || '현재 올라오는 정보들을 한눈에 알아봐요.'}
-              </p>
-            </div>
-
-            {/* 기사형 레이아웃일 때 상단 커버 이미지 */}
-            {publishedMagazine && heroImage && (
-              <div className="mt-4 overflow-hidden rounded-2xl border border-zinc-100 dark:border-zinc-800 shadow-[0_6px_24px_rgba(15,23,42,0.15)]">
-                <div className="w-full bg-gray-100 dark:bg-gray-800" style={{ aspectRatio: '4/3' }}>
-                  <img
-                    src={heroImage}
-                    alt=""
-                    className="w-full h-full object-cover"
-                    loading="lazy"
-                  />
+          {/* 헤드(대표 이미지 + 타이틀 오버레이) */}
+          <section className="bg-black">
+            <div className="relative w-full bg-gray-200 dark:bg-gray-800" style={{ aspectRatio: '4/3' }}>
+              {heroImage ? (
+                <img
+                  src={heroImage}
+                  alt=""
+                  className="h-full w-full object-cover"
+                  loading="lazy"
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center text-gray-400">
+                  <span className="material-symbols-outlined text-4xl">photo</span>
                 </div>
+              )}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/35 to-black/5" />
+              <div className="absolute inset-x-4 bottom-4">
+                <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-white/90 px-3 py-1 text-[11px] font-semibold text-gray-800 shadow-md dark:bg-black/70 dark:text-gray-100">
+                  <span className="text-[14px]">{publishedMagazine?.emoji || topic?.emoji || '📚'}</span>
+                  {publishedMagazine ? '발행 매거진' : '테마 매거진'}
+                </div>
+                <h2 className="m-0 text-[21px] font-extrabold leading-snug text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.7)]">
+                  {publishedMagazine?.title || topic.title}
+                </h2>
+                <p className="mt-1 max-w-[92%] text-[13px] font-medium leading-relaxed text-slate-100/90 line-clamp-3">
+                  {(publishedMagazine?.subtitle || topic.description) || '지금 올라오는 현장 사진으로만 구성된 여행 매거진이에요.'}
+                </p>
               </div>
-            )}
+            </div>
+          </section>
+
+          {/* 본문 인트로 (작성자 / 발행일 등) */}
+          <section className="px-4 pt-3 pb-2 bg-white dark:bg-gray-900 border-b border-zinc-100 dark:border-zinc-800">
+            <div className="flex items-center justify-between text-[11px] text-gray-500 dark:text-gray-400">
+              <span>
+                {publishedMagazine ? (publishedMagazine.author || 'LiveJourney 매거진') : 'LiveJourney 테마 매거진'}
+              </span>
+              {publishedMagazine?.createdAt && (
+                <span>
+                  {new Date(publishedMagazine.createdAt).toLocaleDateString('ko-KR', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
+                  })}
+                  {' 발행'}
+                </span>
+              )}
+            </div>
           </section>
 
           {/* 위치 기반 큐레이션 (TOP 7) */}
