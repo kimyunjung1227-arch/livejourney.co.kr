@@ -357,26 +357,7 @@ const MagazineDetailScreen = () => {
                   <span className="material-symbols-outlined text-4xl">photo</span>
                 </div>
               )}
-              {publishedMagazine ? (
-                <button
-                  type="button"
-                  onClick={async () => {
-                    if (!window.confirm('이 매거진을 삭제할까요?')) return;
-                    const res = await removePublishedMagazine(publishedMagazine.id);
-                    if (!res.success) {
-                      alert('삭제에 실패했습니다.');
-                      return;
-                    }
-                    alert('삭제되었습니다.');
-                    navigate('/magazine', { replace: true });
-                  }}
-                  className="absolute top-3 right-3 z-10 inline-flex items-center justify-center rounded-full bg-black/55 text-white w-10 h-10 backdrop-blur-[6px]"
-                  aria-label="매거진 삭제"
-                  title="삭제"
-                >
-                  <span className="material-symbols-outlined text-[22px]">delete</span>
-                </button>
-              ) : null}
+              {/* 삭제는 어드민 페이지에서만 */}
 
               {/* 뒤로가기 (가볍게) */}
               <button
@@ -440,18 +421,27 @@ const MagazineDetailScreen = () => {
 
                   // 발행 매거진일 때: 기사형(섹션 번호 + 설명 + 장소 카드)
                   if (publishedMagazine) {
-                    const sectionIndexLabel = `${index + 1}`.padStart(1, ' ');
-                    const aroundSpots = Array.isArray(sec.around) ? sec.around : [];
+                    const aroundSpots = (Array.isArray(sec.around) ? sec.around : [])
+                      .map((v, i) => {
+                        if (!v) return null;
+                        if (typeof v === 'string') return { id: `${sec.locKey}-around-${i}`, name: v, desc: '', image: '' };
+                        const name = v.name || v.info || v.locationInfo || '';
+                        return {
+                          id: v.id || `${sec.locKey}-around-${i}`,
+                          name: String(name || '').trim(),
+                          desc: String(v.desc || v.description || '').trim(),
+                          image: v.image || '',
+                        };
+                      })
+                      .filter((x) => x && x.name);
                     const mainImage = media[0] || heroImage;
 
                     return (
                       <article key={sec.locKey || index} className="px-4">
-                        {/* 섹션 헤더: 번호 */}
-                        <div className="mb-2 flex items-center gap-2">
-                          <div className="inline-flex items-center justify-center rounded-full bg-slate-900/90 px-2.5 py-1 text-[11px] font-extrabold text-white shadow-sm dark:bg-white/10">
-                            {sectionIndexLabel}
-                          </div>
-                        </div>
+                        {/* 섹션 간 구분선 */}
+                        {index > 0 ? (
+                          <div className="mb-5 border-t border-zinc-200/70 dark:border-zinc-800" />
+                        ) : null}
                         <h3 className="m-0 text-left text-[18px] font-extrabold text-gray-900 dark:text-gray-50 leading-snug">
                           {sec.locKey}
                         </h3>
@@ -484,7 +474,7 @@ const MagazineDetailScreen = () => {
                         {aroundSpots.length > 0 && (
                           <div className="mt-3 pt-1">
                             <div className="mb-2 text-[13px] font-extrabold text-gray-900 dark:text-gray-50">
-                              📍 가볍게 떠나기 좋은 {sec.locKey} 추천 명소
+                              📍 {sec.locKey} 추천 명소
                             </div>
                             <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1">
                               {aroundSpots.slice(0, 3).map((l) => (
@@ -505,6 +495,11 @@ const MagazineDetailScreen = () => {
                                     <div className="text-[12px] font-extrabold text-gray-900 dark:text-gray-50 truncate">
                                       {l.name}
                                     </div>
+                                    {l.desc ? (
+                                      <div className="mt-1 text-[11px] text-gray-500 dark:text-gray-400 line-clamp-2">
+                                        {l.desc}
+                                      </div>
+                                    ) : null}
                                     <button
                                       type="button"
                                       onClick={goMore}

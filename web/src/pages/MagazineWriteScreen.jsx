@@ -12,7 +12,13 @@ const createEmptySection = (seed = {}) => ({
   locationTitle: seed.locationTitle || '',
   locationInfo: seed.locationInfo || '',
   description: seed.description || '',
-  aroundText: seed.aroundText || '',
+  aroundPlaces: Array.isArray(seed.aroundPlaces) && seed.aroundPlaces.length
+    ? seed.aroundPlaces
+    : [
+        { id: `ap-${Date.now()}-1`, info: '', desc: '' },
+        { id: `ap-${Date.now()}-2`, info: '', desc: '' },
+        { id: `ap-${Date.now()}-3`, info: '', desc: '' },
+      ],
 });
 
 const MagazineWriteScreen = () => {
@@ -36,7 +42,7 @@ const MagazineWriteScreen = () => {
               locationTitle: s?.locationTitle,
               locationInfo: s?.locationInfo,
               description: s?.description,
-              aroundText: s?.aroundText,
+              aroundPlaces: s?.aroundPlaces,
             })
           )
         );
@@ -83,6 +89,40 @@ const MagazineWriteScreen = () => {
     setSections((prev) => (Array.isArray(prev) ? prev.map((s) => (s.id === id ? { ...s, [field]: value } : s)) : prev));
   }, []);
 
+  const handleAddAroundPlace = useCallback((sectionId) => {
+    setSections((prev) =>
+      (Array.isArray(prev) ? prev : []).map((s) => {
+        if (s.id !== sectionId) return s;
+        const next = Array.isArray(s.aroundPlaces) ? s.aroundPlaces.slice() : [];
+        next.push({ id: `ap-${Date.now()}-${Math.random().toString(16).slice(2)}`, info: '', desc: '' });
+        return { ...s, aroundPlaces: next };
+      })
+    );
+  }, []);
+
+  const handleRemoveAroundPlace = useCallback((sectionId, placeId) => {
+    setSections((prev) =>
+      (Array.isArray(prev) ? prev : []).map((s) => {
+        if (s.id !== sectionId) return s;
+        const next = (Array.isArray(s.aroundPlaces) ? s.aroundPlaces : []).filter((p) => p.id !== placeId);
+        return {
+          ...s,
+          aroundPlaces: next.length ? next : [{ id: `ap-${Date.now()}-1`, info: '', desc: '' }],
+        };
+      })
+    );
+  }, []);
+
+  const handleChangeAroundPlace = useCallback((sectionId, placeId, field, value) => {
+    setSections((prev) =>
+      (Array.isArray(prev) ? prev : []).map((s) => {
+        if (s.id !== sectionId) return s;
+        const next = (Array.isArray(s.aroundPlaces) ? s.aroundPlaces : []).map((p) => (p.id === placeId ? { ...p, [field]: value } : p));
+        return { ...s, aroundPlaces: next };
+      })
+    );
+  }, []);
+
   const handleSubmit = useCallback(
     async (e) => {
       e.preventDefault();
@@ -95,9 +135,9 @@ const MagazineWriteScreen = () => {
           locationTitle: String(s?.locationTitle || '').trim(),
           locationInfo: String(s?.locationInfo || '').trim(),
           description: String(s?.description || '').trim(),
-          aroundText: String(s?.aroundText || '').trim(),
+          aroundPlaces: Array.isArray(s?.aroundPlaces) ? s.aroundPlaces : [],
         }))
-        .filter((s) => s.locationTitle || s.locationInfo || s.description || s.aroundText);
+        .filter((s) => s.locationTitle || s.locationInfo || s.description || (s.aroundPlaces && s.aroundPlaces.length));
       if (normalizedSections.length === 0) {
         alert('최소 1개의 위치를 입력해 주세요.');
         return;
@@ -108,12 +148,6 @@ const MagazineWriteScreen = () => {
       }
 
       setSaving(true);
-      const toAroundList = (text) =>
-        String(text || '')
-          .split(/[,/\\n]/)
-          .map((t) => String(t).trim())
-          .filter(Boolean)
-          .slice(0, 12);
       const res = await publishMagazine({
         title: title.trim(),
         subtitle: '',
@@ -121,7 +155,14 @@ const MagazineWriteScreen = () => {
           location: s.locationTitle || s.locationInfo || title.trim(),
           locationInfo: s.locationInfo,
           description: s.description,
-          around: toAroundList(s.aroundText),
+          around: (Array.isArray(s.aroundPlaces) ? s.aroundPlaces : [])
+            .map((p) => ({
+              id: p?.id || `ap-${Date.now()}`,
+              info: String(p?.info || '').trim(),
+              desc: String(p?.desc || '').trim(),
+            }))
+            .filter((p) => p.info || p.desc)
+            .slice(0, 12),
         })),
       });
       setSaving(false);
@@ -245,15 +286,53 @@ const MagazineWriteScreen = () => {
 
                   <div>
                     <label className="block mb-2 text-[13px] font-semibold text-gray-800 dark:text-gray-100">위치 주변 가기 좋은 명소</label>
-                    <textarea
-                      className="w-full min-h-[84px] bg-transparent px-0 py-2 text-[14px] leading-relaxed text-gray-900 dark:text-gray-50 focus:outline-none resize-none"
-                      placeholder="예: 방화수류정, 화성행궁, 장안문"
-                      value={sec.aroundText}
-                      onChange={(e) => handleChangeSection(sec.id, 'aroundText', e.target.value)}
-                    />
-                    <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">
-                      쉼표(,) 또는 줄바꿈으로 여러 개 입력할 수 있어요.
-                    </p>
+                    <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-1">
+                      {(Array.isArray(sec.aroundPlaces) ? sec.aroundPlaces : []).map((p, pi) => (
+                        <div
+                          key={p.id}
+                          className="flex-shrink-0 w-[240px] border border-zinc-200 dark:border-zinc-700 rounded-xl p-3 bg-white/40 dark:bg-gray-900/30"
+                        >
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="text-[12px] font-extrabold text-gray-900 dark:text-gray-50">주변장소 {pi + 1}</div>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveAroundPlace(sec.id, p.id)}
+                              className="text-[12px] font-semibold text-rose-600"
+                            >
+                              삭제
+                            </button>
+                          </div>
+                          <div className="space-y-3">
+                            <div>
+                              <div className="text-[12px] font-semibold text-gray-700 dark:text-gray-200 mb-1">위치정보</div>
+                              <input
+                                className="w-full border-b border-zinc-200 dark:border-zinc-700 bg-transparent px-0 py-2 text-[13px] text-gray-900 dark:text-gray-50 focus:outline-none"
+                                placeholder="예: 방화수류정"
+                                value={p.info}
+                                onChange={(e) => handleChangeAroundPlace(sec.id, p.id, 'info', e.target.value)}
+                              />
+                            </div>
+                            <div>
+                              <div className="text-[12px] font-semibold text-gray-700 dark:text-gray-200 mb-1">간단한 위치설명</div>
+                              <input
+                                className="w-full border-b border-zinc-200 dark:border-zinc-700 bg-transparent px-0 py-2 text-[13px] text-gray-900 dark:text-gray-50 focus:outline-none"
+                                placeholder="예: 야경이 예쁜 정자"
+                                value={p.desc}
+                                onChange={(e) => handleChangeAroundPlace(sec.id, p.id, 'desc', e.target.value)}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => handleAddAroundPlace(sec.id)}
+                        className="flex-shrink-0 w-[76px] rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white/60 dark:bg-gray-900/40 flex items-center justify-center text-[13px] font-extrabold text-gray-900 dark:text-gray-50"
+                        aria-label="주변장소 추가"
+                      >
+                        + 추가
+                      </button>
+                    </div>
                   </div>
                 </div>
               </section>

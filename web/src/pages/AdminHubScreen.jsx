@@ -23,6 +23,13 @@ const tiles = [
     icon: 'auto_stories',
     path: '/admin/magazine/publish',
   },
+  {
+    id: 'magazine-manage',
+    title: '발행 매거진 관리',
+    desc: '발행된 매거진 확인 및 삭제',
+    icon: 'library_books',
+    path: '/admin/magazine/manage',
+  },
 ];
 
 const AdminHubScreen = () => {
