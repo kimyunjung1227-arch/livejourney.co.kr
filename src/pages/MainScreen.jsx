@@ -1,1877 +1,1783 @@
+
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import BottomNavigation from '../components/BottomNavigation';
-import { seedMockData } from '../utils/mockUploadData';
 import { getUnreadCount } from '../utils/notifications';
-import { getTimeAgo, filterRecentPosts } from '../utils/timeUtils';
+import { getTimeAgo, filterRecentPosts, filterActivePosts48 } from '../utils/timeUtils';
 import { getInterestPlaces, toggleInterestPlace } from '../utils/interestPlaces';
-import { getRegionIcon } from '../utils/regionIcons';
+import { getRegionDefaultImage } from '../utils/regionDefaultImages';
 import { logger } from '../utils/logger';
+import { getRecommendedRegions, RECOMMENDATION_TYPES } from '../utils/recommendationEngine';
+import { useHorizontalDragScroll } from '../hooks/useHorizontalDragScroll';
+import './MainScreen.css';
+import { getCombinedPosts } from '../utils/mockData';
+import { fetchPostsSupabase } from '../api/postsSupabase';
+import { getDisplayImageUrl } from '../api/upload';
+import { getMapThumbnailUri } from '../utils/postMedia';
+import { getPostAccuracyCount, toggleLike, isPostLiked } from '../utils/socialInteractions';
+import { rankHotspotPosts } from '../utils/hotnessEngine';
+import { updatePostLikesSupabase } from '../api/postsSupabase';
+import { getWeatherByRegion } from '../api/weather';
+import { listPublishedMagazines } from '../utils/magazinesStore';
+import {
+    getHotFeedAddressLine,
+    getCityDongLine,
+    getPhotoCategoryLabel,
+    getPhotoCaptionLine,
+    getAvatarUrls,
+    computeHotFeedViewingCount,
+} from '../utils/hotPlaceDisplay';
+
+/** 이미지 좌상단 카테고리 뱃지 (급상승 / 사람 많음 / 인기 / 실시간) */
+const getHotCategoryLabel = (post) => {
+    const likes = Number(post.likes ?? post.likeCount ?? 0) || 0;
+    const commentCount = Array.isArray(post.comments) ? post.comments.length : 0;
+    const tagStr = [...(Array.isArray(post.reasonTags) ? post.reasonTags : []), ...(Array.isArray(post.aiHotTags) ? post.aiHotTags : [])]
+        .map((t) => String(t || ''))
+        .join(' ');
+    if (post.surgeIndicator === '급상승' || likes > 45) return '급상승';
+    if (tagStr.includes('웨이팅') || tagStr.includes('줄') || commentCount > 10 || likes > 28) return '사람 많음';
+    if (post.surgeIndicator === '인기' || likes > 18) return '인기';
+    return post.surgeIndicator || '실시간';
+};
 
 const MainScreen = () => {
-  const navigate = useNavigate();
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedTag, setSelectedTag] = useState(null);
-  const [popularTags, setPopularTags] = useState([]);
+    const navigate = useNavigate();
+    const location = useLocation();
+    const [selectedTag, setSelectedTag] = useState(null);
+    const [popularTags, setPopularTags] = useState([]);
 
-  const [realtimeData, setRealtimeData] = useState([]);
-  const [crowdedData, setCrowdedData] = useState([]);
-  const [recommendedData, setRecommendedData] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
-  const [interestPlaces, setInterestPlaces] = useState([]);
-  const [selectedInterest, setSelectedInterest] = useState(null);
-  const [showAddInterestModal, setShowAddInterestModal] = useState(false);
-  const [newInterestPlace, setNewInterestPlace] = useState('');
-  const [deleteConfirmPlace, setDeleteConfirmPlace] = useState(null);
-  const [hoveredPlaceIndex, setHoveredPlaceIndex] = useState(null);
-  const realtimeScrollRef = useRef(null);
-  const crowdedScrollRef = useRef(null);
-  const recommendedScrollRef = useRef(null);
-  const tagScrollRef = useRef(null);
-  const interestScrollRef = useRef(null);
-  const themeScrollRef = useRef(null);
-  const magazineScrollRef = useRef(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const [startX, setStartX] = useState(0);
-  const [scrollLeft, setScrollLeft] = useState(0);
-  const [currentScrollRef, setCurrentScrollRef] = useState(null);
-  const [hasMoved, setHasMoved] = useState(false);
-  const [isInterestSectionVisible, setIsInterestSectionVisible] = useState(true);
-  const [interestOpacity, setInterestOpacity] = useState(1);
-  const scrollY = useRef(0);
-  
-  // SOS 알림
-  const [nearbySosRequests, setNearbySosRequests] = useState([]);
-  const [currentLocation, setCurrentLocation] = useState(null);
-  const [dismissedSosIds, setDismissedSosIds] = useState([]);
-  
-  // 위도/경도 거리 계산 (km)
-  const getDistanceKm = (lat1, lon1, lat2, lon2) => {
-    const toRad = (v) => (v * Math.PI) / 180;
-    const R = 6371;
-    const dLat = toRad(lat2 - lat1);
-    const dLon = toRad(lon2 - lon1);
-    const a =
-      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-      Math.cos(toRad(lat1)) *
-        Math.cos(toRad(lat2)) *
-        Math.sin(dLon / 2) *
-        Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c;
-  };
-  
-  // SOS 요청 로드 및 주변 요청 필터링
-  const loadSosRequests = useCallback(() => {
-    try {
-      const sosJson = localStorage.getItem('sosRequests_v1');
-      const sosRequests = sosJson ? JSON.parse(sosJson) : [];
-      
-      if (!currentLocation) {
-        setNearbySosRequests([]);
-        return;
-      }
-      
-      const nearby = sosRequests.filter((req) => {
-        if (req.status !== 'open' || !req.coordinates) return false;
-        const d = getDistanceKm(
-          currentLocation.latitude,
-          currentLocation.longitude,
-          req.coordinates.lat,
-          req.coordinates.lng
-        );
-        // 반경 5km 이내 SOS만 표시 (메인화면에서는 더 넓은 범위)
-        return d <= 5;
-      });
-      
-      setNearbySosRequests(nearby);
-    } catch (error) {
-      console.error('SOS 요청 로드 실패:', error);
-    }
-  }, [currentLocation]);
-  
-  // 현재 위치 가져오기
-  useEffect(() => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setCurrentLocation({
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-          });
-        },
-        (error) => {
-          console.error('위치 가져오기 실패:', error);
+    const [realtimeData, setRealtimeData] = useState([]);
+    const [crowdedData, setCrowdedData] = useState([]);
+    const [recommendedData, setRecommendedData] = useState([]);
+    const [weatherByRegion, setWeatherByRegion] = useState({});
+    const [allPostsForRecommend, setAllPostsForRecommend] = useState([]);
+    const [publishedMagazines, setPublishedMagazines] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState(null);
+    const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
+    const [interestPlaces, setInterestPlaces] = useState([]);
+    const [selectedInterest, setSelectedInterest] = useState(null);
+    const [hotFeedVideoPoster, setHotFeedVideoPoster] = useState(null);
+    const [showAddInterestModal, setShowAddInterestModal] = useState(false);
+    const [newInterestPlace, setNewInterestPlace] = useState('');
+    // 국내 관심지역 선택용 상태 (전국 8도)
+    const [selectedCountry, setSelectedCountry] = useState('서울');
+    const [selectedCity, setSelectedCity] = useState('서울 전체');
+    const [selectedInterestLabels, setSelectedInterestLabels] = useState([]);
+    const [deleteConfirmPlace, setDeleteConfirmPlace] = useState(null);
+    const [selectedRecommendTag, setSelectedRecommendTag] = useState('active');
+    const [hotFeedSlideIndex, setHotFeedSlideIndex] = useState(0);
+    const [hotFeedSocialIdx, setHotFeedSocialIdx] = useState(0);
+
+    const { handleDragStart, hasMovedRef } = useHorizontalDragScroll();
+    const videoRefs = useRef(new Map());
+    const currentlyPlayingVideo = useRef(null);
+    const getDeterministicValue = useCallback((seed, min, max) => {
+        const text = String(seed || 'seed');
+        let hash = 0;
+        for (let i = 0; i < text.length; i += 1) {
+            hash = (hash * 31 + text.charCodeAt(i)) >>> 0;
         }
-      );
-    }
-  }, []);
-  
-  // SOS 요청 로드
-  useEffect(() => {
-    loadSosRequests();
-    
-    // 주기적으로 SOS 요청 확인 (30초마다)
-    const interval = setInterval(() => {
-      loadSosRequests();
-    }, 30000);
-    
-    return () => clearInterval(interval);
-  }, [loadSosRequests]);
+        const range = Math.max(1, max - min + 1);
+        return min + (hash % range);
+    }, []);
 
-  // 관심 지역/장소로 필터링된 데이터
-  const filteredRealtimeData = useMemo(() => {
-    if (!selectedInterest) return realtimeData;
-    return realtimeData.filter(item => {
-      const location = item.location || item.title || '';
-      return location.includes(selectedInterest) || selectedInterest.includes(location);
-    });
-  }, [realtimeData, selectedInterest]);
+    const withDragCheck = useCallback((fn) => () => {
+        if (!hasMovedRef.current) fn();
+    }, [hasMovedRef]);
 
-  const filteredCrowdedData = useMemo(() => {
-    if (!selectedInterest) return crowdedData;
-    return crowdedData.filter(item => {
-      const location = item.location || item.title || '';
-      return location.includes(selectedInterest) || selectedInterest.includes(location);
-    });
-  }, [crowdedData, selectedInterest]);
+    // Intersection Observer로 화면에 보이는 동영상만 재생
+    useEffect(() => {
+        const observer = new IntersectionObserver(
+            (entries) => {
+                entries.forEach((entry) => {
+                    const video = entry.target;
 
-  // 모든 게시물에서 태그 수집 및 인기 태그 계산
-  const extractPopularTags = useCallback((posts) => {
-    const tagCountMap = new Map();
-    
-    posts.forEach(post => {
-      const tags = post.tags || [];
-      tags.forEach(tag => {
-        const cleanTag = typeof tag === 'string' ? tag.replace(/^#+/, '').trim() : String(tag).replace(/^#+/, '').trim();
-        if (cleanTag && cleanTag.length >= 2) {
-          tagCountMap.set(cleanTag, (tagCountMap.get(cleanTag) || 0) + 1);
-        }
-      });
-    });
-    
-    const sortedTags = Array.from(tagCountMap.entries())
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 10)
-      .map(([tag]) => tag);
-    
-    return sortedTags;
-  }, []);
-
-  const filteredRecommendedData = useMemo(() => {
-    if (!selectedTag) {
-      return recommendedData;
-    }
-    
-    return recommendedData.filter(item => {
-      const tags = item.tags || [];
-      return tags.some(tag => {
-        const cleanTag = typeof tag === 'string' ? tag.replace(/^#+/, '').trim() : String(tag).replace(/^#+/, '').trim();
-        return cleanTag === selectedTag;
-      });
-    });
-  }, [recommendedData, selectedTag]);
-
-  // 상황별 추천 테마 (가벼운 추천 여행지)
-  const travelThemes = useMemo(() => [
-    {
-      id: 'weekend_nearby',
-      name: '주말 근교',
-      description: '서울 기준 2시간 이내',
-      regions: ['서울', '강릉', '춘천'],
-    },
-    {
-      id: 'one_day',
-      name: '당일치기',
-      description: '아침에 떠나서 밤에 돌아오기',
-      regions: ['인천', '수원', '속초'],
-    },
-    {
-      id: 'healing_2days',
-      name: '1박 2일 힐링',
-      description: '조용히 쉬고 오는 여행',
-      regions: ['제주', '여수', '남해'],
-    },
-    {
-      id: 'solo_trip',
-      name: '혼자 가기 좋아요',
-      description: '혼자서도 부담 없는 동선',
-      regions: ['부산', '전주', '광주'],
-    },
-    {
-      id: 'couple_trip',
-      name: '커플 여행',
-      description: '함께 걷기 좋은 감성 코스',
-      regions: ['여수', '부산', '제주'],
-    },
-  ], []);
-
-  // 지역별 한 줄 카피
-  const regionCopyMap = useMemo(
-    () => ({
-      서울: '야경과 맛집이 가까운 도심 여행',
-      부산: '해운대와 광안리를 걷는 바다 여행',
-      제주: '섬을 한 바퀴 도는 힐링 드라이브',
-      강릉: '바다와 카페를 동시에 즐기는 해변 도시',
-      여수: '야경과 해산물이 맛있는 항구 여행',
-      속초: '설악산과 동해를 함께 보는 힐링 여행',
-      춘천: '호수와 카페가 어우러진 감성 여행',
-      인천: '바다와 거리 산책이 함께 있는 근교 여행',
-      수원: '화성과 구도심을 도는 역사 여행',
-      남해: '조용한 남쪽 바다 마을로 떠나는 휴식',
-      전주: '한옥마을에서 즐기는 전통 도시 여행',
-      광주: '카페와 예술 공간을 걷는 문화 여행',
-    }),
-    []
-  );
-
-  const [selectedThemeId, setSelectedThemeId] = useState(travelThemes[0]?.id);
-
-  const selectedTheme = useMemo(
-    () => travelThemes.find((theme) => theme.id === selectedThemeId) || travelThemes[0],
-    [travelThemes, selectedThemeId]
-  );
-
-  // 선택된 테마에 맞는 추천 게시물만 필터링 (현재는 하단 큰 피드는 숨기고, 테마별 지역 카드만 사용)
-  const themeFilteredRecommendedData = useMemo(() => {
-    return [];
-  }, [selectedTheme, filteredRecommendedData, recommendedData]);
-
-  // 웹 메인 전용: 여행 매거진 카드 데이터
-  const travelMagazineArticles = useMemo(() => ([
-    {
-      id: 'web-weekend-jeju',
-      regionName: '제주',
-      detailedLocation: '애월·협재',
-      title: '이번 주말, 꼭 가봐야 하는 제주 서쪽 노을 드라이브',
-      tagLine: '노을이 제일 예쁜 서쪽 해안 도로',
-      summary: '애월에서 협재까지, 서쪽 해안을 따라 드라이브하면서 노을 맛집만 골라 들르는 1일 코스.',
-      coverImage: 'https://images.unsplash.com/photo-1542367592-8849eb950fd8?auto=format&fit=crop&w=1200&q=80',
-      content: [
-        {
-          type: 'text',
-          title: '1. 오후, 애월 카페 거리에서 천천히 출발',
-          body: '비행기에서 내려 숙소에 짐을 풀었다면, 애월 카페 거리에서 가벼운 브런치로 시작해 보세요.\n\n바다를 내려다보는 테라스 자리에 앉으면, 파도 소리와 함께 오늘 루트를 여유롭게 정리할 수 있어요.'
-        },
-        {
-          type: 'image',
-          caption: '애월 바다를 바라보는 테라스 카페',
-          imageUrl: 'https://images.unsplash.com/photo-1500375592092-40eb2168fd21?auto=format&fit=crop&w=1200&q=80'
-        },
-        {
-          type: 'text',
-          title: '2. 협재·금능에서 맞이하는 황금빛 노을',
-          body: '해가 지기 1시간 전쯤, 협재해수욕장 쪽으로 이동해 보세요.\n\n하얀 모래와 에메랄드빛 바다 위로 해가 천천히 떨어지면서, 실감나는 그림 같은 풍경이 펼쳐집니다.'
-        },
-        {
-          type: 'image',
-          caption: '협재에서 바라본 서쪽 노을',
-          imageUrl: 'https://images.unsplash.com/photo-1518837695005-2083093ee35b?auto=format&fit=crop&w=1200&q=80'
-        }
-      ]
-    },
-    {
-      id: 'web-weekend-busan',
-      regionName: '부산',
-      detailedLocation: '해운대·청사포',
-      title: '현지인처럼 걷는 해운대·청사포 산책 루트',
-      tagLine: '바다와 카페를 번갈아 걷는 산책 코스',
-      summary: '해운대 해변에서 시작해 청사포까지, 기차선로와 바다를 따라 걷는 감성 산책 루트.',
-      coverImage: 'https://images.unsplash.com/photo-1537953773345-d172ccf13cf1?auto=format&fit=crop&w=1200&q=80',
-      content: [
-        {
-          type: 'text',
-          title: '1. 해운대 모래사장에서 천천히 몸 풀기',
-          body: '아침에는 해운대 해변을 가볍게 걸으며 하루를 시작해 보세요.\n\n생각보다 파도가 잔잔해서, 신발을 벗고 물에 살짝 발을 담그고 걷기에도 좋아요.'
-        },
-        {
-          type: 'image',
-          caption: '한적한 오전의 해운대 해변',
-          imageUrl: 'https://images.unsplash.com/photo-1500375592092-40eb2168fd21?auto=format&fit=crop&w=1200&q=80'
-        },
-        {
-          type: 'text',
-          title: '2. 청사포 다릿돌 전망대에서 바다 한 번 더',
-          body: '해운대에서 미포를 지나 청사포까지 이어지는 해변 산책로는, 부산 현지인들도 자주 찾는 코스예요.\n\n유리 바닥으로 바다가 내려다보이는 다릿돌 전망대는 꼭 한 번 올라가 보세요.'
-        },
-        {
-          type: 'image',
-          caption: '청사포 다릿돌 전망대에서 내려다본 바다',
-          imageUrl: 'https://images.unsplash.com/photo-1526481280695-3c687fd543c4?auto=format&fit=crop&w=1200&q=80'
-        }
-      ]
-    },
-    {
-      id: 'web-weekend-seoul',
-      regionName: '서울',
-      detailedLocation: '잠실·반포',
-      title: '멀리 가지 않아도, 도심에서 즐기는 한강 야경 산책',
-      tagLine: '퇴근 후에도 가능한 도심 야경 코스',
-      summary: '잠실·반포·여의도, 굳이 멀리 떠나지 않아도 충분히 여행 같은 한강 야경 산책 루트.',
-      coverImage: 'https://images.unsplash.com/photo-1519181245277-cffeb31da2fb?auto=format&fit=crop&w=1200&q=80',
-      content: [
-        {
-          type: 'text',
-          title: '1. 해 질 무렵, 잠실대교 아래에서 시작하기',
-          body: '해가 지기 시작할 때쯤, 잠실대교 근처 한강공원으로 가 보세요.\n\n하늘이 분홍빛으로 물들기 시작하면 롯데타워와 한강이 함께 들어오는, 서울다운 풍경을 볼 수 있어요.'
-        },
-        {
-          type: 'image',
-          caption: '야경이 예쁜 잠실 일대 한강 뷰',
-          imageUrl: 'https://images.unsplash.com/photo-1549692520-acc6669e2f0c?auto=format&fit=crop&w=1200&q=80'
-        },
-        {
-          type: 'text',
-          title: '2. 반포대교 분수와 함께 마무리',
-          body: '조금 더 여유가 있다면 반포대교 달빛무지개분수 시간에 맞춰 이동해 보세요.\n\n분수와 다리 불빛, 그리고 강가에 앉아 있는 사람들까지 합쳐져, 멀리 가지 않아도 여행 온 듯한 기분이 듭니다.'
-        },
-        {
-          type: 'image',
-          caption: '반포대교 분수와 한강 야경',
-          imageUrl: 'https://images.unsplash.com/photo-1526481280695-3c687fd543c4?auto=format&fit=crop&w=1200&q=80'
-        }
-      ]
-    },
-  ]), []);
-
-  const updateNotificationCount = useCallback(() => {
-    setUnreadNotificationCount(getUnreadCount());
-  }, []);
-
-  const loadMockData = useCallback(() => {
-    // 목업 데이터 생성
-    seedMockData();
-    
-    // localStorage에서 직접 가져오기 (getPosts는 async이므로)
-    const allPosts = JSON.parse(localStorage.getItem('uploadedPosts') || '[]');
-    logger.log(`📸 전체 게시물 (기록): ${allPosts.length}개`);
-    
-    // 배열인지 확인
-    if (!Array.isArray(allPosts)) {
-      logger.error('게시물 데이터가 배열이 아닙니다:', allPosts);
-      setRealtimeData([]);
-      setCrowdedData([]);
-      setRecommendedData([]);
-      return;
-    }
-    
-    const posts = filterRecentPosts(allPosts, 2);
-    logger.log(`📊 메인화면 노출 게시물 (2일 이내): ${posts.length}개`);
-    
-    const realtimeFormatted = posts.slice(0, 30).map((post) => {
-      const dynamicTime = getTimeAgo(post.timestamp || post.createdAt || post.time);
-      
-      return {
-        id: post.id,
-        images: post.images || [],
-        videos: post.videos || [],
-        image: (post.images && post.images.length > 0) ? post.images[0] : 
-               (post.videos && post.videos.length > 0) ? post.videos[0] : 
-               (post.image || ''),
-        title: post.location,
-        location: post.location,
-        detailedLocation: post.detailedLocation || post.location,
-        placeName: post.placeName || post.location,
-        time: dynamicTime,
-        timeLabel: dynamicTime,
-        timestamp: post.timestamp || post.createdAt || post.time,
-        user: post.user || '여행자',
-        userId: post.userId,
-        badge: post.categoryName || '여행러버',
-        category: post.category,
-        categoryName: post.categoryName,
-        content: post.note || `${post.location}의 아름다운 순간!`,
-        note: post.note,
-        tags: post.tags || [],
-        coordinates: post.coordinates,
-        likes: post.likes || 0,
-        comments: post.comments || [],
-        questions: post.questions || [],
-        qnaList: [],
-        aiLabels: post.aiLabels
-      };
-    });
-    
-    const oneHourAgo = Date.now() - (60 * 60 * 1000);
-    const crowdedFormatted = posts
-      .filter(post => {
-        const postTime = post.timestamp || post.createdAt || post.time;
-        const timestamp = typeof postTime === 'number' ? postTime : new Date(postTime).getTime();
-        return timestamp >= oneHourAgo;
-      })
-      .slice(0, 20)
-      .map((post) => {
-        const dynamicTime = getTimeAgo(post.timestamp || post.createdAt || post.time);
-        
-        return {
-          id: post.id,
-          images: post.images || [],
-          videos: post.videos || [],
-          image: (post.images && post.images.length > 0) ? post.images[0] : 
-                 (post.videos && post.videos.length > 0) ? post.videos[0] : 
-                 (post.image || ''),
-          title: post.location,
-          location: post.location,
-          detailedLocation: post.detailedLocation || post.location,
-          placeName: post.placeName || post.location,
-          time: dynamicTime,
-          timeLabel: dynamicTime,
-          timestamp: post.timestamp || post.createdAt || post.time,
-          user: post.user || '여행자',
-          userId: post.userId,
-          badge: post.categoryName || '여행러버',
-          category: post.category,
-          categoryName: post.categoryName,
-          content: post.note || `${post.location}의 인기 명소!`,
-          note: post.note,
-          tags: post.tags || [],
-          coordinates: post.coordinates,
-          likes: post.likes || 0,
-          comments: post.comments || [],
-          questions: post.questions || [],
-          qnaList: [],
-          aiLabels: post.aiLabels,
-          crowdLevel: post.crowdLevel || 'medium'
-        };
-      });
-    
-    const recommendedFormatted = posts.slice(0, 10).map((post) => {
-      const dynamicTime = getTimeAgo(post.timestamp || post.createdAt || post.time);
-      
-      return {
-        id: post.id,
-        images: post.images || [],
-        videos: post.videos || [],
-        image: (post.images && post.images.length > 0) ? post.images[0] : 
-               (post.videos && post.videos.length > 0) ? post.videos[0] : 
-               (post.image || ''),
-        title: post.location,
-        location: post.location,
-        detailedLocation: post.detailedLocation || post.location,
-        placeName: post.placeName || post.location,
-        time: dynamicTime,
-        timeLabel: dynamicTime,
-        timestamp: post.timestamp || post.createdAt || post.time,
-        user: post.user || '여행자',
-        userId: post.userId,
-        badge: post.categoryName || '여행러버',
-        category: post.category,
-        categoryName: post.categoryName,
-        content: post.note || `${post.location} 추천!`,
-        note: post.note,
-        tags: post.tags || [],
-        coordinates: post.coordinates,
-        likes: post.likes || 0,
-        comments: post.comments || [],
-        questions: post.questions || [],
-        qnaList: [],
-        aiLabels: post.aiLabels,
-        weather: post.weather,
-        crowdLevel: post.crowdLevel
-      };
-    });
-    
-    setRealtimeData(realtimeFormatted);
-    setCrowdedData(crowdedFormatted);
-    setRecommendedData(recommendedFormatted);
-    
-    const tags = extractPopularTags(posts);
-    setPopularTags(tags);
-    
-    logger.log('📊 메인화면 Mock 데이터 로드:', {
-      realtime: realtimeFormatted.length,
-      crowded: crowdedFormatted.length,
-      recommended: recommendedFormatted.length,
-      popularTags: tags.length
-    });
-  }, [getTimeAgo, extractPopularTags, selectedTag]);
-
-
-  const fetchPosts = useCallback(async () => {
-    setLoading(true);
-      setError(null);
-      
-    try {
-      // localStorage에서 직접 가져오기
-      loadMockData();
-    } catch (err) {
-      logger.error('게시물 로드 실패:', err);
-      setError(err.message);
-      loadMockData();
-    } finally {
-      setLoading(false);
-    }
-  }, [loadMockData]);
-
-  const loadInterestPlaces = useCallback(() => {
-    const places = getInterestPlaces();
-    setInterestPlaces(places);
-    logger.log(`⭐ 관심 지역/장소 로드: ${places.length}개`);
-  }, []);
-
-  const handleAddInterestPlace = useCallback(() => {
-    if (!newInterestPlace.trim()) return;
-    
-    const added = toggleInterestPlace(newInterestPlace.trim());
-    if (added) {
-      loadInterestPlaces();
-      setNewInterestPlace('');
-      setShowAddInterestModal(false);
-    }
-  }, [newInterestPlace, loadInterestPlaces]);
-
-  const handleDeleteInterestPlace = useCallback((placeName) => {
-    toggleInterestPlace(placeName);
-    loadInterestPlaces();
-    setDeleteConfirmPlace(null);
-    if (selectedInterest === placeName) {
-      setSelectedInterest(null);
-    }
-  }, [loadInterestPlaces, selectedInterest]);
-
-  const handleSearch = useCallback((e) => {
-    e.preventDefault();
-    if (searchQuery.trim()) {
-      navigate(`/search?q=${encodeURIComponent(searchQuery)}`);
-    }
-  }, [searchQuery, navigate]);
-
-  const handleSearchFocus = useCallback(() => {
-    navigate('/search');
-  }, [navigate]);
-
-  const handleItemClickWithDragCheck = useCallback((item, sectionType) => {
-    if (!hasMoved) {
-      navigate(`/post/${item.id}`, { 
-        state: { 
-          post: item,
-          sectionType,
-          fromMain: true
-        }
-      });
-    }
-    setHasMoved(false);
-  }, [hasMoved, navigate]);
-
-  const handleMouseDown = useCallback((e, scrollRef) => {
-    setIsDragging(true);
-    setHasMoved(false);
-    setCurrentScrollRef(scrollRef);
-    setStartX(e.pageX - scrollRef.current.offsetLeft);
-    setScrollLeft(scrollRef.current.scrollLeft);
-    scrollRef.current.style.cursor = 'grabbing';
-    scrollRef.current.style.userSelect = 'none';
-  }, []);
-
-  const handleMouseMove = useCallback((e) => {
-    if (!isDragging || !currentScrollRef) return;
-    e.preventDefault();
-    const x = e.pageX - currentScrollRef.current.offsetLeft;
-    const walk = (x - startX) * 1.2;
-    
-    if (Math.abs(walk) > 5) {
-      setHasMoved(true);
-    }
-    
-    if (currentScrollRef.current) {
-      currentScrollRef.current.scrollLeft = scrollLeft - walk;
-    }
-  }, [isDragging, currentScrollRef, startX, scrollLeft]);
-
-  const handleMouseUp = useCallback(() => {
-    setIsDragging(false);
-    if (currentScrollRef) {
-      currentScrollRef.current.style.cursor = 'grab';
-      currentScrollRef.current.style.userSelect = 'auto';
-    }
-    setCurrentScrollRef(null);
-  }, [currentScrollRef]);
-
-  const handleMouseLeave = useCallback(() => {
-    if (isDragging && currentScrollRef) {
-      currentScrollRef.current.style.cursor = 'grab';
-      currentScrollRef.current.style.userSelect = 'auto';
-    }
-    setIsDragging(false);
-    setCurrentScrollRef(null);
-  }, [isDragging, currentScrollRef]);
-
-  // 스크롤 이벤트 핸들러
-  const handleScroll = useCallback((e) => {
-    const currentScrollY = e.target.scrollTop;
-    const scrollingDown = currentScrollY > scrollY.current;
-    
-    // 스크롤 시작 (10px 이상)하면 관심지역 섹션만 숨기기 (부드러운 애니메이션)
-    if (currentScrollY > 10 && scrollingDown) {
-      // 페이드 아웃
-      setInterestOpacity(0);
-      setTimeout(() => setIsInterestSectionVisible(false), 200);
-    } else if (currentScrollY <= 10) {
-      setIsInterestSectionVisible(true);
-      // 페이드 인
-      setInterestOpacity(1);
-    }
-    
-    scrollY.current = currentScrollY;
-  }, []);
-
-  useEffect(() => {
-      fetchPosts();
-    updateNotificationCount();
-      loadInterestPlaces();
-  }, [fetchPosts, updateNotificationCount, loadInterestPlaces]);
-
-  // 랜딩페이지 phone-screen 구조 그대로 적용
-  return (
-    <>
-      <div className="phone-screen" style={{ 
-        background: '#f8fafc',
-        borderRadius: '32px',
-        overflow: 'hidden',
-        height: '100vh',
-        display: 'flex',
-        flexDirection: 'column',
-        position: 'relative'
-      }}>
-        {/* 상태바 영역 (시스템 UI 제거, 공간만 유지) */}
-        <div style={{ height: '20px' }} />
-        
-        {/* 앱 헤더 */}
-        <div className="app-header" style={{ 
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          padding: '12px 16px',
-          background: 'transparent',
-          color: '#111827'
-        }}>
-          <span className="app-title" style={{ 
-            fontSize: '20px',
-            fontWeight: 800,
-            letterSpacing: '-0.8px',
-            color: '#111827',
-            fontFamily: "'Noto Sans KR', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
-          }}>Live Journey</span>
-            <button 
-              onClick={() => navigate('/notifications')}
-            className="icon-btn"
-            style={{ 
-              fontSize: '24px',
-              cursor: 'pointer',
-              color: '#374151',
-              fontWeight: 300,
-              background: 'none',
-              border: 'none',
-              padding: 0,
-              position: 'relative'
-            }}
-          >
-            <span className="material-symbols-outlined">notifications</span>
-              {unreadNotificationCount > 0 && (
-              <span style={{ 
-                position: 'absolute',
-                top: '1.5px',
-                right: '1.5px',
-                width: '10px',
-                height: '10px',
-                background: '#00BCD4',
-                borderRadius: '50%'
-              }}></span>
-              )}
-            </button>
-        </div>
-
-        {/* SOS 알림 배너 - 로고와 검색창 사이 */}
-        {nearbySosRequests.length > 0 && !dismissedSosIds.includes(nearbySosRequests[0]?.id) && (
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            padding: '0 16px 8px 16px',
-            gap: '8px'
-          }}>
-            <button
-              onClick={() => navigate('/map')}
-              style={{
-                flex: 1,
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '6px 12px',
-                backgroundColor: '#ff6b35',
-                borderRadius: '8px',
-                border: 'none',
-                cursor: 'pointer',
-                boxShadow: '0 2px 4px rgba(255, 107, 53, 0.2)',
-                textAlign: 'left'
-              }}
-            >
-              <span className="material-symbols-outlined" style={{ fontSize: '14px', color: 'white' }}>warning</span>
-              <span style={{
-                flex: 1,
-                fontSize: '11px',
-                fontWeight: '600',
-                color: 'white',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap'
-              }}>
-                현재 당신 근처에 도움이 필요한 사람이 있습니다
-              </span>
-              <span className="material-symbols-outlined" style={{ fontSize: '14px', color: 'white' }}>chevron_right</span>
-            </button>
-            <button
-              onClick={() => {
-                if (nearbySosRequests[0]?.id) {
-                  setDismissedSosIds([...dismissedSosIds, nearbySosRequests[0].id]);
-                }
-              }}
-              style={{
-                width: '24px',
-                height: '24px',
-                borderRadius: '12px',
-                backgroundColor: 'rgba(255, 107, 53, 0.2)',
-                border: 'none',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}
-            >
-              <span className="material-symbols-outlined" style={{ fontSize: '14px', color: '#ff6b35' }}>close</span>
-            </button>
-          </div>
-        )}
-
-        {/* 검색바 - 크게 키움 */}
-        <div className="app-search-bar" style={{ 
-          display: 'flex',
-          alignItems: 'center',
-          gap: '12px',
-          padding: '14px 20px',
-          margin: '12px 16px',
-          background: 'white',
-          borderRadius: '12px',
-          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
-          minHeight: '56px'
-        }}>
-          <form onSubmit={handleSearch} style={{ display: 'flex', alignItems: 'center', gap: '10px', width: '100%' }}>
-            <span className="material-symbols-outlined search-icon" style={{ 
-              fontSize: '24px',
-              fontWeight: 400,
-              color: '#00BCD4'
-            }}>search</span>
-                <input
-              type="text"
-                  placeholder="어디로 떠나볼까요? 🌏"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onFocus={handleSearchFocus}
-              style={{ 
-                border: 'none',
-                outline: 'none',
-                flex: 1,
-                fontSize: '16px',
-                color: '#374151',
-                background: 'transparent',
-                fontWeight: 400
-              }}
-            />
-          </form>
-        </div>
-
-        {/* 관심 지역 (스토리 스타일) - 스크롤시 숨김 (부드러운 애니메이션) */}
-        {isInterestSectionVisible && (
-          <div style={{ 
-            opacity: interestOpacity,
-            transition: 'opacity 0.2s ease-out'
-          }}>
-            <div style={{ padding: '0 16px 6px 16px' }}>
-          <div style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '8px',
-                marginBottom: '6px'
-          }}>
-            <h3 style={{ 
-              fontSize: '16px', 
-              fontWeight: 700, 
-              color: '#111827',
-              margin: 0
-            }}>
-              관심 지역/장소
-            </h3>
-            {interestPlaces.length === 0 && (
-              <span style={{ 
-                fontSize: '12px', 
-                color: '#9CA3AF',
-                fontWeight: 400
-              }}>
-                관심지역을 추가해보세요
-              </span>
-            )}
-          </div>
-        </div>
-        <div 
-          className="interest-places"
-          ref={interestScrollRef}
-          onMouseDown={(e) => handleMouseDown(e, interestScrollRef)}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseLeave}
-          style={{ 
-            display: 'flex',
-                gap: '10px',
-                padding: '0 16px 6px 16px',
-            overflowX: 'auto',
-            scrollbarWidth: 'none'
-          }}
-        >
-          {/* 추가 버튼 */}
-          <div className="interest-item" style={{ 
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: '4px',
-            minWidth: '52px'
-          }}>
-            <button
-              onClick={() => {
-                if (!hasMoved) {
-                  setShowAddInterestModal(true);
-                }
-              }}
-              style={{ 
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: '4px',
-                background: 'none',
-                border: 'none',
-                cursor: 'pointer',
-                width: '100%'
-              }}
-            >
-              <div className="interest-avatar" style={{ 
-                width: '46px',
-                height: '46px',
-                borderRadius: '50%',
-                background: 'linear-gradient(135deg, #F3F4F6 0%, #E5E7EB 100%)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '22px',
-                border: '1.5px dashed #9CA3AF',
-                color: '#9CA3AF'
-              }}>
-                <span className="material-symbols-outlined" style={{ fontWeight: 300, fontSize: '22px' }}>add_circle</span>
-              </div>
-              <span className="interest-name" style={{ 
-                fontSize: '10px',
-                fontWeight: 500,
-                color: '#9CA3AF',
-                textAlign: 'center',
-                whiteSpace: 'nowrap'
-              }}>
-                추가
-              </span>
-            </button>
-          </div>
-
-              {/* 관심 지역/장소들 */}
-              {interestPlaces.map((place, index) => {
-                const isSelected = selectedInterest === place.name;
-            const regionIcon = getRegionIcon(place.name);
-            const isHovered = hoveredPlaceIndex === index;
-                return (
-              <div
-                    key={index}
-                className={`interest-item ${isSelected ? 'active' : ''}`}
-                style={{ 
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: '4px',
-                  minWidth: '52px',
-                  position: 'relative'
-                }}
-                onMouseEnter={() => setHoveredPlaceIndex(index)}
-                onMouseLeave={() => setHoveredPlaceIndex(null)}
-              >
-                <button
-                    onClick={() => {
-                      if (!hasMoved) {
-                        setSelectedInterest(isSelected ? null : place.name);
-                      }
-                    }}
-                  style={{ 
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    gap: '4px',
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    width: '100%'
-                  }}
-                >
-                  <div 
-                    className="interest-avatar"
-                    style={{ 
-                      width: '46px',
-                      height: '46px',
-                      borderRadius: '50%',
-                      background: 'white',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: '22px',
-                      border: isSelected ? '2px solid #00BCD4' : '2px solid transparent',
-                      boxShadow: isSelected ? '0 0 0 2px #E0F7FA' : 'none',
-                      color: '#4B5563'
-                    }}
-                  >
-                    {regionIcon}
-                    </div>
-                  <span className="interest-name" style={{ 
-                    fontSize: '10px',
-                    fontWeight: 500,
-                    color: isSelected ? '#00BCD4' : '#374151',
-                    textAlign: 'center',
-                    whiteSpace: 'nowrap'
-                  }}>
-                      {place.name}
-                    </span>
-                  </button>
-                {isHovered && (
-            <button 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setDeleteConfirmPlace(place.name);
-                    }}
-                    style={{
-                      position: 'absolute',
-                      top: '-4px',
-                      right: '-4px',
-                      width: '20px',
-                      height: '20px',
-                      background: 'white',
-                      borderRadius: '50%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                      border: '1px solid #E5E7EB',
-                      cursor: 'pointer',
-                      zIndex: 10
-                    }}
-                  >
-                    <span className="material-symbols-outlined" style={{ fontSize: '14px', color: '#EF4444' }}>close</span>
-            </button>
-                )}
-          </div>
-            );
-          })}
-            </div>
-          </div>
-        )}
-        
-        {/* 실시간 피드 */}
-        <div className="app-content" style={{ 
-          padding: '0 0 100px 0',
-          flex: 1,
-          overflowY: 'auto',
-          scrollbarWidth: 'none'
-        }} onScroll={handleScroll}>
-          {/* 실시간 여행 피드 섹션 */}
-          <div className="feed-section" style={{ marginBottom: '20px' }}>
-            <div className="section-header-main" style={{ 
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              padding: '0 16px 12px 16px'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <h3 style={{ 
-                  fontSize: '15px',
-                  fontWeight: 700,
-                  color: '#111827',
-                  margin: 0
-                }}>🔥 지금 여기는</h3>
-                <span className="live-badge" style={{ 
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  padding: '4px 10px',
-                  background: '#FFF8E1',
-                  borderRadius: '12px',
-                  fontSize: '10px',
-                  fontWeight: 700,
-                  color: '#FFA000'
-                }}>
-                  <span className="live-dot" style={{ 
-                    width: '5px',
-                    height: '5px',
-                    background: '#ef4444',
-                    borderRadius: '50%',
-                    animation: 'pulse 1.5s ease-in-out infinite'
-                  }}></span>
-                  <span>LIVE</span>
-              </span>
-              </div>
-              <button
-                onClick={() => navigate('/realtime-feed')}
-                className="more-btn"
-                style={{ 
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  color: '#00BCD4',
-                  cursor: 'pointer',
-                  background: 'none',
-                  border: 'none',
-                  padding: 0,
-                  transition: 'opacity 0.2s'
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.opacity = '0.7'}
-                onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
-              >
-                더보기
-              </button>
-            </div>
-            
-            {/* 횡스크롤 카드 */}
-            {filteredRealtimeData.length > 0 ? (
-            <div 
-                className="horizontal-scroll"
-              ref={realtimeScrollRef}
-              onMouseDown={(e) => handleMouseDown(e, realtimeScrollRef)}
-              onMouseMove={handleMouseMove}
-              onMouseUp={handleMouseUp}
-              onMouseLeave={handleMouseLeave}
-              style={{ 
-                  display: 'flex',
-                  gap: '12px',
-                  padding: '0 16px',
-                  overflowX: 'auto',
-                  scrollbarWidth: 'none',
-                  paddingBottom: '4px',
-                scrollBehavior: 'smooth', 
-                WebkitOverflowScrolling: 'touch',
-                  cursor: 'grab',
-                userSelect: 'none',
-                scrollSnapType: 'x mandatory',
-                scrollPadding: '0 16px' // 첫/마지막 카드 양쪽 선 잘 안 잘리도록
-              }}
-            >
-                {filteredRealtimeData.map((item, index) => (
-                    <div 
-                      key={item.id} 
-                    className="scroll-card"
-                    style={{ 
-                      flexShrink: 0,
-                      width: '180px', // 두 장 정도 보이게 유지
-                      borderRadius: '12px',
-                      overflow: 'hidden',
-                      background: 'white',
-                      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
-                      cursor: 'pointer',
-                      transition: 'transform 0.3s ease, box-shadow 0.3s ease',
-                      animation: `fadeInSlide 0.5s ease-out ${index * 0.1}s both`,
-                      scrollSnapAlign: 'start',
-                    }}
-                      onClick={() => handleItemClickWithDragCheck(item, 'realtime')}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.transform = 'translateY(-4px)';
-                      e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.12)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.transform = 'translateY(0)';
-                      e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.08)';
-                    }}
-                  >
-                    <div className="scroll-image" style={{ 
-                      position: 'relative',
-                      width: '100%',
-                      height: '200px',
-                      overflow: 'hidden'
-                    }}>
-                        {item.videos && item.videos.length > 0 ? (
-                          <video
-                            src={item.videos[0]}
-                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                            autoPlay
-                            loop
-                            muted
-                            playsInline
-                            draggable={false}
-                          />
-                        ) : (
-                          <img
-                            src={item.image || 'https://images.unsplash.com/photo-1524222717473-730000096953?w=800&auto=format&fit=crop&q=80'}
-                            alt={item.location || '여행 사진'}
-                          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                            onError={(e) => {
-                              e.currentTarget.src = 'https://images.unsplash.com/photo-1524222717473-730000096953?w=800&auto=format&fit=crop&q=80';
-                            }}
-                            draggable={false}
-                          />
-                        )}
-                      {item.time && (
-                        <div className="scroll-badge" style={{ 
-                        position: 'absolute', 
-                          top: '8px',
-                          right: '8px',
-                          background: 'rgba(0, 0, 0, 0.7)',
-                          backdropFilter: 'blur(10px)',
-                              color: 'white', 
-                          fontSize: '10px',
-                          fontWeight: 700,
-                          padding: '4px 8px',
-                          borderRadius: '10px'
-                        }}>
-                          {item.time}
-                        </div>
-                      )}
-                    </div>
-                    <div className="scroll-info" style={{ 
-                      padding: '10px',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '4px'
-                    }}>
-                      <span className="scroll-location" style={{ 
-                              fontSize: '12px', 
-                        fontWeight: 600,
-                        color: '#111827',
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis'
-                      }}>
-                        {item.location ? `📍 ${item.location}` : item.title || '위치 정보 없음'}
-                      </span>
-                      <span className="scroll-user" style={{ 
-                        fontSize: '11px',
-                        color: '#6B7280'
-                      }}>
-                        {item.user || '여행자'}
-                      </span>
-                        </div>
-                      </div>
-                ))}
-                    </div>
-            ) : (
-              <div style={{ padding: '40px 16px', textAlign: 'center', color: '#6B7280' }}>
-                아직 게시물이 없습니다.
-            </div>
-          )}
-          </div>
-
-          {/* 혼잡도 정보 섹션 */}
-          <div className="feed-section" style={{ marginBottom: '20px' }}>
-            <div className="section-header-main" style={{ 
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              padding: '0 16px 12px 16px'
-            }}>
-              <h3 style={{ 
-                fontSize: '15px',
-                fontWeight: 700,
-                color: '#111827',
-                margin: 0
-              }}>👥 지금 가장 붐비는 곳</h3>
-              <span className="more-btn" style={{ 
-                fontSize: '12px',
-                fontWeight: 600,
-                color: '#00BCD4',
-                cursor: 'pointer'
-              }}>더보기</span>
-            </div>
-            
-            {filteredCrowdedData.length > 0 ? (
-            <div 
-                className="horizontal-scroll"
-              ref={crowdedScrollRef}
-              onMouseDown={(e) => handleMouseDown(e, crowdedScrollRef)}
-              onMouseMove={handleMouseMove}
-              onMouseUp={handleMouseUp}
-              onMouseLeave={handleMouseLeave}
-              style={{ 
-                  display: 'flex',
-                  gap: '12px',
-                  padding: '0 16px',
-                  overflowX: 'auto',
-                  scrollbarWidth: 'none',
-                  paddingBottom: '4px',
-                scrollBehavior: 'smooth', 
-                WebkitOverflowScrolling: 'touch',
-                  cursor: 'grab',
-                  userSelect: 'none'
-              }}
-            >
-                {filteredCrowdedData.map((item) => {
-                  const getCrowdLevel = () => {
-                    if (item.crowdLevel) return item.crowdLevel;
-                    if (item.tags && item.tags.some(tag => tag.includes('혼잡') || tag.includes('붐빔'))) return 'high';
-                    if (item.tags && item.tags.some(tag => tag.includes('보통'))) return 'medium';
-                    return 'low';
-                  };
-                  const crowdLevel = getCrowdLevel();
-                  const crowdText = crowdLevel === 'high' ? '매우 혼잡' : crowdLevel === 'medium' ? '보통' : '여유';
-                  const crowdBadgeClass = crowdLevel === 'high' ? 'high' : crowdLevel === 'medium' ? 'medium' : 'low';
-                  
-                  return (
-                  <div 
-                    key={item.id} 
-                      className="scroll-card-small"
-                      style={{ 
-                        flexShrink: 0,
-                        width: '140px',
-                        borderRadius: '10px',
-                        overflow: 'hidden',
-                        background: 'white',
-                        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
-                        cursor: 'pointer'
-                      }}
-                    onClick={() => handleItemClickWithDragCheck(item, 'crowded')}
-                  >
-                      <div className="scroll-image-small" style={{ 
-                        position: 'relative',
-                        width: '100%',
-                        height: '140px',
-                        overflow: 'hidden'
-                      }}>
-                      {item.videos && item.videos.length > 0 ? (
-                        <video
-                          src={item.videos[0]}
-                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                          autoPlay
-                          loop
-                          muted
-                          playsInline
-                        />
-                      ) : (
-                        <img
-                          src={item.image || 'https://images.unsplash.com/photo-1524222717473-730000096953?w=800&auto=format&fit=crop&q=80'}
-                          alt={item.location || '여행 사진'}
-                            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                          onError={(e) => {
-                            e.currentTarget.src = 'https://images.unsplash.com/photo-1524222717473-730000096953?w=800&auto=format&fit=crop&q=80';
-                          }}
-                        />
-                      )}
-                        <div className={`crowd-badge ${crowdBadgeClass}`} style={{ 
-                        position: 'absolute', 
-                          top: '8px',
-                          right: '8px',
-                          fontSize: '9px',
-                          fontWeight: 700,
-                          padding: '4px 8px',
-                          borderRadius: '8px',
-                          background: crowdLevel === 'high' ? 'rgba(239, 68, 68, 0.9)' : crowdLevel === 'medium' ? 'rgba(245, 158, 11, 0.9)' : 'rgba(16, 185, 129, 0.9)',
-                          color: 'white'
-                        }}>
-                          {crowdText}
-                        </div>
-                      </div>
-                      <div className="scroll-info-small" style={{ 
-                        padding: '8px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '3px'
-                      }}>
-                        <span className="scroll-location-small" style={{ 
-                          fontSize: '11px',
-                          fontWeight: 600,
-                          color: '#111827',
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis'
-                        }}>
-                          {item.location || item.title || '위치 정보 없음'}
-                        </span>
-                        <span className="scroll-time-small" style={{ 
-                          fontSize: '10px',
-                          color: '#6B7280'
-                        }}>
-                          {item.time ? `${item.time} 업데이트` : '방금 전 업데이트'}
-                        </span>
-                  </div>
-                </div>
-                );
-              })}
-              </div>
-            ) : (
-              <div style={{ padding: '40px 16px', textAlign: 'center', color: '#6B7280' }}>
-                아직 혼잡도 정보가 없습니다.
-            </div>
-          )}
-          </div>
-          
-          {/* 상세 게시물 (추천 여행지 피드) */}
-          <div className="feed-section" style={{ marginBottom: '20px' }}>
-            <div className="section-header-main" style={{ 
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              padding: '0 16px 12px 16px'
-            }}>
-              <h3 style={{ 
-                fontSize: '15px',
-                fontWeight: 700,
-                color: '#111827',
-                margin: 0
-              }}>✨ 추천 여행지</h3>
-          </div>
-
-            {/* 추천 여행지 섹션 안에 가벼운 테마 기반 추천 블록 */}
-            <div style={{ padding: '0 16px 10px 16px' }}>
-              {selectedTheme && (
-                <p style={{ 
-                  fontSize: '12px', 
-                  color: '#6B7280',
-                  margin: '0 0 6px 0'
-                }}>
-                  {selectedTheme.description}
-                </p>
-              )}
-
-              {/* 테마 탭 */}
-              <div
-                ref={themeScrollRef}
-                onMouseDown={(e) => handleMouseDown(e, themeScrollRef)}
-                onMouseMove={handleMouseMove}
-                onMouseUp={handleMouseUp}
-                onMouseLeave={handleMouseLeave}
-                style={{ 
-                display: 'flex',
-                gap: '8px',
-                marginBottom: '8px',
-                overflowX: 'auto',
-                scrollBehavior: 'smooth',
-                WebkitOverflowScrolling: 'touch'
-              }}>
-                {travelThemes.map((theme) => {
-                  const isActive = theme.id === selectedThemeId;
-                  return (
-                    <button
-                      key={theme.id}
-                      onClick={() => setSelectedThemeId(theme.id)}
-                      style={{
-                        padding: '6px 12px',
-                        borderRadius: '999px',
-                        border: 'none',
-                        cursor: 'pointer',
-                        fontSize: '12px',
-                        fontWeight: 600,
-                        whiteSpace: 'nowrap',
-                        backgroundColor: isActive ? '#00BCD4' : '#E5E7EB',
-                        color: isActive ? '#FFFFFF' : '#4B5563',
-                      }}
-                    >
-                      {theme.name}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* 선택된 테마의 여행지 카드 리스트 (사진 포함, 한 줄 문장) */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {selectedTheme?.regions.map((regionName) => (
-                  <button
-                    key={regionName}
-                    onClick={() =>
-                      navigate('/search?region=' + encodeURIComponent(regionName))
+                    if (entry.isIntersecting && entry.intersectionRatio > 0.5) {
+                        // 이전에 재생 중이던 비디오가 있으면 일시정지
+                        if (currentlyPlayingVideo.current && currentlyPlayingVideo.current !== video) {
+                            const prevVideo = currentlyPlayingVideo.current;
+                            if (prevVideo && !prevVideo.paused) {
+                                prevVideo.pause();
+                            }
+                        }
+                        // 현재 비디오 재생
+                        if (video && video.paused) {
+                            video.play().catch(() => {
+                                // 자동 재생이 차단된 경우 무시
+                            });
+                            currentlyPlayingVideo.current = video;
+                        }
+                    } else {
+                        // 화면에서 벗어나면 일시정지
+                        if (video && !video.paused) {
+                            video.pause();
+                        }
+                        if (currentlyPlayingVideo.current === video) {
+                            currentlyPlayingVideo.current = null;
+                        }
                     }
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'flex-start',
-                      padding: '8px 10px',
-                      borderRadius: '12px',
-                      border: 'none',
-                      backgroundColor: '#FFFFFF',
-                      boxShadow: '0 1px 4px rgba(15, 23, 42, 0.06)',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    {/* 지역 대표 사진 (Unsplash 기반) */}
-                    <div
-                      style={{
-                        width: '72px',
-                        height: '54px',
-                        borderRadius: '10px',
-                        overflow: 'hidden',
-                        marginRight: '10px',
-                        backgroundColor: '#E5E7EB',
-                        flexShrink: 0,
-                      }}
-                    >
-                      <div
-                        style={{
-                          width: '100%',
-                          height: '100%',
-                          backgroundImage: `url("https://source.unsplash.com/featured/?${encodeURIComponent(
-                            regionName + ' travel landscape'
-                          )}")`,
-                          backgroundSize: 'cover',
-                          backgroundPosition: 'center',
-                        }}
-                      />
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
-                      <span
-                        style={{
-                          fontSize: '13px',
-                          fontWeight: 700,
-                          color: '#111827',
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                        }}
-                      >
-                        {regionName}
-                      </span>
-                      <span
-                        style={{
-                          fontSize: '11px',
-                          color: '#6B7280',
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                        }}
-                      >
-                        {regionCopyMap[regionName] || selectedTheme.description}
-                      </span>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
+                });
+            },
+            {
+                threshold: [0, 0.5, 1],
+                rootMargin: '0px',
+            }
+        );
 
-            {themeFilteredRecommendedData.map((item) => (
-              <div 
-                key={item.id} 
-                className="feed-card"
-                style={{ 
-                  background: 'white',
-                  borderRadius: '14px',
-                  overflow: 'hidden',
-                  margin: '0 16px 14px 16px',
-                  boxShadow: '0 2px 10px rgba(0, 0, 0, 0.06)',
-                  cursor: 'pointer'
+        // 모든 비디오 요소 관찰
+        const videos = Array.from(videoRefs.current.values()).filter(Boolean);
+        videos.forEach((video) => {
+            observer.observe(video);
+        });
+
+        return () => {
+            videos.forEach((video) => {
+                observer.unobserve(video);
+            });
+            observer.disconnect();
+        };
+    }, [realtimeData, crowdedData, recommendedData, selectedInterest]);
+
+    const loadMockData = useCallback(async () => {
+        const localPosts = JSON.parse(localStorage.getItem('uploadedPosts') || '[]');
+
+        // Supabase에서 실제 게시물 불러오기 (실패 시 빈 배열)
+        const supabasePosts = await fetchPostsSupabase();
+
+        // Supabase + 로컬 결합 후 id 기준 중복 제거 (같은 게시물이 피드에 2번 나오는 것 방지)
+        const byId = new Map();
+        [...(Array.isArray(supabasePosts) ? supabasePosts : []), ...(Array.isArray(localPosts) ? localPosts : [])].forEach((p) => {
+          if (p && p.id && !byId.has(p.id)) byId.set(p.id, p);
+        });
+        const combined = Array.from(byId.values());
+        // 관리자가 삭제한 게시물은 제외 (다른 탭에서 삭제했거나 이벤트를 놓친 경우)
+        let deletedIds = new Set();
+        try {
+            const raw = sessionStorage.getItem('adminDeletedPostIds') || '[]';
+            deletedIds = new Set(JSON.parse(raw));
+            sessionStorage.removeItem('adminDeletedPostIds');
+        } catch (_) {}
+        const combinedFiltered = combined.filter((p) => p && p.id && !deletedIds.has(String(p.id)));
+        const allPosts = getCombinedPosts(combinedFiltered);
+
+        // 메인 피드 기준:
+        // 1) 기본은 최근 24시간 이내 게시물만 사용해 실시간성을 극대화
+        // 2) 24시간 이내 게시물이 너무 적을 때만 최근 3일(72시간) 이내 게시물로 보완
+        const recent24h = filterRecentPosts(allPosts, 2, 24);
+        let posts = [];
+        if (recent24h.length >= 40) {
+            // 실시간성이 충분히 확보되면 24시간 이내 게시물만 사용
+            posts = recent24h;
+        } else {
+            // 최근 3일 이내에서 부족한 부분만 채워 넣기
+            const recent72h = filterRecentPosts(allPosts, 5, 72);
+            const existingIds = new Set(recent24h.map((p) => String(p.id)));
+            const merged = [...recent24h];
+            recent72h.forEach((p) => {
+                if (p && p.id && !existingIds.has(String(p.id))) {
+                    merged.push(p);
+                }
+            });
+            // 그래도 게시물이 너무 적으면, 전체 72시간 이내 게시물이라도 사용
+            posts = merged.length > 0 ? merged : recent72h;
+        }
+
+        // 촬영 시간 라벨 포맷터 (가볍게: "2/10 14:30")
+        const formatCaptureLabel = (post) => {
+            const src = post.photoDate || post.timestamp || post.createdAt;
+            if (!src) return null;
+            const d = new Date(src);
+            if (Number.isNaN(d.getTime())) return null;
+            const month = d.getMonth() + 1;
+            const day = d.getDate();
+            const hours = d.getHours();
+            const minutes = String(d.getMinutes()).padStart(2, '0');
+            return `${month}/${day} ${hours}:${minutes}`;
+        };
+
+        // ===== 태그 분류용 집계 (장소별 통계) =====
+        const now = Date.now();
+        const placeStats = {};
+
+        const getPlaceKey = (post) => {
+            return post.location || post.placeName || post.detailedLocation || '기록';
+        };
+
+        const collectTextForPost = (post) => {
+            const tags = Array.isArray(post.tags) ? post.tags : [];
+            const parts = [
+                post.note,
+                post.content,
+                post.categoryName,
+                post.location,
+                post.placeName,
+                ...tags.map((t) => typeof t === 'string' ? t : String(t || ''))
+            ].filter(Boolean);
+            return parts.join(' ');
+        };
+
+        posts.forEach((post) => {
+            const placeKey = getPlaceKey(post);
+            if (!placeStats[placeKey]) {
+                placeStats[placeKey] = {
+                    // 실시간 계층 (최근 60분)
+                    waitingRecent: 0,
+                    soldoutRecent: 0,
+                    // 시즌/이벤트 계층 (최근 24시간)
+                    blossom24h: 0,
+                    newMenu24h: 0,
+                    popup24h: 0,
+                    total24h: 0,
+                    // 상시 특징 계층 (누적)
+                    nightViewAll: 0,
+                    parkingAll: 0,
+                    photoSpotAll: 0,
+                    totalAll: 0,
+                };
+            }
+
+            const stats = placeStats[placeKey];
+            const text = collectTextForPost(post);
+            const ts = post.timestamp || post.createdAt || post.time;
+            const postTime = ts ? new Date(ts).getTime() : now;
+            const diffMinutes = Math.max(0, (now - postTime) / 60000);
+            const diffHours = diffMinutes / 60;
+
+            const hasWaiting = text.includes('웨이팅') || text.includes('대기') || text.includes('줄') || text.includes('북적');
+            const hasSoldout = text.includes('재고') || text.includes('소진') || text.includes('품절');
+            const hasBlossom = text.includes('벚꽃') || text.includes('꽃놀이') || text.includes('벚꽃축제');
+            const hasNewMenu = text.includes('신메뉴') || text.includes('신상') || text.includes('한정') || text.includes('시즌메뉴');
+            const hasPopup = text.includes('팝업') || text.includes('팝업스토어');
+            const hasNightView = text.includes('야경');
+            const hasParking = text.includes('주차');
+            const hasPhotoSpot = text.includes('포토존') || text.includes('사진 맛집') || text.includes('사진맛집') || text.includes('인스타');
+
+            // 실시간: 최근 60분 이내 제보
+            if (diffMinutes <= 60) {
+                if (hasWaiting) stats.waitingRecent += 1;
+                if (hasSoldout) stats.soldoutRecent += 1;
+            }
+
+            // 시즌/이벤트: 최근 24시간
+            if (diffHours <= 24) {
+                stats.total24h += 1;
+                if (hasBlossom) stats.blossom24h += 1;
+                if (hasNewMenu) stats.newMenu24h += 1;
+                if (hasPopup) stats.popup24h += 1;
+            }
+
+            // 상시 특징: 누적
+            stats.totalAll += 1;
+            if (hasNightView) stats.nightViewAll += 1;
+            if (hasParking) stats.parkingAll += 1;
+            if (hasPhotoSpot) stats.photoSpotAll += 1;
+        });
+
+        const transformPost = (post) => {
+            const dynamicTime = getTimeAgo(post.timestamp || post.createdAt || post.time);
+            // 급상승 지표 계산 (최근 좋아요 증가율 기반)
+            const recentLikes = post.likes || 0;
+            const surgeIndicator = recentLikes > 50 ? '급상승' : recentLikes > 20 ? '인기' : '실시간';
+            const surgePercent = recentLikes > 50
+                ? getDeterministicValue(post.id, 100, 149)
+                : recentLikes > 20
+                    ? getDeterministicValue(post.id, 50, 79)
+                    : getDeterministicValue(post.id, 20, 49);
+
+            const placeKey = getPlaceKey(post);
+            const stats = placeStats[placeKey] || {
+                waitingRecent: 0,
+                soldoutRecent: 0,
+                blossom24h: 0,
+                newMenu24h: 0,
+                popup24h: 0,
+                total24h: 0,
+                nightViewAll: 0,
+                parkingAll: 0,
+                photoSpotAll: 0,
+                totalAll: 0,
+            };
+
+            const reasonTags = [];
+
+            // 1) 실시간 상태 (Live) - 최우선
+            if (stats.waitingRecent >= 3) {
+                reasonTags.push('#지금_웨이팅_폭주');
+            }
+            if (stats.soldoutRecent >= 2) {
+                reasonTags.push('#재고_소진_임박');
+            }
+
+            // 2) 시즌/이벤트 (Context) - 최근 24시간 / 48시간 맥락
+            if (stats.total24h > 0) {
+                const blossomRatio = stats.blossom24h / stats.total24h;
+                if (blossomRatio >= 0.7) {
+                    reasonTags.push('#벚꽃_절정');
+                }
+                const newMenuRatio = stats.newMenu24h / stats.total24h;
+                if (newMenuRatio >= 0.4) {
+                    reasonTags.push('#신메뉴_출시');
+                }
+                const popupRatio = stats.popup24h / stats.total24h;
+                if (popupRatio >= 0.4) {
+                    reasonTags.push('#팝업스토어');
+                }
+            }
+
+            // 3) 상시 특징 (Feature) - 누적 리뷰 기반
+            if (stats.totalAll > 0) {
+                const nightRatio = stats.nightViewAll / stats.totalAll;
+                if (nightRatio >= 0.3) {
+                    reasonTags.push('#야경_최고');
+                }
+                const parkingRatio = stats.parkingAll / stats.totalAll;
+                if (parkingRatio >= 0.3) {
+                    reasonTags.push('#주차_편함');
+                }
+                const photoRatio = stats.photoSpotAll / stats.totalAll;
+                if (photoRatio >= 0.3) {
+                    reasonTags.push('#사진_맛집');
+                }
+            }
+
+            const aiBasedTags = (Array.isArray(post.tags) ? post.tags : [])
+                .map((t) => String(t || '').replace(/^#+/, '').trim())
+                .filter(Boolean)
+                .slice(0, 3)
+                .map((t) => `#${t}`);
+
+            // 아무 태그도 없으면 가벼운 기본 태그로 보완 (정보 과부하 방지용 1~2개)
+            const uniqueReasons = [...new Set(reasonTags)];
+            if (uniqueReasons.length === 0) {
+                const fallback = ['#추천_맛집', '#SNS_화제', '#오늘_특가', '#사진_맛집', '#지금_핫플'];
+                uniqueReasons.push(fallback[getDeterministicValue(post.id, 0, fallback.length - 1)]);
+            }
+
+            const firstImageUrl = (post.images && post.images.length > 0) ? post.images[0] : (post.image || post.thumbnail || '');
+            const firstVideoUrl = (post.videos && post.videos.length > 0) ? post.videos[0] : '';
+            const likesNum = Number(post.likes ?? post.likeCount ?? 0) || 0;
+            const commentsArr = Array.isArray(post.comments) ? post.comments : [];
+            return {
+                ...post,
+                id: post.id,
+                image: getDisplayImageUrl(firstImageUrl || firstVideoUrl || ''),
+                thumbnailIsVideo: !firstImageUrl && !!firstVideoUrl,
+                firstVideoUrl: firstVideoUrl ? getDisplayImageUrl(firstVideoUrl) : null,
+                title: post.location,
+                time: dynamicTime,
+                content: post.note || post.content || `${post.location}의 모습`,
+                likes: likesNum,
+                likeCount: likesNum,
+                comments: commentsArr,
+                weather: post.weather || null,
+                surgeIndicator,
+                surgePercent,
+                // 메타데이터 기반 촬영 시간 라벨
+                captureLabel: formatCaptureLabel(post),
+                // 카드당 최대 2~3개 태그만 노출
+                aiHotTags: aiBasedTags,
+                reasonTags: uniqueReasons.slice(0, 3),
+            };
+        };
+
+        const transformedAll = posts.map(transformPost);
+
+        // "지금 여기는": 최신순 정렬 후 상위 20개
+        const byLatest = [...transformedAll].sort((a, b) => {
+            const tA = a.timestamp || a.createdAt || a.time || 0;
+            const tB = b.timestamp || b.createdAt || b.time || 0;
+            const dateA = typeof tA === 'number' ? tA : new Date(tA).getTime();
+            const dateB = typeof tB === 'number' ? tB : new Date(tB).getTime();
+            return dateB - dateA;
+        });
+        setRealtimeData(byLatest.slice(0, 20));
+
+        // "실시간 핫플": 더보기(/crowded-place)와 동일하게 48h + 핫니스 랭킹
+        const posts48 = filterActivePosts48(allPosts);
+        const transformed48 = posts48.map(transformPost);
+        const preFiltered = transformed48.filter((p) => {
+            const hasLikes = (p.likes || 0) > 0;
+            const isRecent = p.time && (p.time.includes('방금') || p.time.includes('분 전') || p.time.includes('시간 전'));
+            return hasLikes || isRecent;
+        });
+        const toRank = preFiltered.length > 0 ? preFiltered : transformed48;
+        const ranked = rankHotspotPosts(toRank, { verifyFirst: true, maxItems: 100 });
+        const crowdedRanked = ranked.map((r) => ({
+            ...r.post,
+            _rank: r.rank,
+            _impactLabel: r.impactLabel,
+            accuracyCount: getPostAccuracyCount(r.post.id),
+        }));
+        const crowdedFallback = transformed48.slice(0, 50).map((p) => ({
+            ...p,
+            accuracyCount: getPostAccuracyCount(p.id),
+        }));
+        setCrowdedData(crowdedRanked.length > 0 ? crowdedRanked : crowdedFallback);
+
+        // 추천 여행지: 현재는 Supabase/로컬에서 집계한 posts 기반으로 계산
+        const recs = getRecommendedRegions(allPosts, selectedRecommendTag);
+        setRecommendedData(recs.slice(0, 10));
+        setAllPostsForRecommend(allPosts);
+    }, [getDeterministicValue]);
+
+    const fetchPosts = useCallback(async () => {
+        setLoading(true);
+        try {
+            await loadMockData();
+        } catch (err) {
+            logger.error('메인 피드 로딩 중 오류 (fallback로 계속 진행):', err);
+        } finally {
+            setLoading(false);
+        }
+    }, [loadMockData]);
+
+    const loadInterestPlaces = useCallback(() => {
+        const places = getInterestPlaces();
+        setInterestPlaces(places);
+    }, []);
+
+    useEffect(() => {
+        let alive = true;
+        const load = async () => {
+            const mags = await listPublishedMagazines();
+            if (alive) setPublishedMagazines(Array.isArray(mags) ? mags : []);
+        };
+        load();
+        const onUpdated = () => load();
+        window.addEventListener('magazinesUpdated', onUpdated);
+        return () => {
+            alive = false;
+            window.removeEventListener('magazinesUpdated', onUpdated);
+        };
+    }, []);
+
+    const magazineCards = useMemo(() => {
+        if (!Array.isArray(publishedMagazines) || publishedMagazines.length === 0) return [];
+        const posts = Array.isArray(allPostsForRecommend) ? allPostsForRecommend : [];
+        const byRecency = (a, b) => {
+            const now = Date.now();
+            const ta = new Date(a?.timestamp || a?.createdAt || now).getTime();
+            const tb = new Date(b?.timestamp || b?.createdAt || now).getTime();
+            return tb - ta;
+        };
+        const pickCoverByLocation = (locationText) => {
+            const key = String(locationText || '').trim();
+            if (!key) return '';
+            const lower = key.toLowerCase();
+            const matched = posts
+                .filter((p) => {
+                    const loc = String(p?.location || '').toLowerCase();
+                    const place = String(p?.placeName || '').toLowerCase();
+                    const detailed = String(p?.detailedLocation || '').toLowerCase();
+                    return (loc && loc.includes(lower)) || (place && place.includes(lower)) || (detailed && detailed.includes(lower));
+                })
+                .filter((p) => (Array.isArray(p?.images) && p.images.length > 0) || p?.image || p?.thumbnail)
+                .sort(byRecency)[0];
+            const raw = matched?.images?.[0] || matched?.image || matched?.thumbnail || '';
+            return raw ? getDisplayImageUrl(raw) : '';
+        };
+        return publishedMagazines
+            .map((m) => {
+                const firstSection = Array.isArray(m?.sections) ? m.sections[0] : null;
+                const loc = String(firstSection?.location || m?.title || '').trim();
+                const cover = pickCoverByLocation(loc);
+                return { magazine: m, cover };
+            })
+            .sort((a, b) => {
+                const ta = new Date(a?.magazine?.createdAt || a?.magazine?.created_at || 0).getTime();
+                const tb = new Date(b?.magazine?.createdAt || b?.magazine?.created_at || 0).getTime();
+                return (Number.isNaN(tb) ? 0 : tb) - (Number.isNaN(ta) ? 0 : ta);
+            })
+            .slice(0, 6);
+    }, [publishedMagazines, allPostsForRecommend]);
+
+    const filteredInterestPosts = useMemo(() => {
+        if (!selectedInterest) return [];
+        const allPosts = [...realtimeData, ...crowdedData, ...recommendedData];
+        return allPosts.filter(item => {
+            const location = item.location || item.title || '';
+            return location.includes(selectedInterest) || selectedInterest.includes(location);
+        }).filter((v, i, a) => a.findIndex(t => (t.id === v.id)) === i);
+    }, [selectedInterest, realtimeData, crowdedData, recommendedData]);
+
+    const handleAddInterestPlace = useCallback(() => {
+        // 새 UI: 여러 개의 국내 관심지역을 한 번에 추가
+        if (!selectedInterestLabels || selectedInterestLabels.length === 0) return;
+
+        let addedAny = false;
+        selectedInterestLabels.forEach((label) => {
+            const added = toggleInterestPlace(label);
+            if (added) addedAny = true;
+        });
+
+        if (addedAny) {
+            loadInterestPlaces();
+        }
+
+        setShowAddInterestModal(false);
+        setSelectedInterestLabels([]);
+    }, [selectedInterestLabels, loadInterestPlaces]);
+
+    const handleDeleteInterestPlace = useCallback(() => {
+        if (deleteConfirmPlace) {
+            toggleInterestPlace(deleteConfirmPlace);
+            loadInterestPlaces();
+            if (selectedInterest === deleteConfirmPlace) setSelectedInterest(null);
+            setDeleteConfirmPlace(null);
+        }
+    }, [deleteConfirmPlace, loadInterestPlaces, selectedInterest]);
+
+    const crowdedIdsKey = useMemo(() => crowdedData.map((p) => String(p.id)).join(','), [crowdedData]);
+
+    const hotFeedPost = useMemo(() => {
+        if (!crowdedData.length) return null;
+        const i = hotFeedSlideIndex % crowdedData.length;
+        return crowdedData[i];
+    }, [crowdedData, hotFeedSlideIndex]);
+
+    useEffect(() => {
+        let cancelled = false;
+        const post = hotFeedPost;
+        const firstVideo = post && Array.isArray(post.videos) && post.videos.length > 0 ? post.videos[0] : '';
+        if (!post || !firstVideo) {
+            setHotFeedVideoPoster(null);
+            return;
+        }
+        const still = getMapThumbnailUri(post);
+        if (still) {
+            setHotFeedVideoPoster(null);
+            return;
+        }
+
+        const capture = async () => {
+            try {
+                const url = getDisplayImageUrl(firstVideo);
+                if (!url) return;
+                const video = document.createElement('video');
+                video.crossOrigin = 'anonymous';
+                video.muted = true;
+                video.playsInline = true;
+                video.preload = 'auto';
+                video.src = url;
+
+                await new Promise((resolve, reject) => {
+                    const onLoaded = () => resolve();
+                    const onErr = () => reject(new Error('video load failed'));
+                    video.addEventListener('loadeddata', onLoaded, { once: true });
+                    video.addEventListener('error', onErr, { once: true });
+                });
+
+                const w = Math.max(1, video.videoWidth || 0);
+                const h = Math.max(1, video.videoHeight || 0);
+                if (!w || !h) return;
+
+                const canvas = document.createElement('canvas');
+                canvas.width = w;
+                canvas.height = h;
+                const ctx = canvas.getContext('2d');
+                if (!ctx) return;
+                ctx.drawImage(video, 0, 0, w, h);
+                const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+                if (!cancelled) setHotFeedVideoPoster(dataUrl);
+            } catch {
+                if (!cancelled) setHotFeedVideoPoster(null);
+            }
+        };
+
+        capture();
+        return () => {
+            cancelled = true;
+        };
+    }, [hotFeedPost]);
+
+    const hotFeedCardProps = useMemo(() => {
+        if (!hotFeedPost) return null;
+        const post = hotFeedPost;
+        const title = getHotFeedAddressLine(post);
+        const regionKey = (post.region || post.location || '').trim().split(/\s+/)[0] || post.region || post.location;
+        const weather = post.weather || weatherByRegion[regionKey] || null;
+        const hasWeather = weather && (weather.icon || weather.temperature);
+        const likeCount = Number(post.likes ?? post.likeCount ?? 0) || 0;
+        const commentCount = Array.isArray(post.comments) ? post.comments.length : 0;
+        const photoCount = Math.max(1, Math.min(99, (likeCount + commentCount * 2) % 28 + 4));
+        const viewingCount = computeHotFeedViewingCount(post);
+        const avatars = getAvatarUrls(post);
+        const regionShort = post.region || (post.location || '').trim().split(/\s+/).slice(0, 2).join(' ') || '위치';
+        const categoryLabel = getHotCategoryLabel(post);
+        const tagHint = (post.reasonTags && post.reasonTags[0])
+            ? String(post.reasonTags[0]).replace(/#/g, '').replace(/_/g, ' ').trim()
+            : ((Array.isArray(post.aiHotTags) && post.aiHotTags[0])
+                ? String(post.aiHotTags[0]).replace(/#/g, '').trim()
+                : '');
+        let whyHotLine = '';
+        if (post._impactLabel) {
+            whyHotLine = post._impactLabel;
+        } else if (categoryLabel === '급상승') {
+            whyHotLine = tagHint ? `최근 이 장소에 관심이 급증했어요. ${tagHint}` : '최근 관심이 급증한 실시간 핫플이에요.';
+        } else if (categoryLabel === '사람 많음') {
+            whyHotLine = tagHint ? `지금 현장 반응이 뜨거워요. ${tagHint}` : '지금 많은 분들이 몰리는 곳이에요.';
+        } else if (categoryLabel === '인기') {
+            whyHotLine = tagHint ? `꾸준히 사랑받는 장소예요. ${tagHint}` : '꾸준히 인기 있는 핫플이에요.';
+        } else {
+            whyHotLine = tagHint ? `실시간으로 올라온 정보예요. ${tagHint}` : '실시간으로 올라온 핫플 정보예요.';
+        }
+        const cityDongLine = getCityDongLine(post);
+        const photoCategoryLabel = getPhotoCategoryLabel(post);
+        const photoCaptionLine = getPhotoCaptionLine(post);
+        const loc = (post.location || '').trim();
+        const hasUserCaption = !!(post.note || '').trim()
+            || (!!(post.content || '').trim() && (post.content || '').trim() !== (loc ? `${loc}의 모습` : ''));
+        const captionForCard = hasUserCaption ? photoCaptionLine : whyHotLine;
+        return {
+            post,
+            title,
+            regionKey,
+            weather,
+            hasWeather,
+            photoCount,
+            viewingCount,
+            likeCount,
+            avatars,
+            regionShort,
+            categoryLabel,
+            whyHotLine,
+            cityDongLine,
+            photoCategoryLabel,
+            captionForCard,
+        };
+    }, [hotFeedPost, weatherByRegion]);
+
+    useEffect(() => {
+        setHotFeedSlideIndex(0);
+    }, [crowdedIdsKey]);
+
+    // 핫플이 여러 개일 때 순차(라운드로빈) 자동 전환
+    useEffect(() => {
+        if (crowdedData.length <= 1) return undefined;
+        const id = setInterval(() => {
+            setHotFeedSlideIndex((n) => (n + 1) % crowdedData.length);
+        }, 4500);
+        return () => clearInterval(id);
+    }, [crowdedData.length, crowdedIdsKey]);
+
+    useEffect(() => {
+        setHotFeedSocialIdx(0);
+    }, [hotFeedPost?.id, crowdedIdsKey]);
+
+    // 조회수·좋아요·사진 찍는 중 문구 순차 표시
+    useEffect(() => {
+        if (!hotFeedPost) return undefined;
+        const id = setInterval(() => {
+            setHotFeedSocialIdx((i) => (i + 1) % 3);
+        }, 2800);
+        return () => clearInterval(id);
+    }, [hotFeedPost?.id]);
+
+    const handleHotFeedLike = useCallback((e, post) => {
+        e.stopPropagation();
+        const wasLiked = isPostLiked(post.id);
+        const baseLikes = typeof post.likes === 'number'
+            ? post.likes
+            : (typeof post.likeCount === 'number' ? post.likeCount : 0);
+        const result = toggleLike(post.id, baseLikes);
+        if (result.existsInStorage) {
+            setCrowdedData((prev) =>
+                prev.map((p) => (p && p.id === post.id ? { ...p, likes: result.newCount, likeCount: result.newCount } : p))
+            );
+        } else {
+            const delta = wasLiked ? -1 : 1;
+            updatePostLikesSupabase(post.id, delta);
+            setCrowdedData((prev) =>
+                prev.map((p) =>
+                    (p && p.id === post.id ? { ...p, likes: result.newCount, likeCount: result.newCount } : p)
+                )
+            );
+        }
+    }, []);
+
+    useEffect(() => {
+        fetchPosts();
+        setUnreadNotificationCount(getUnreadCount());
+        loadInterestPlaces();
+    }, [fetchPosts, loadInterestPlaces]);
+
+    // 메인 화면으로 돌아올 때마다 목록 재조회 (좋아요·댓글 DB 반영 확인)
+    const prevPathRef = useRef('');
+    useEffect(() => {
+        if (location.pathname === '/') {
+            if (prevPathRef.current !== '/') fetchPosts();
+            prevPathRef.current = '/';
+        } else {
+            prevPathRef.current = location.pathname;
+        }
+    }, [location.pathname, fetchPosts]);
+
+    // 상세에서 좋아요 반영 시 메인 목록의 해당 게시물 좋아요 수 동기화
+    useEffect(() => {
+        const onPostLikeUpdated = (e) => {
+            const { postId, likesCount } = e.detail || {};
+            if (!postId || typeof likesCount !== 'number') return;
+            const id = String(postId);
+            const updateLikes = (p) => (p && String(p.id) === id ? { ...p, likes: likesCount, likeCount: likesCount } : p);
+            setRealtimeData((prev) => prev.map(updateLikes));
+            setCrowdedData((prev) => prev.map(updateLikes));
+            setRecommendedData((prev) => prev.map(updateLikes));
+            setAllPostsForRecommend((prev) => (Array.isArray(prev) ? prev.map(updateLikes) : prev));
+        };
+        window.addEventListener('postLikeUpdated', onPostLikeUpdated);
+        return () => window.removeEventListener('postLikeUpdated', onPostLikeUpdated);
+    }, []);
+
+    // 상세에서 댓글 반영 시 메인 목록의 해당 게시물 댓글 수 동기화
+    useEffect(() => {
+        const onPostCommentsUpdated = (e) => {
+            const { postId, comments } = e.detail || {};
+            if (!postId || !Array.isArray(comments)) return;
+            const id = String(postId);
+            const updateComments = (p) => (p && String(p.id) === id ? { ...p, comments } : p);
+            setRealtimeData((prev) => prev.map(updateComments));
+            setCrowdedData((prev) => prev.map(updateComments));
+            setRecommendedData((prev) => prev.map(updateComments));
+            setAllPostsForRecommend((prev) => (Array.isArray(prev) ? prev.map(updateComments) : prev));
+        };
+        window.addEventListener('postCommentsUpdated', onPostCommentsUpdated);
+        return () => window.removeEventListener('postCommentsUpdated', onPostCommentsUpdated);
+    }, []);
+
+    // 관리자가 게시물 삭제 시 메인에서 즉시 제거 후 DB 기준으로 다시 불러오기
+    useEffect(() => {
+        const onAdminDeletedPost = (e) => {
+            const postId = e.detail?.postId ? String(e.detail.postId) : null;
+            if (postId) {
+                setRealtimeData((prev) => prev.filter((p) => p && String(p.id) !== postId));
+                setCrowdedData((prev) => prev.filter((p) => p && String(p.id) !== postId));
+                setRecommendedData((prev) => prev.filter((p) => p && String(p.id) !== postId));
+                setAllPostsForRecommend((prev) => (Array.isArray(prev) ? prev.filter((p) => p && String(p.id) !== postId) : prev));
+            }
+            fetchPosts();
+        };
+        window.addEventListener('adminDeletedPost', onAdminDeletedPost);
+        return () => window.removeEventListener('adminDeletedPost', onAdminDeletedPost);
+    }, [fetchPosts]);
+
+    // 탭/창 포커스 복귀 시 목록 다시 불러오기 (다른 탭에서 관리자가 삭제한 경우 반영)
+    useEffect(() => {
+        const onVisible = () => { fetchPosts(); };
+        document.addEventListener('visibilitychange', onVisible);
+        return () => document.removeEventListener('visibilitychange', onVisible);
+    }, [fetchPosts]);
+
+    // 게시물에 날씨가 없을 때 지역 기준으로 기온 조회 (카드에 기온 표시용)
+    useEffect(() => {
+        const regions = new Set();
+        [...realtimeData, ...crowdedData].forEach((p) => {
+            if (p && !p.weather && (p.region || p.location)) {
+                const r = (p.region || p.location || '').trim().split(/\s+/)[0] || p.region || p.location;
+                if (r) regions.add(r);
+            }
+        });
+        if (regions.size === 0) return;
+        let cancelled = false;
+        const map = {};
+        Promise.all(
+            Array.from(regions).map(async (region) => {
+                try {
+                    const res = await getWeatherByRegion(region);
+                    if (!cancelled && res?.success && res.weather) return { region, weather: res.weather };
+                } catch (_) {}
+                return null;
+            })
+        ).then((results) => {
+            if (cancelled) return;
+            results.forEach((r) => { if (r) map[r.region] = r.weather; });
+            setWeatherByRegion((prev) => ({ ...prev, ...map }));
+        });
+        return () => { cancelled = true; };
+    }, [realtimeData, crowdedData]);
+
+    // 새 알림이 생기면 메인 화면에서도 배지 갱신
+    useEffect(() => {
+        const onCountChange = () => setUnreadNotificationCount(getUnreadCount());
+        window.addEventListener('notificationCountChanged', onCountChange);
+        return () => window.removeEventListener('notificationCountChanged', onCountChange);
+    }, []);
+
+    // 추천 여행지 탭 변경 시 추천 목록만 갱신 (실시간 급상승 태그는 그대로 유지)
+    useEffect(() => {
+        if (!allPostsForRecommend || allPostsForRecommend.length === 0) return;
+        const recs = getRecommendedRegions(allPostsForRecommend, selectedRecommendTag);
+        setRecommendedData(recs.slice(0, 10));
+    }, [selectedRecommendTag, allPostsForRecommend]);
+
+    return (
+        <div className="screen-layout bg-background-light dark:bg-background-dark">
+            <div
+                className="screen-content"
+                style={{
+                    background: '#ffffff',
                 }}
-                onClick={() => handleItemClickWithDragCheck(item, 'recommended')}
-              >
-                <div className="card-header" style={{ 
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  padding: '11px'
-                }}>
-                  <div className="user-info" style={{ 
+            >
+                {/* 앱 헤더: 로고 + 검색창 + 알림 */}
+                <div className="app-header" style={{
                     display: 'flex',
+                    justifyContent: 'space-between',
                     alignItems: 'center',
-                    gap: '9px'
-                  }}>
-                    <div className="user-avatar" style={{ 
-                      width: '34px',
-                      height: '34px',
-                      borderRadius: '50%',
-                      background: 'linear-gradient(135deg, #E0F7FA 0%, #00BCD4 100%)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: '17px'
-                    }}>
-                      {item.userId ? String(item.userId).charAt(0) : '👤'}
-          </div>
-                    <div className="user-details" style={{ 
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '1px'
-                    }}>
-                      <span className="user-name" style={{ 
-                        fontSize: '12px',
-                        fontWeight: 600,
-                        color: '#111827'
-                      }}>
-                        {item.user || '여행자'}
-              </span>
-                      <span className="post-time" style={{ 
-                        fontSize: '10px',
-                        color: '#6B7280'
-                      }}>
-                        {item.time || '방금 전'}
-                      </span>
-            </div>
-                  </div>
-                  {item.location && (
-                    <span className="location-badge" style={{ 
-                      fontSize: '10px',
-                      fontWeight: 600,
-                      color: '#00BCD4',
-                      background: '#E0F7FA',
-                      padding: '4px 8px',
-                      borderRadius: '8px'
-                    }}>
-                      📍 {item.location}
-              </span>
-                  )}
-            </div>
-                <div className="card-image" style={{ 
-                  position: 'relative',
-                  width: '100%',
-                  height: '220px',
-                  background: 'linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%)',
-                  overflow: 'hidden'
-                }}>
-                      {item.videos && item.videos.length > 0 ? (
-                        <video
-                          src={item.videos[0]}
-                      style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                          autoPlay
-                          loop
-                          muted
-                          playsInline
-                        />
-                      ) : (
-                        <img
-                          src={item.image || 'https://images.unsplash.com/photo-1524222717473-730000096953?w=800&auto=format&fit=crop&q=80'}
-                          alt={item.location || '여행 사진'}
-                      style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                          onError={(e) => {
-                            e.currentTarget.src = 'https://images.unsplash.com/photo-1524222717473-730000096953?w=800&auto=format&fit=crop&q=80';
-                          }}
-                        />
-                      )}
-                  <div className="live-indicator" style={{ 
-                        position: 'absolute', 
-                    top: '10px',
-                    right: '10px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '5px',
-                    padding: '5px 11px',
-                    background: 'rgba(0, 0, 0, 0.75)',
+                    gap: '10px',
+                    padding: '12px 16px',
+                    background: '#ffffff',
                     backdropFilter: 'blur(10px)',
-                    borderRadius: '16px',
-                    fontSize: '10px',
-                    fontWeight: 700,
-                    color: 'white'
-                  }}>
-                    <span className="live-pulse" style={{ 
-                      width: '5px',
-                      height: '5px',
-                      background: '#ef4444',
-                      borderRadius: '50%',
-                      animation: 'pulse 1.5s ease-in-out infinite'
-                    }}></span>
-                    <span>{item.time || 'LIVE'}</span>
-                  </div>
-                </div>
-                <div className="card-info" style={{ padding: '11px' }}>
-                  <div className="info-tags" style={{ 
-                    display: 'flex',
-                    gap: '5px',
-                    marginBottom: '9px',
-                    flexWrap: 'wrap'
-                  }}>
-                    {item.category && (
-                      <span className="tag" style={{ 
-                        fontSize: '10px',
-                        fontWeight: 600,
-                        color: '#374151',
-                        background: '#F3F4F6',
-                        padding: '4px 9px',
-                        borderRadius: '8px'
-                      }}>
-                        {item.category === '자연' ? '🏞️' : item.category === '맛집' ? '🍜' : item.category === '카페' ? '☕' : '📍'} {item.category}
-                      </span>
-                    )}
-                    {item.weather && (
-                      <span className="tag" style={{ 
-                        fontSize: '10px',
-                        fontWeight: 600,
-                        color: '#374151',
-                        background: '#F3F4F6',
-                        padding: '4px 9px',
-                        borderRadius: '8px'
-                      }}>
-                        {item.weather}
-                      </span>
-                    )}
-                    {item.crowdLevel && (
-                      <span className="tag" style={{ 
-                        fontSize: '10px',
-                        fontWeight: 600,
-                        color: '#374151',
-                        background: '#F3F4F6',
-                        padding: '4px 9px',
-                        borderRadius: '8px'
-                      }}>
-                        {item.crowdLevel === 'high' ? '👥 매우 혼잡' : item.crowdLevel === 'medium' ? '👥 보통' : '👥 여유'}
-                      </span>
-                    )}
-                  </div>
-                  {item.note && (
-                    <p className="post-text" style={{ 
-                              fontSize: '12px', 
-                      lineHeight: '1.5',
-                      color: '#1F2937',
-                      marginBottom: '10px'
-                    }}>
-                      "{item.note}"
-                            </p>
-                          )}
-                  <div className="card-actions" style={{ 
-                    display: 'flex',
-                    gap: '14px',
-                    paddingTop: '9px',
-                    borderTop: '1px solid #F3F4F6'
-                  }}>
-                    <span className="action-btn" style={{ 
-                      fontSize: '11px',
-                      fontWeight: 600,
-                      color: '#4B5563'
-                    }}>❤️ {item.likes || 0}</span>
-                    <span className="action-btn" style={{ 
-                      fontSize: '11px',
-                      fontWeight: 600,
-                      color: '#4B5563'
-                    }}>💬 {item.comments?.length || 0}</span>
-                    <span className="action-btn" style={{ 
-                      fontSize: '11px',
-                      fontWeight: 600,
-                      color: '#4B5563',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center'
-                    }}>
-                      <span className="material-symbols-outlined" style={{ fontSize: '14px', margin: 0 }}>bookmark</span>
+                    position: 'sticky',
+                    top: 0,
+                    zIndex: 100,
+                    borderBottom: 'none',
+                    boxShadow: 'none'
+                }}>
+                    <span
+                        className="logo-text"
+                        style={{
+                            fontSize: '18px',
+                            fontWeight: 700,
+                            color: '#0f172a',
+                            opacity: 0.9,
+                            letterSpacing: '-0.3px',
+                            flexShrink: 0
+                        }}
+                    >
+                        Live Journey
                     </span>
+                    {/* 중앙 검색창 (예시 이미지 스타일 참고) */}
+                    <button
+                        type="button"
+                        onClick={() => navigate('/search')}
+                        style={{
+                            flex: 1,
+                            minWidth: 0,
+                            maxWidth: 260,
+                            height: 32,
+                            marginLeft: 12,
+                            marginRight: 8,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            padding: '0 4px',
+                            background: 'transparent',
+                            border: 'none',
+                            borderBottom: '1px solid #e2e8f0',
+                            color: '#94a3b8',
+                            fontSize: 14,
+                            cursor: 'pointer'
+                        }}
+                        aria-label="검색으로 이동"
+                    >
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            어디로 떠나볼까요?
+                        </span>
+                        <span className="material-symbols-outlined" style={{ fontSize: 20, color: '#94a3b8' }}>search</span>
+                    </button>
+                    <button
+                        onClick={() => navigate('/notifications')}
+                        className="icon-btn"
+                        style={{ minWidth: 44, minHeight: 44, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}
+                        aria-label="알림"
+                    >
+                        <span className="material-symbols-outlined" style={{ fontSize: 24 }}>notifications</span>
+                        {unreadNotificationCount > 0 && (
+                            <span className="noti-badge" aria-label="새 알림">
+                                {unreadNotificationCount > 99 ? '99+' : unreadNotificationCount}
+                            </span>
+                        )}
+                    </button>
+                </div>
+
+                {/* 상단 배너는 현재 사용하지 않음 */}
+
+                {/* 관심 지역/장소 — 라벨 없이 원형 목록만 */}
+                <div style={{ padding: '4px 16px 8px', background: '#ffffff' }}>
+                    <div
+                        style={{ display: 'flex', gap: '10px', padding: '0 0 4px 0', overflowX: 'auto', scrollbarWidth: 'none', cursor: 'grab', scrollSnapType: 'x mandatory' }}
+                        className="hide-scrollbar"
+                        onMouseDown={handleDragStart}
+                    >
+                        {interestPlaces.map((place, idx) => {
+                            const isSelected = selectedInterest === place.name;
+                            return (
+                                <div
+                                    key={idx}
+                                    style={{
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'center',
+                                        gap: 4,
+                                        flexShrink: 0,
+                                        position: 'relative',
+                                        scrollSnapAlign: 'start',
+                                        minWidth: 56,
+                                    }}
+                                >
+                                        <div style={{ position: 'relative' }}>
+                                            <div
+                                                role="button"
+                                                tabIndex={0}
+                                                onClick={withDragCheck(() => setSelectedInterest(isSelected ? null : place.name))}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter' || e.key === ' ') {
+                                                        e.preventDefault();
+                                                        setSelectedInterest(isSelected ? null : place.name);
+                                                    }
+                                                }}
+                                                style={{
+                                                    width: 48,
+                                                    height: 48,
+                                                    minWidth: 48,
+                                                    minHeight: 48,
+                                                    borderRadius: '50%',
+                                                    border: isSelected
+                                                        ? '2px solid rgba(15,23,42,0.9)'
+                                                        : '1px solid rgba(148,163,184,0.7)',
+                                                    overflow: 'hidden',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    cursor: 'pointer',
+                                                    background: '#E5E7EB',
+                                                }}
+                                            >
+                                                <img
+                                                    src={getRegionDefaultImage(place.name)}
+                                                    alt={place.name}
+                                                    style={{
+                                                        width: '100%',
+                                                        height: '100%',
+                                                        objectFit: 'cover',
+                                                        display: 'block',
+                                                    }}
+                                                />
+                                            </div>
+                                            {isSelected && (
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        withDragCheck(() => setDeleteConfirmPlace(place.name))();
+                                                    }}
+                                                    style={{
+                                                        position: 'absolute',
+                                                        top: -4,
+                                                        right: 0,
+                                                        transform: 'translate(30%, -40%)',
+                                                        width: 56,
+                                                        height: 56,
+                                                        minWidth: 56,
+                                                        minHeight: 56,
+                                                        padding: 0,
+                                                        border: 'none',
+                                                        background: 'transparent',
+                                                        cursor: 'pointer',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        zIndex: 2,
+                                                    }}
+                                                    aria-label={`${place.name} 관심 지역 삭제`}
+                                                >
+                                                    <span style={{
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        width: 28,
+                                                        height: 28,
+                                                        borderRadius: '999px',
+                                                        backgroundColor: '#ffffff',
+                                                        border: '1px solid #ffeded',
+                                                        color: '#ff4d4f',
+                                                        fontSize: 18,
+                                                        lineHeight: 0,
+                                                        fontWeight: 700,
+                                                        boxShadow: '0 2px 6px rgba(0,0,0,0.12)',
+                                                    }}>
+                                                        ×
+                                                    </span>
+                                                </button>
+                                            )}
+                                        </div>
+                                    <span
+                                        style={{
+                                            fontSize: 11,
+                                            color: isSelected ? '#0F172A' : '#94A3B8',
+                                            fontWeight: isSelected ? 600 : 400,
+                                            maxWidth: 56,
+                                            overflow: 'hidden',
+                                            textOverflow: 'ellipsis',
+                                            whiteSpace: 'nowrap',
+                                            textAlign: 'center',
+                                        }}
+                                    >
+                                        {place.name}
+                                    </span>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+
+                {/* 지금 여기는 — 관심 지역 선택 시 숨김, 한 화면에 핫플까지 보이도록 높이 축소 */}
+                {!selectedInterest && (
+                    <div style={{ padding: '12px 16px 14px', background: '#ffffff' }}>
+                    <div style={{ padding: '0 0 8px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: '#111827' }}>지금 여기는</h2>
+                        </div>
+                        <button
+                            onClick={() => navigate('/realtime-feed')}
+                            className="border-none bg-transparent text-primary hover:text-primary-dark dark:hover:text-primary-soft text-sm font-semibold cursor-pointer py-1.5 px-2.5 min-h-[36px] flex items-center gap-1"
+                        >
+                            <span>더보기</span>
+                        </button>
+                    </div>
+                    <div
+                    style={{ display: 'flex', gap: '7px', padding: '0 0 12px 0', overflowX: 'auto', scrollbarWidth: 'none', scrollSnapType: 'x mandatory', WebkitOverflowScrolling: 'touch', cursor: 'grab', background: '#ffffff' }}
+                        className="hide-scrollbar"
+                        onMouseDown={handleDragStart}
+                    >
+                        {realtimeData.map((post) => {
+                            // 동영상 우선 체크: videos 배열이 있으면 첫 번째 동영상 사용
+                            let firstVideo = null;
+                            if (post.videos) {
+                                if (Array.isArray(post.videos) && post.videos.length > 0) {
+                                    firstVideo = getDisplayImageUrl(post.videos[0]);
+                                } else if (typeof post.videos === 'string' && post.videos.trim()) {
+                                    firstVideo = getDisplayImageUrl(post.videos);
+                                }
+                            }
+                            
+                            // 동영상이 없을 때만 이미지 사용
+                            const firstImage = firstVideo ? null : getDisplayImageUrl(Array.isArray(post.images) && post.images.length > 0 ? post.images[0] : (post.image || post.thumbnail || ''));
+                            const regionKey = (post.region || post.location || '').trim().split(/\s+/)[0] || post.region || post.location;
+                            const weather = post.weather || weatherByRegion[regionKey] || null;
+                            const hasWeather = weather && (weather.icon || weather.temperature);
+                            const likeCount = Number(post.likes ?? post.likeCount ?? 0) || 0;
+                            const commentCount = Array.isArray(post.comments) ? post.comments.length : 0;
+                            return (
+                                <div
+                                    key={post.id}
+                                    onClick={withDragCheck(() => navigate(`/post/${post.id}`, { state: { post, allPosts: realtimeData } }))}
+                                    style={{
+                                        minWidth: '52%',
+                                        width: '52%',
+                                        overflow: 'visible',
+                                        flexShrink: 0,
+                                        cursor: 'pointer',
+                                        scrollSnapAlign: 'start',
+                                        scrollSnapStop: 'always'
+                                    }}
+                                >
+                                    <div style={{ width: '100%', height: '200px', background: '#e5e7eb', position: 'relative', borderRadius: '14px', overflow: 'hidden', marginBottom: '4px' }}>
+                                        {firstVideo ? (
+                                            <video
+                                                ref={(el) => {
+                                                    if (el) {
+                                                        videoRefs.current.set(`realtime-${post.id}`, el);
+                                                    } else {
+                                                        videoRefs.current.delete(`realtime-${post.id}`);
+                                                    }
+                                                }}
+                                                data-video-id={`realtime-${post.id}`}
+                                                src={firstVideo}
+                                                poster={firstImage || getDisplayImageUrl(Array.isArray(post.images) && post.images.length > 0 ? post.images[0] : (post.image || post.thumbnail || '')) || undefined}
+                                                muted
+                                                loop
+                                                playsInline
+                                                style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', borderRadius: '14px' }}
+                                            />
+                                        ) : firstImage ? (
+                                            <img
+                                                src={firstImage}
+                                                alt={post.location}
+                                                style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', borderRadius: '14px' }}
+                                            />
+                                        ) : null}
+                                        {/* 날씨 정보만 이미지 우측 상단에 오버레이 */}
+                                        {hasWeather && (
+                                            <div style={{ position: 'absolute', top: '6px', right: '10px', background: 'rgba(15,23,42,0.7)', padding: '4px 8px', borderRadius: '999px', fontSize: '12px', fontWeight: 600, color: '#f9fafb', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                {weather.icon && <span>{weather.icon}</span>}
+                                                {weather.temperature && <span>{weather.temperature}</span>}
+                                            </div>
+                                        )}
+                                        {/* 좋아요 하트 - 이미지 우하단 (아이콘 + 숫자) */}
+                                        <div style={{ position: 'absolute', bottom: '10px', right: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: 'rgba(255,255,255,0.96)', color: '#111827', padding: '4px 8px', borderRadius: '9999px', fontSize: '11px', fontWeight: 600, boxShadow: '0 2px 6px rgba(15,23,42,0.18)' }}>
+                                                <span className="material-symbols-outlined" style={{ fontSize: 14, color: '#f97373' }}>favorite</span>
+                                                <span>{likeCount}</span>
+                                            </span>
+                                        </div>
+                                    </div>
+                                    {/* 사진 정보 하단 — 설명만 표시 */}
+                                    <div style={{ padding: '6px 14px 10px', minHeight: '100px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px', flexShrink: 0 }}>
+                                            <div style={{ color: '#111827', fontSize: '14px', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>
+                                                {post.location || '어딘가의 지금'}
+                                            </div>
+                                            <span style={{ fontSize: '11px', color: '#6b7280', flexShrink: 0 }}>
+                                                {post.time}
+                                            </span>
+                                        </div>
+                                        {(post.content || post.note) && (
+                                            <div style={{ color: '#4b5563', fontSize: '13px', lineHeight: 1.45, marginTop: '6px', height: '2.9em', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                                                {post.content || post.note}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+                )}
+
+                {/* 메인 컨텐츠 */}
+                {selectedInterest ? (
+                    <div style={{ padding: '0 16px 20px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', background: '#f0f9ff', padding: '6px 12px', borderRadius: '12px' }}>
+                            <span style={{ fontWeight: 700, color: '#0284c7', fontSize: '14px', lineHeight: 1.3 }}>"{selectedInterest}" 모아보기</span>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    // 관심지역 전체 피드를 별도 화면(지역 상세)에서 볼 수 있도록 이동
+                                    navigate(`/region/${encodeURIComponent(selectedInterest)}`, {
+                                        state: { region: { name: selectedInterest } },
+                                    });
+                                }}
+                                style={{
+                                    border: 'none',
+                                    background: 'none',
+                                    color: '#0284c7',
+                                    fontSize: '14px',
+                                    fontWeight: 600,
+                                    cursor: 'pointer',
+                                    padding: '4px 10px',
+                                    minHeight: 'auto',
+                                    lineHeight: 1.3,
+                                }}
+                            >
+                                전체 보기
+                            </button>
+                        </div>
+                        {filteredInterestPosts.length > 0 ? (
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
+                                {filteredInterestPosts.map((post) => (
+                                    <div key={post.id} onClick={() => navigate(`/post/${post.id}`, { state: { post, allPosts: filteredInterestPosts } })} style={{ overflow: 'hidden', cursor: 'pointer', display: 'flex', flexDirection: 'column' }}>
+                                        {/* 정사각형 썸네일 — 2x2 그리드 통일 */}
+                                        <div style={{ width: '100%', aspectRatio: '1', background: '#eee', position: 'relative', overflow: 'hidden', borderRadius: '12px' }}>
+                                            {(Array.isArray(post.videos) && post.videos.length > 0) ? (
+                                                <video
+                                                    ref={(el) => {
+                                                        if (el) {
+                                                            videoRefs.current.set(`interest-${post.id}`, el);
+                                                        } else {
+                                                            videoRefs.current.delete(`interest-${post.id}`);
+                                                        }
+                                                    }}
+                                                    data-video-id={`interest-${post.id}`}
+                                                    src={getDisplayImageUrl(post.videos[0])}
+                                                    poster={getDisplayImageUrl(post.images?.[0] || post.image || post.thumbnail)}
+                                                    muted
+                                                    loop
+                                                    playsInline
+                                                    style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', borderRadius: '12px' }}
+                                                />
+                                            ) : post.thumbnailIsVideo && post.firstVideoUrl ? (
+                                                <video src={post.firstVideoUrl} muted playsInline preload="metadata" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', borderRadius: '12px' }} />
+                                            ) : (post.images && post.images.length > 0) ? (
+                                                <img src={getDisplayImageUrl(post.images[0])} alt={post.location} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', borderRadius: '12px' }} />
+                                            ) : (
+                                                <img src={getDisplayImageUrl(post.image || post.thumbnail)} alt={post.location} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', borderRadius: '12px' }} />
+                                            )}
+                                            {/* 좋아요·댓글 — 이미지 우하단 반투명 pill */}
+                                            <div style={{ position: 'absolute', bottom: '6px', right: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', background: 'rgba(15,23,42,0.6)', color: '#fff', padding: '3px 7px', borderRadius: '9999px', fontSize: '10px', fontWeight: 600 }}>
+                                                    좋아요 {Number(post.likes ?? post.likeCount ?? 0) || 0}
+                                                </span>
+                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', background: 'rgba(15,23,42,0.6)', color: '#fff', padding: '3px 7px', borderRadius: '9999px', fontSize: '10px', fontWeight: 600 }}>
+                                                    댓글 {Array.isArray(post.comments) ? post.comments.length : 0}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div style={{ padding: '8px 4px 6px' }}>
+                                            <div style={{ fontSize: '12px', fontWeight: 600, color: '#333', marginBottom: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{post.content || post.note || post.location || ''}</div>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '11px', color: '#94a3b8' }}>
+                                                <span>{post.time || ''}</span>
+                                                <span style={{ maxWidth: '55%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{post.location || ''}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div style={{ textAlign: 'center', padding: '60px 0', color: '#94a3b8' }}>
+                                <p style={{ margin: 0, fontSize: '14px' }}>아직 이 지역의 사진이 없어요.</p>
+                                <p style={{ margin: '4px 0 0 0', fontSize: '12px' }}>첫 번째 사진을 올려보세요!</p>
+                            </div>
+                        )}
+                    </div>
+                ) : (
+                <div style={{ padding: '8px 16px 24px', background: '#ffffff', minHeight: '100%' }}>
+
+                        {/* 실시간 핫플 — 이미지 4:3 세로 비중 + 섹션 여백 */}
+                        <div style={{ marginBottom: '0', paddingTop: '4px', paddingBottom: '24px', background: '#ffffff' }}>
+                            <div style={{ padding: '0 0 14px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#ffffff' }}>
+                                <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 700, color: '#111827' }}>실시간 핫플</h3>
+                                <button
+                                    type="button"
+                                    onClick={() => navigate('/crowded-place')}
+                                    className="border-none bg-transparent text-primary hover:text-primary-dark dark:hover:text-primary-soft text-sm font-semibold cursor-pointer py-1.5 px-2 min-h-[36px] flex items-center gap-0.5"
+                                >
+                                    <span>더보기</span>
+                                    <span className="material-symbols-outlined" style={{ fontSize: 18 }}>chevron_right</span>
+                                </button>
+                            </div>
+                            {!hotFeedCardProps ? (
+                                <div style={{ textAlign: 'center', padding: '28px 12px', color: '#94a3b8', fontSize: '14px' }}>
+                                    아직 실시간 핫플 게시물이 없어요.
+                                </div>
+                            ) : (
+                                (() => {
+                                    const {
+                                        post,
+                                        title,
+                                        weather,
+                                        hasWeather,
+                                        photoCount,
+                                        viewingCount,
+                                        likeCount,
+                                        avatars,
+                                        regionShort,
+                                        categoryLabel,
+                                        cityDongLine,
+                                        photoCategoryLabel,
+                                        captionForCard,
+                                    } = hotFeedCardProps;
+                                    const socialLines = [
+                                        `지금 약 ${viewingCount}명이 이 피드를 보고 있어요`,
+                                        `좋아요 ${likeCount}개를 받았어요`,
+                                        `${photoCount}명이 지금 사진 찍는 중이에요`,
+                                    ];
+                                    const socialText = socialLines[hotFeedSocialIdx % 3];
+                                    const liked = isPostLiked(post.id);
+                                    const slideIdx = crowdedData.length ? hotFeedSlideIndex % crowdedData.length : 0;
+                                    const badgeBg = '#26C6DA';
+                                    return (
+                                    <div
+                                        key={`${post.id}-${slideIdx}`}
+                                        className="hot-feed-card-enter"
+                                        onClick={withDragCheck(() => navigate(`/post/${post.id}`, { state: { post, allPosts: crowdedData } }))}
+                                        style={{
+                                            cursor: 'pointer',
+                                            background: 'transparent',
+                                            border: 'none',
+                                            boxShadow: 'none',
+                                            overflow: 'visible',
+                                        }}
+                                    >
+                                        <div
+                                            className="main-hot-feed-media"
+                                            style={{
+                                                width: '100%',
+                                                aspectRatio: '4/3',
+                                                maxHeight: 'min(54vw, 36dvh, 228px)',
+                                                position: 'relative',
+                                                background: '#e5e7eb',
+                                                overflow: 'hidden',
+                                                borderRadius: 14,
+                                                boxShadow: '0 2px 14px rgba(15, 23, 42, 0.07)',
+                                            }}
+                                        >
+                                            <div style={{ position: 'absolute', top: 8, left: 8, zIndex: 10, display: 'inline-flex', alignItems: 'center', gap: 4, background: badgeBg, color: '#fff', padding: '4px 9px', borderRadius: 9999, fontSize: 10, fontWeight: 800, boxShadow: '0 2px 8px rgba(0,0,0,0.12)' }}>
+                                                <span className="material-symbols-outlined" style={{ fontSize: 14, fontVariationSettings: '"FILL" 1' }}>local_fire_department</span>
+                                                {categoryLabel}
+                                            </div>
+                                            {hasWeather ? (
+                                                <div style={{ position: 'absolute', top: 8, right: 8, zIndex: 10, display: 'inline-flex', alignItems: 'center', gap: 4, background: 'rgba(15,23,42,0.52)', backdropFilter: 'blur(8px)', color: '#f8fafc', padding: '4px 9px', borderRadius: 9999, fontSize: 10, fontWeight: 600, maxWidth: '58%' }}>
+                                                    {weather.icon && <span style={{ fontSize: 12 }}>{weather.icon}</span>}
+                                                    <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                        {weather.temperature}
+                                                        {weather.condition && weather.condition !== '-' ? ` ${weather.condition}` : ''}
+                                                    </span>
+                                                </div>
+                                            ) : (
+                                                <div style={{ position: 'absolute', top: 8, right: 8, zIndex: 10, display: 'inline-flex', alignItems: 'center', gap: 3, background: 'rgba(15,23,42,0.52)', backdropFilter: 'blur(8px)', color: '#f8fafc', padding: '4px 9px', borderRadius: 9999, fontSize: 10, fontWeight: 600, maxWidth: '58%' }}>
+                                                    <span className="material-symbols-outlined" style={{ fontSize: 13 }}>location_on</span>
+                                                    <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{regionShort}</span>
+                                                </div>
+                                            )}
+                                            {(() => {
+                                                const still = getMapThumbnailUri(post);
+                                                const src = still
+                                                    || hotFeedVideoPoster
+                                                    || (Array.isArray(post.images) && post.images.length > 0 ? post.images[0] : (post.image || post.thumbnail || ''));
+                                                if (!src) return <div style={{ width: '100%', height: '100%', background: '#e5e7eb' }} />;
+                                                return (
+                                                    <img
+                                                        src={src.startsWith('data:') ? src : getDisplayImageUrl(src)}
+                                                        alt={title}
+                                                        style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                                                    />
+                                                );
+                                            })()}
+                                            {(() => {
+                                                const raw = Array.isArray(post.images)
+                                                    ? post.images
+                                                    : post.images
+                                                        ? [post.images]
+                                                        : post.image
+                                                            ? [post.image]
+                                                            : post.thumbnail
+                                                                ? [post.thumbnail]
+                                                                : [];
+                                                const thumbs = raw.map((v) => getDisplayImageUrl(v)).filter(Boolean).slice(0, 3);
+                                                const showThumbs = thumbs.length > 1;
+                                                if (!showThumbs) return null;
+                                                return (
+                                                    <div
+                                                        style={{
+                                                            position: 'absolute',
+                                                            left: 10,
+                                                            bottom: 10,
+                                                            zIndex: 12,
+                                                            display: 'flex',
+                                                            gap: 6,
+                                                            padding: '6px 8px',
+                                                            borderRadius: 9999,
+                                                            background: 'rgba(15,23,42,0.38)',
+                                                            backdropFilter: 'blur(8px)',
+                                                        }}
+                                                    >
+                                                        {thumbs.map((src, i) => (
+                                                            <img
+                                                                key={`${post.id}-thumb-${i}`}
+                                                                src={src}
+                                                                alt=""
+                                                                style={{
+                                                                    width: 34,
+                                                                    height: 34,
+                                                                    borderRadius: 10,
+                                                                    objectFit: 'cover',
+                                                                    border: '1px solid rgba(255,255,255,0.55)',
+                                                                    boxShadow: '0 1px 5px rgba(0,0,0,0.18)',
+                                                                }}
+                                                            />
+                                                        ))}
+                                                    </div>
+                                                );
+                                            })()}
+                                        </div>
+                                        <div style={{ padding: '10px 2px 4px', background: 'transparent', border: 'none', boxShadow: 'none' }}>
+                                            <h4 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#111827', lineHeight: 1.3 }}>{title}</h4>
+                                            {(cityDongLine || photoCategoryLabel) ? (
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginTop: 6 }}>
+                                                    <span style={{ fontSize: 12, color: '#64748b', fontWeight: 500, lineHeight: 1.4, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cityDongLine || regionShort}</span>
+                                                    {photoCategoryLabel ? (
+                                                        <span style={{ fontSize: 10, fontWeight: 800, color: '#fff', background: '#26C6DA', padding: '3px 9px', borderRadius: 9999, flexShrink: 0 }}>{photoCategoryLabel}</span>
+                                                    ) : null}
+                                                </div>
+                                            ) : null}
+                                            <p style={{ margin: '8px 0 0 0', fontSize: '12px', color: '#374151', lineHeight: 1.5, fontWeight: 500, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', background: 'transparent', boxShadow: 'none' }}>{captionForCard}</p>
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, gap: 8 }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', minWidth: 0, flex: 1, gap: 8 }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', paddingLeft: 2 }}>
+                                                        {avatars.slice(0, 3).map((url, ai) => (
+                                                            <img
+                                                                key={`${post.id}-av-${ai}`}
+                                                                src={url}
+                                                                alt=""
+                                                                style={{
+                                                                    width: 26,
+                                                                    height: 26,
+                                                                    borderRadius: '50%',
+                                                                    border: '2px solid #fff',
+                                                                    marginLeft: ai === 0 ? 0 : -9,
+                                                                    objectFit: 'cover',
+                                                                    flexShrink: 0,
+                                                                    background: '#e2e8f0',
+                                                                }}
+                                                            />
+                                                        ))}
+                                                        {avatars.length === 0 && (
+                                                            <span style={{ width: 26, height: 26, borderRadius: '50%', background: '#e2e8f0', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11 }} aria-hidden>👤</span>
+                                                        )}
+                                                    </div>
+                                                    <span
+                                                        key={`social-${post.id}-${hotFeedSocialIdx}`}
+                                                        style={{ fontSize: 11, color: '#64748b', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}
+                                                    >
+                                                        {socialText}
+                                                    </span>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    aria-label="좋아요"
+                                                    onClick={(e) => handleHotFeedLike(e, post)}
+                                                    style={{ background: 'none', border: 'none', padding: 4, cursor: 'pointer', flexShrink: 0, color: liked ? '#f43f5e' : '#94a3b8' }}
+                                                >
+                                                    <span className="material-symbols-outlined" style={{ fontSize: 22, fontVariationSettings: liked ? '"FILL" 1' : '"FILL" 0' }}>favorite</span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    );
+                                })()
+                            )}
+                        </div>
+
+                        {/* ✨ 추천 여행지 */}
+                        <div style={{ marginBottom: '24px', background: '#ffffff' }}>
+                            <div style={{ padding: '0 0 12px 0' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: '#374151' }}>추천 여행지</h3>
+                                </div>
+                                <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#64748b' }}>
+                                    {RECOMMENDATION_TYPES.find(t => t.id === selectedRecommendTag)?.description}
+                                </p>
+                            </div>
+                            <div
+                                style={{
+                                    display: 'flex',
+                                    gap: 8,
+                                    padding: '0 0 12px 0',
+                                    overflowX: 'auto',
+                                    scrollbarWidth: 'none',
+                                    WebkitOverflowScrolling: 'touch',
+                                    cursor: 'grab',
+                                    scrollSnapType: 'x mandatory',
+                                }}
+                                className="hide-scrollbar"
+                                onMouseDown={handleDragStart}
+                            >
+                                {RECOMMENDATION_TYPES.map((tag) => {
+                                    const isActive = selectedRecommendTag === tag.id;
+                                    return (
+                                        <button
+                                            key={tag.id}
+                                            type="button"
+                                            onClick={withDragCheck(() => setSelectedRecommendTag(tag.id))}
+                                            style={{
+                                                flexShrink: 0,
+                                                scrollSnapAlign: 'start',
+                                                padding: '6px 12px',
+                                                borderRadius: 999,
+                                                border: isActive ? '1px solid #26C6DA' : '1px solid #e2e8f0',
+                                                backgroundColor: isActive ? 'rgba(38,198,218,0.08)' : '#ffffff',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                gap: 4,
+                                                fontSize: 12,
+                                                fontWeight: isActive ? 700 : 500,
+                                                color: isActive ? '#0f172a' : '#64748b',
+                                                whiteSpace: 'nowrap',
+                                                cursor: 'pointer',
+                                                transition: 'all 0.18s ease-out',
+                                            }}
+                                        >
+                                            <span>{tag.name}</span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                            <div
+                                style={{
+                                    display: 'flex',
+                                    gap: '10px',
+                                    padding: '0 0 16px 0',
+                                    overflowX: 'auto',
+                                    scrollbarWidth: 'none',
+                                    WebkitOverflowScrolling: 'touch',
+                                    cursor: 'grab'
+                                }}
+                                className="hide-scrollbar"
+                                onMouseDown={handleDragStart}
+                            >
+                                {recommendedData.map((item, idx) => {
+                                    const regionPosts = allPostsForRecommend.filter(p =>
+                                        (typeof p.location === 'string' && p.location.includes(item.regionName)) ||
+                                        (p.detailedLocation && String(p.detailedLocation).includes(item.regionName)) ||
+                                        (p.placeName && String(p.placeName).includes(item.regionName))
+                                    );
+                                    const rawImages = [
+                                        item.image,
+                                        ...regionPosts.flatMap(p => (p.images && p.images.length ? p.images : [p.thumbnail || p.image].filter(Boolean)))
+                                    ].filter(Boolean).slice(0, 5);
+                                    const displayImages = rawImages.map(url => getDisplayImageUrl(url)).filter(Boolean);
+                                    const mainSrc = displayImages[0] || 'https://images.unsplash.com/photo-1548115184-bc65ae4986cf?w=800&q=80';
+
+                                    return (
+                                        <div
+                                            key={idx}
+                                            onClick={withDragCheck(() => navigate(`/region/${item.regionName}`))}
+                                            style={{
+                                                minWidth: '74%',
+                                                width: '74%',
+                                                cursor: 'pointer',
+                                                overflow: 'visible',
+                                                background: 'transparent'
+                                            }}
+                                        >
+                                            <div style={{ width: '100%', height: '160px', overflow: 'hidden', borderRadius: '14px', background: '#e5e7eb' }}>
+                                                <img
+                                                    src={mainSrc}
+                                                    alt={item.title}
+                                                    style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                                                    onError={(e) => { e.target.onerror = null; e.target.src = 'https://images.unsplash.com/photo-1548115184-bc65ae4986cf?w=800&q=80'; }}
+                                                />
+                                            </div>
+                                            <div style={{ padding: '6px 2px 10px' }}>
+                                                <div style={{ fontSize: '11px', fontWeight: 700, color: '#06b6d4', marginBottom: '3px' }}>추천</div>
+                                                <div style={{ color: '#111827', fontSize: '14px', fontWeight: 800, marginBottom: '3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                    {item.title}
+                                                </div>
+                                                <div style={{ color: '#4b5563', fontSize: '12px', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                    {item.description}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                        {/* 여행 매거진 (발행 매거진 모아보기) */}
+                        <div style={{ marginBottom: '24px', background: '#ffffff' }}>
+                            <div style={{ padding: '0 0 10px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: '#374151' }}>여행 매거진</h3>
+                                <button
+                                    type="button"
+                                    onClick={() => navigate('/magazine')}
+                                    className="border-none bg-transparent text-primary hover:text-primary-dark dark:hover:text-primary-soft text-sm font-semibold cursor-pointer py-1.5 px-2.5 min-h-[36px] flex items-center gap-1"
+                                >
+                                    <span>더보기</span>
+                                </button>
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingBottom: 4 }}>
+                                {magazineCards.map(({ magazine, cover }) => (
+                                    <button
+                                        key={magazine.id}
+                                        type="button"
+                                        onClick={() => navigate(`/magazine/${magazine.id}`, { state: { magazine } })}
+                                        style={{
+                                            width: '100%',
+                                            display: 'flex',
+                                            alignItems: 'stretch',
+                                            borderRadius: 16,
+                                            border: '1px solid #e5e7eb',
+                                            background: '#ffffff',
+                                            padding: 10,
+                                            cursor: 'pointer',
+                                            boxShadow: '0 2px 6px rgba(15,23,42,0.03)',
+                                        }}
+                                    >
+                                        <div style={{ width: 56, height: 56, borderRadius: 12, overflow: 'hidden', background: '#e5e7eb', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                            {cover ? (
+                                                <img src={cover} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                                            ) : (
+                                                <span className="material-symbols-outlined" style={{ color: '#94a3b8' }}>photo</span>
+                                            )}
+                                        </div>
+                                        <div style={{ flex: 1, minWidth: 0, paddingLeft: 10, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                                            <p style={{ margin: 0, fontSize: 11, fontWeight: 600, color: '#4f46e5' }}>
+                                                발행 매거진
+                                            </p>
+                                            <p style={{ margin: '2px 0 0 0', fontSize: 14, fontWeight: 700, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                {magazine.title}
+                                            </p>
+                                            {(magazine.subtitle || magazine.summary) && (
+                                                <p style={{ margin: '2px 0 0 0', fontSize: 12, color: '#6b7280', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                    {magazine.subtitle || magazine.summary}
+                                                </p>
+                                            )}
+                                        </div>
+                                    </button>
+                                ))}
+                            </div>
                         </div>
                     </div>
-                  </div>
-            ))}
-                </div>
+                )}
 
-          {/* 여행 매거진 섹션 – 추천 여행지 하단 */}
-          <div className="feed-section" style={{ marginBottom: '20px' }}>
-            <div className="section-header-main" style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'flex-start',
-              padding: '0 16px 12px 16px',
-              gap: '4px'
-            }}>
-              <h3 style={{
-                fontSize: '15px',
-                fontWeight: 700,
-                color: '#111827',
-                margin: 0
-              }}>📰 여행 매거진</h3>
-              <p style={{
-                fontSize: '12px',
-                color: '#6B7280',
-                margin: 0
-              }}>이번 주말 꼭 가봐야 하는 장소</p>
             </div>
 
-            <div
-              ref={magazineScrollRef}
-              onMouseDown={(e) => handleMouseDown(e, magazineScrollRef)}
-              onMouseMove={handleMouseMove}
-              onMouseUp={handleMouseUp}
-              onMouseLeave={handleMouseLeave}
-              style={{
-              display: 'flex',
-              overflowX: 'auto',
-              padding: '0 16px 16px 16px',
-                gap: '12px',
-                scrollBehavior: 'smooth',
-                WebkitOverflowScrolling: 'touch',
-                cursor: 'grab',
-                userSelect: 'none'
-              }}
-            >
-              {travelMagazineArticles.map((article) => (
+            {/* 관심 지역 삭제 확인 모달 */}
+            {deleteConfirmPlace && (
+                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div style={{ background: 'white', width: '85%', maxWidth: '300px', padding: '24px', borderRadius: '20px', textAlign: 'center' }}>
+                        <h3 style={{ margin: '0 0 12px 0', fontSize: '18px', fontWeight: 700 }}>관심 지역 삭제</h3>
+                        <p style={{ margin: '0 0 24px 0', fontSize: '14px', color: '#64748b' }}>'{deleteConfirmPlace}'을(를) 관심 지역에서 삭제하시겠습니까?</p>
+                        <div style={{ display: 'flex', gap: '12px' }}>
+                            <button type="button" onClick={() => setDeleteConfirmPlace(null)} style={{ flex: 1, padding: '14px 16px', minHeight: 48, borderRadius: '12px', background: '#f1f5f9', color: '#64748b', fontWeight: 600, fontSize: '15px' }}>취소</button>
+                            <button type="button" onClick={handleDeleteInterestPlace} style={{ flex: 1, padding: '14px 16px', minHeight: 48, borderRadius: '12px', background: '#ef4444', color: 'white', fontWeight: 600, fontSize: '15px' }}>삭제</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 관심 지역 추가 모달 - 지역 선택 UI */}
+            {showAddInterestModal && (
                 <div
-                  key={article.id}
-                  style={{
-                    minWidth: '220px',
-                    maxWidth: '240px',
-                    borderRadius: '16px',
-                    background: '#FFFFFF',
-                    boxShadow: '0 2px 10px rgba(0,0,0,0.06)',
-                    overflow: 'hidden',
-                    cursor: 'pointer',
-                    flexShrink: 0
-                  }}
-                  onClick={() => navigate(`/magazine/${article.id}`, { state: { magazine: article } })}
+                    style={{
+                        position: 'fixed',
+                        inset: 0,
+                        background: 'rgba(0,0,0,0.45)',
+                        backdropFilter: 'blur(8px)',
+                        zIndex: 2000,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: '16px',
+                    }}
                 >
-                  <div style={{
-                    position: 'relative',
-                    width: '100%',
-                    height: '140px',
-                    background: 'linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%)',
-                    overflow: 'hidden'
-                  }}>
-                    <div style={{
-                      position: 'absolute',
-                      inset: 0,
-                      backgroundImage: `url("https://source.unsplash.com/featured/?${encodeURIComponent(article.regionName + ' travel landscape')}")`,
-                      backgroundSize: 'cover',
-                      backgroundPosition: 'center'
-                    }} />
-                    <div style={{
-                      position: 'absolute',
-                      left: 8,
-                      bottom: 8,
-                      padding: '4px 8px',
-                      borderRadius: 999,
-                      backgroundColor: 'rgba(0,0,0,0.6)',
-                      color: '#FFFFFF',
-                      fontSize: '10px',
-                      fontWeight: 600
-                    }}>
-                      {article.tagLine}
+                    <div style={{ background: '#ffffff', width: '100%', maxWidth: 420, maxHeight: '80vh', borderRadius: 28, overflowY: 'auto', overflowX: 'hidden', boxShadow: '0 18px 45px rgba(15,23,42,0.35)', display: 'flex', flexDirection: 'column', margin: 'auto', WebkitOverflowScrolling: 'touch' }}>
+                        {/* 헤더 */}
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 20px 14px', borderBottom: '1px solid #e5e7eb' }}>
+                            <button
+                                type="button"
+                                onClick={() => { setShowAddInterestModal(false); }}
+                                style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', minWidth: 44, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'flex-start', color: '#111827' }}
+                                aria-label="닫기"
+                            >
+                                <span style={{ fontSize: 20 }}>×</span>
+                            </button>
+                            <h3 style={{ fontSize: 18, fontWeight: 800, margin: 0, color: '#111827' }}>관심지역 설정</h3>
+                            <div style={{ width: 44, height: 44 }} />
+                        </div>
+                        {/* 본문: 좌우 2열 레이아웃 */}
+                        <div style={{ display: 'flex', flex: 1, minHeight: 260 }}>
+                            {/* 왼쪽: 국내 권역 리스트 (전국 8도 개념) */}
+                            <div style={{ width: '38%', borderRight: '1px solid #f1f5f9', background: '#f8fafc' }}>
+                                {['서울', '경기', '인천', '강원', '충청', '전라', '경상', '제주'].map((country) => {
+                                    const isActive = selectedCountry === country;
+                                    return (
+                                        <button
+                                            key={country}
+                                            type="button"
+                                            onClick={() => { setSelectedCountry(country); setSelectedCity(`${country} 전체`); }}
+                                            style={{
+                                                width: '100%',
+                                                padding: '10px 12px',
+                                                textAlign: 'left',
+                                                border: 'none',
+                                                background: isActive ? '#e5f0ff' : 'transparent',
+                                                color: isActive ? '#111827' : '#94a3b8',
+                                                fontSize: 14,
+                                                fontWeight: isActive ? 600 : 500,
+                                                cursor: 'pointer',
+                                            }}
+                                        >
+                                            {country}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                            {/* 오른쪽: 선택한 권역의 세부 지역 리스트 */}
+                            <div style={{ flex: 1, background: '#ffffff', display: 'flex', flexDirection: 'column' }}>
+                                <div style={{ padding: '10px 16px', borderBottom: '1px solid #f1f5f9', fontSize: 14, fontWeight: 600, color: '#111827' }}>
+                                    {selectedCountry}
+                                </div>
+                                <div style={{ flex: 1, overflowY: 'auto' }}>
+                                    {(() => {
+                                        const cityMap = {
+                                            '서울': ['서울 전체', '종로·중구', '강남·서초', '송파·강동', '마포·용산', '홍대·신촌', '여의도'],
+                                            '경기': ['경기 전체', '성남·분당', '수원', '고양·일산', '용인', '김포·파주', '가평·양평'],
+                                            '인천': ['인천 전체', '송도', '연수·남동', '부평·계양', '중구(월미·영종)'],
+                                            '강원': ['강원 전체', '춘천', '강릉', '속초', '평창', '양양'],
+                                            '충청': ['충청 전체', '대전', '세종', '천안·아산', '청주'],
+                                            '전라': ['전라 전체', '전주', '광주', '여수', '순천', '목포', '군산'],
+                                            '경상': ['경상 전체', '부산', '대구', '울산', '경주', '포항', '창원·마산·진해'],
+                                            '제주': ['제주 전체', '제주시', '서귀포', '애월', '성산·표선'],
+                                        };
+                                        const cities = cityMap[selectedCountry] || [`${selectedCountry} 전체`];
+                                        return cities.map((city) => {
+                                            const label = city.includes('전체') ? city : `${selectedCountry} ${city}`;
+                                            const isActive = selectedInterestLabels.includes(label);
+                                            return (
+                                                <button
+                                                    key={city}
+                                                    type="button"
+                                                    onClick={() =>
+                                                        setSelectedInterestLabels((prev) =>
+                                                            prev.includes(label)
+                                                                ? prev.filter((v) => v !== label)
+                                                                : [...prev, label]
+                                                        )
+                                                    }
+                                                    style={{
+                                                        width: '100%',
+                                                        padding: '12px 16px',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'space-between',
+                                                        border: 'none',
+                                                        borderBottom: '1px solid #f1f5f9',
+                                                        background: isActive ? '#f9fafb' : '#ffffff',
+                                                        cursor: 'pointer',
+                                                        fontSize: 14,
+                                                        color: '#111827',
+                                                    }}
+                                                >
+                                                    <span>{city}</span>
+                                                    {isActive && (
+                                                        <span style={{ color: '#0ea5e9', fontSize: 12 }}>선택</span>
+                                                    )}
+                                                </button>
+                                            );
+                                        });
+                                    })()}
+                                </div>
+                            </div>
+                        </div>
+                        {/* 하단 버튼 */}
+                        <div style={{ padding: '14px 18px', borderTop: '1px solid #e5e7eb', display: 'flex', gap: 10 }}>
+                            <button
+                                type="button"
+                                onClick={() => { setShowAddInterestModal(false); setSelectedInterestLabels([]); }}
+                                style={{
+                                    flex: 1,
+                                    padding: '12px 14px',
+                                    borderRadius: 999,
+                                    border: '1px solid #e5e7eb',
+                                    background: '#ffffff',
+                                    color: '#6b7280',
+                                    fontWeight: 600,
+                                    fontSize: 14,
+                                    cursor: 'pointer',
+                                }}
+                            >
+                                취소
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleAddInterestPlace}
+                                style={{
+                                    flex: 1,
+                                    padding: '12px 14px',
+                                    borderRadius: 999,
+                                    border: 'none',
+                                    background: selectedInterestLabels.length > 0 ? '#111827' : '#cbd5e1',
+                                    color: '#ffffff',
+                                    fontWeight: 700,
+                                    fontSize: 14,
+                                    cursor: selectedInterestLabels.length > 0 ? 'pointer' : 'default',
+                                }}
+                                disabled={selectedInterestLabels.length === 0}
+                            >
+                                추가하기
+                            </button>
+                        </div>
                     </div>
-                  </div>
-                  <div style={{ padding: '10px 12px 12px 12px' }}>
-                    <div style={{
-                      fontSize: '11px',
-                      fontWeight: 600,
-                      color: '#00BCD4',
-                      marginBottom: '2px'
-                    }}>
-                      {article.regionName}
-                    </div>
-                    <div style={{
-                      fontSize: '13px',
-                      fontWeight: 600,
-                      color: '#111827',
-                      lineHeight: 1.4
-                    }}>
-                      {article.title}
-                    </div>
-                  </div>
                 </div>
-              ))}
-            </div>
-          </div>
-        </div>
-        
-        {/* 바텀 네비게이션 */}
-        <BottomNavigation />
-      </div>
+            )}
 
-      {/* 관심 지역/장소 추가 모달 */}
-      {showAddInterestModal && (
-        <div className="fixed inset-0 bg-black/50 z-[200] flex items-end" onClick={() => setShowAddInterestModal(false)}>
-          <div className="w-full bg-white dark:bg-gray-900 rounded-t-3xl p-6 max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4 pb-4 border-b border-gray-200 dark:border-gray-700">
-              <h3 className="text-xl font-bold text-gray-900 dark:text-white">관심 지역/장소 추가</h3>
-              <button
-                onClick={() => {
-                  setShowAddInterestModal(false);
-                  setNewInterestPlace('');
-                }}
-                className="w-8 h-8 flex items-center justify-center text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
-              >
-                <span className="material-symbols-outlined">close</span>
-              </button>
-            </div>
-            
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                지역 또는 장소 이름
-              </label>
-              <input
-                type="text"
-                value={newInterestPlace}
-                onChange={(e) => setNewInterestPlace(e.target.value)}
-                onKeyPress={(e) => {
-                  if (e.key === 'Enter') {
-                    handleAddInterestPlace();
-                  }
-                }}
-                placeholder="예: 제주, 부산 해운대, 경주 불국사"
-                className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                autoFocus
-              />
-              
-              {newInterestPlace.trim() && (
-                <div className="mt-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">미리보기</p>
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center">
-                      <span className="text-2xl">{getRegionIcon(newInterestPlace.trim())}</span>
-                    </div>
-                    <span className="text-base font-semibold text-gray-900 dark:text-white">
-                      {newInterestPlace.trim()}
-                    </span>
-              </div>
-            </div>
-          )}
-            </div>
-            
-            <div className="flex gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
-              <button
-                onClick={() => {
-                  setShowAddInterestModal(false);
-                  setNewInterestPlace('');
-                }}
-                className="flex-1 px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-semibold hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-              >
-                취소
-              </button>
-              <button
-                onClick={handleAddInterestPlace}
-                disabled={!newInterestPlace.trim()}
-                className={`flex-1 px-4 py-3 rounded-xl font-semibold transition-colors ${
-                  newInterestPlace.trim()
-                    ? 'bg-primary text-white hover:bg-primary-dark'
-                    : 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-500 cursor-not-allowed'
-                }`}
-              >
-                추가
-              </button>
-        </div>
-      </div>
-        </div>
-      )}
+            <BottomNavigation />
+        </div >
+    );
 
-      {/* 관심 지역/장소 삭제 확인 모달 */}
-      {deleteConfirmPlace && (
-        <div className="fixed inset-0 bg-black/50 z-[200] flex items-center justify-center" onClick={() => setDeleteConfirmPlace(null)}>
-          <div className="bg-white dark:bg-gray-900 rounded-2xl p-6 w-[80%] max-w-[320px] shadow-xl" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2 text-center">
-              관심 지역/장소 삭제
-            </h3>
-            <p className="text-base text-gray-600 dark:text-gray-400 mb-6 text-center">
-              "{deleteConfirmPlace}"을(를) 삭제하시겠어요?
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setDeleteConfirmPlace(null)}
-                className="flex-1 px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-semibold hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-              >
-                취소
-              </button>
-              <button
-                onClick={() => handleDeleteInterestPlace(deleteConfirmPlace)}
-                className="flex-1 px-4 py-3 rounded-xl font-semibold bg-red-500 text-white hover:bg-red-600 transition-colors"
-              >
-                삭제
-              </button>
-    </div>
-          </div>
-        </div>
-      )}
-    </>
-  );
 };
 
 export default MainScreen;
