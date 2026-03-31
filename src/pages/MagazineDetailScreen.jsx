@@ -1,16 +1,292 @@
-import React from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import BottomNavigation from '../components/BottomNavigation';
+import { getMagazineTopicById } from '../utils/magazinesConfig';
+import { fetchPostsSupabase } from '../api/postsSupabase';
+import { getCombinedPosts } from '../utils/mockData';
+import { getTimeAgo } from '../utils/timeUtils';
+import { getDisplayImageUrl } from '../api/upload';
+import { logger } from '../utils/logger';
+import { getLandmarksByRegion } from '../utils/regionLandmarks';
+import { getCategoryChipsFromPost } from '../utils/travelCategories';
+import { getPublishedMagazineById, removePublishedMagazine } from '../utils/magazinesStore';
 
 const MagazineDetailScreen = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { id } = useParams();
   const state = location.state || {};
-  const { magazine } = state;
 
-  if (!magazine) {
+  const topic = useMemo(() => getMagazineTopicById(id), [id]);
+  const [publishedMagazine, setPublishedMagazine] = useState(null);
+  const [posts, setPosts] = useState([]);
+  const [allPosts, setAllPosts] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const normalizeSpace = (s) => String(s || '').replace(/\s+/g, ' ').trim();
+  const getLocationKey = (p) =>
+    normalizeSpace(p?.detailedLocation || p?.placeName || p?.location || '');
+  const getRegionKey = (locKey) => normalizeSpace(locKey).split(' ')[0] || '';
+  const getPostAuthor = (p) => {
+    const u = p?.user;
+    const username =
+      (typeof u === 'string' ? u : u?.username) ||
+      p?.userName ||
+      p?.author?.name ||
+      '여행자';
+    const avatar =
+      (typeof u === 'object' ? (u?.profileImage || u?.avatar || u?.photoURL) : null) ||
+      p?.userAvatar ||
+      null;
+    return { username: String(username || '여행자'), avatar: avatar ? String(avatar) : null };
+  };
+  const mediaUrlsFromPost = (p) => {
+    const raw = [];
+    if (Array.isArray(p?.images)) raw.push(...p.images);
+    else if (p?.images) raw.push(p.images);
+    if (p?.image) raw.push(p.image);
+    if (p?.thumbnail) raw.push(p.thumbnail);
+    const urls = raw.map((v) => getDisplayImageUrl(v)).filter(Boolean);
+    return [...new Set(urls)];
+  };
+  const toSearchText = (p) =>
+    [
+      p?.detailedLocation,
+      p?.placeName,
+      p?.location,
+      p?.note,
+      p?.content,
+      ...(Array.isArray(p?.tags) ? p.tags : []),
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      // state로 넘어온 발행 매거진이 있으면 우선 사용
+      if (state?.magazine && Array.isArray(state.magazine.sections)) {
+        if (alive) setPublishedMagazine(state.magazine);
+        return;
+      }
+      // topic이 없거나, id가 pub-* 형식이면 발행 매거진 조회 시도
+      const shouldTryPublished = String(id || '').startsWith('pub-') || !topic;
+      if (!shouldTryPublished) return;
+      const found = await getPublishedMagazineById(id);
+      if (alive) setPublishedMagazine(found);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [id, state?.magazine, topic]);
+
+  // 수국 등 키워드 기반으로 사용자 피드 큐레이션
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      try {
+        const localPosts = JSON.parse(localStorage.getItem('uploadedPosts') || '[]');
+        const supabasePosts = await fetchPostsSupabase();
+
+        const byId = new Map();
+        [...(Array.isArray(supabasePosts) ? supabasePosts : []), ...(Array.isArray(localPosts) ? localPosts : [])].forEach(
+          (p) => {
+            if (p && p.id && !byId.has(p.id)) byId.set(p.id, p);
+          }
+        );
+        const combined = Array.from(byId.values());
+        const combinedAllPosts = getCombinedPosts(combined);
+        setAllPosts(combinedAllPosts);
+
+        const now = Date.now();
+        const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
+        const keywords = (topic?.tagKeywords || []).map((k) => String(k).toLowerCase());
+
+        const base = combinedAllPosts
+          .filter((p) => {
+            const hasImage = (Array.isArray(p.images) && p.images.length > 0) || p.image || p.thumbnail;
+            if (!hasImage) return false;
+            const tsSrc = p.timestamp || p.createdAt;
+            const ts = tsSrc ? new Date(tsSrc).getTime() : now;
+            if (Number.isNaN(ts) || ts < sevenDaysAgo) return false;
+            return true;
+          })
+          .sort((a, b) => {
+            const ta = new Date(a.timestamp || a.createdAt || now).getTime();
+            const tb = new Date(b.timestamp || b.createdAt || now).getTime();
+            return tb - ta;
+          });
+
+        // 발행 매거진: 키워드 필터 없이 최근 사진 풀을 사용 (위치로 매칭)
+        if (publishedMagazine) {
+          setPosts(base);
+        } else if (topic) {
+          const filtered = base.filter((p) => {
+            const joined = [
+              p.note,
+              p.content,
+              p.location,
+              p.placeName,
+              ...(Array.isArray(p.tags) ? p.tags : []),
+            ]
+              .filter(Boolean)
+              .join(' ')
+              .toLowerCase();
+            return keywords.some((kw) => kw && joined.includes(kw));
+          });
+          setPosts(filtered);
+        } else {
+          setPosts(base);
+        }
+      } catch (e) {
+        logger.error('매거진 피드 로딩 오류:', e);
+        setPosts([]);
+        setAllPosts([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    load();
+  }, [topic, publishedMagazine]);
+
+  const locationSections = useMemo(() => {
+    if (!Array.isArray(posts) || posts.length === 0) return [];
+
+    const map = new Map();
+    posts.forEach((p) => {
+      const key = getLocationKey(p);
+      if (!key) return;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(p);
+    });
+
+    const sections = Array.from(map.entries()).map(([locKey, list]) => {
+      const regionKey = getRegionKey(locKey);
+      const uniqMedia = [...new Set(list.flatMap(mediaUrlsFromPost))].filter(Boolean);
+      const sliderMedia = uniqMedia.slice(0, 19);
+      const hasMoreMedia = uniqMedia.length > 19;
+
+      const first = list[0] || null;
+      const { username, avatar } = first ? getPostAuthor(first) : { username: '여행자', avatar: null };
+      const createdAt = first?.timestamp || first?.createdAt;
+      const timeLabel = createdAt ? getTimeAgo(createdAt) : '';
+
+      const chips = list.flatMap((p) => getCategoryChipsFromPost(p)).filter(Boolean);
+      const chipMap = new Map();
+      chips.forEach((c) => {
+        if (c?.slug && !chipMap.has(c.slug)) chipMap.set(c.slug, c);
+      });
+      const topChips = Array.from(chipMap.values()).slice(0, 3);
+
+      const landmarks = getLandmarksByRegion(regionKey);
+      const around = landmarks.filter((l) => l?.name && !locKey.includes(l.name)).slice(0, 4);
+
+      const allTextPosts = Array.isArray(allPosts) ? allPosts : [];
+      const byRecency = (a, b) => {
+        const now = Date.now();
+        const ta = new Date(a?.timestamp || a?.createdAt || now).getTime();
+        const tb = new Date(b?.timestamp || b?.createdAt || now).getTime();
+        return tb - ta;
+      };
+      const aroundWithImage = around
+        .map((l) => {
+          const keys = [l?.name, ...(Array.isArray(l?.keywords) ? l.keywords : [])]
+            .filter(Boolean)
+            .map((s) => String(s).toLowerCase());
+          const matched = allTextPosts
+            .filter((p) => keys.some((k) => k && toSearchText(p).includes(k)))
+            .sort(byRecency)[0];
+          const img = matched ? mediaUrlsFromPost(matched)[0] : '';
+          return { ...l, image: img || '' };
+        })
+        .slice(0, 3);
+
+      return {
+        locKey,
+        regionKey,
+        sliderMedia,
+        hasMoreMedia,
+        author: { username, avatar, timeLabel },
+        topChips,
+        around: aroundWithImage,
+        mediaCount: uniqMedia.length,
+        postCount: list.length,
+      };
+    });
+
+    return sections.sort((a, b) => (b.mediaCount - a.mediaCount) || (b.postCount - a.postCount));
+  }, [posts, allPosts]);
+
+  const publishedSections = useMemo(() => {
+    if (!publishedMagazine || !Array.isArray(publishedMagazine.sections)) return [];
+    const allTextPosts = Array.isArray(allPosts) ? allPosts : [];
+    const byRecency = (a, b) => {
+      const now = Date.now();
+      const ta = new Date(a?.timestamp || a?.createdAt || now).getTime();
+      const tb = new Date(b?.timestamp || b?.createdAt || now).getTime();
+      return tb - ta;
+    };
+    const pickMediaByKeyword = (keyword) => {
+      const k = String(keyword || '').trim().toLowerCase();
+      if (!k) return '';
+      const matched = allTextPosts
+        .filter((p) => toSearchText(p).includes(k))
+        .sort(byRecency)[0];
+      return matched ? (mediaUrlsFromPost(matched)[0] || '') : '';
+    };
+    const pickMediaByLocation = (loc) => {
+      const key = String(loc || '').trim().toLowerCase();
+      if (!key) return [];
+      const matchedPosts = allTextPosts
+        .filter((p) => toSearchText(p).includes(key))
+        .sort(byRecency);
+      const uniq = [...new Set(matchedPosts.flatMap(mediaUrlsFromPost))].filter(Boolean);
+      return uniq;
+    };
+
+    return publishedMagazine.sections
+      .map((s, idx) => {
+        const locKey = normalizeSpace(s?.location || '');
+        const regionKey = getRegionKey(locKey);
+        const uniqMedia = pickMediaByLocation(locKey);
+        const sliderMedia = uniqMedia.slice(0, 19);
+        const hasMoreMedia = uniqMedia.length > 19;
+
+        const aroundNames = Array.isArray(s?.around) ? s.around : [];
+        const around = aroundNames
+          .map((name, ai) => {
+            const id = `${idx}-${ai}`;
+            const image = pickMediaByKeyword(name);
+            return { id, name: String(name || '').trim(), image };
+          })
+          .filter((x) => x.name)
+          .slice(0, 3);
+
+        return {
+          locKey,
+          regionKey,
+          sliderMedia,
+          hasMoreMedia,
+          author: { username: publishedMagazine.author || 'LiveJourney', avatar: null, timeLabel: '' },
+          description: String(s?.description || '').trim(),
+          around,
+          mediaCount: uniqMedia.length,
+          postCount: 0,
+        };
+      })
+      .filter((x) => x.locKey);
+  }, [publishedMagazine, allPosts, normalizeSpace, getRegionKey]);
+
+  const sectionsToRender = publishedMagazine ? publishedSections : locationSections;
+
+  if (!topic) {
+    if (publishedMagazine) {
+      // topic이 없고 발행 매거진이 있으면 아래 렌더로 진행
+    } else {
     return (
-      <div className="screen-layout bg-background-light dark:bg-background-dark">
+      <div className="screen-layout bg-background-light dark:bg-background-dark h-screen overflow-hidden">
         <div className="screen-content flex flex-col h-full">
           <div className="screen-header flex-shrink-0 flex items-center justify-between px-4 py-3 bg-white dark:bg-gray-900 border-b border-zinc-200 dark:border-zinc-800 shadow-sm">
             <button
@@ -39,20 +315,18 @@ const MagazineDetailScreen = () => {
         <BottomNavigation />
       </div>
     );
+    }
   }
 
-  const createdDate = magazine.createdAt
-    ? new Date(magazine.createdAt).toLocaleDateString('ko-KR', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-      })
-    : null;
+  const heroImage =
+    Array.isArray(sectionsToRender?.[0]?.sliderMedia) && sectionsToRender[0].sliderMedia.length
+      ? sectionsToRender[0].sliderMedia[0]
+      : '';
 
   return (
-    <div className="screen-layout bg-background-light dark:bg-background-dark">
+    <div className="screen-layout bg-background-light dark:bg-background-dark h-screen overflow-hidden">
       <div className="screen-content flex flex-col h-full">
-        {/* 헤더 */}
+          {/* 헤더 */}
         <div className="screen-header flex-shrink-0 flex items-center justify-between px-4 py-3 bg-white dark:bg-gray-900 border-b border-zinc-200 dark:border-zinc-800 shadow-sm">
           <button
             onClick={() => navigate(-1)}
@@ -63,132 +337,276 @@ const MagazineDetailScreen = () => {
           <h1 className="text-[18px] font-bold text-text-primary-light dark:text-text-primary-dark m-0">
             여행 매거진
           </h1>
-          <div className="w-10" />
+          {publishedMagazine ? (
+            <button
+              type="button"
+              onClick={async () => {
+                if (!window.confirm('이 매거진을 삭제할까요?')) return;
+                const res = await removePublishedMagazine(publishedMagazine.id);
+                if (!res.success) {
+                  alert('삭제에 실패했습니다.');
+                  return;
+                }
+                alert('삭제되었습니다.');
+                navigate('/magazine', { replace: true });
+              }}
+              className="flex size-10 items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-rose-600"
+              aria-label="매거진 삭제"
+              title="삭제"
+            >
+              <span className="material-symbols-outlined text-[22px]">delete</span>
+            </button>
+          ) : (
+            <div className="w-10" />
+          )}
         </div>
 
-        {/* 스크롤 가능한 본문 */}
+          {/* 스크롤 가능한 본문 */}
         <main className="flex-1 overflow-y-auto">
-          {/* 커버 영역 */}
-          <div className="mt-4 mx-4 rounded-2xl overflow-hidden bg-gray-200 relative">
-            <div
-              style={{
-                width: '100%',
-                height: 220,
-                backgroundImage: magazine.coverImage
-                  ? `url("${magazine.coverImage}")`
-                  : `url("https://source.unsplash.com/featured/?${encodeURIComponent(
-                      (magazine.regionName || 'travel') + ' landscape'
-                    )}")`,
-                backgroundSize: 'cover',
-                backgroundPosition: 'center',
-              }}
-            />
-            <div className="absolute left-4 bottom-4 px-3 py-1.5 rounded-full bg-black/60 text-white text-[11px] font-semibold inline-flex items-center gap-1.5">
-              <span>📖</span>
-              <span>여행 매거진</span>
+          {/* 헤드(제목/소제목 + 커버 이미지) */}
+          <section className="px-4 pt-4 pb-3 bg-white dark:bg-gray-900 border-b border-zinc-100 dark:border-zinc-800">
+            <div className="mb-3">
+              <div className="inline-flex items-center gap-2 rounded-full bg-indigo-50 dark:bg-indigo-900/25 px-3 py-1 text-[12px] font-semibold text-indigo-600 dark:text-indigo-200">
+                <span className="text-[14px]">{publishedMagazine?.emoji || topic?.emoji || '📚'}</span>
+                {publishedMagazine ? '발행 매거진' : '테마 매거진'}
+              </div>
             </div>
-          </div>
 
-          {/* 제목 / 요약 / 메타 */}
-          <section className="px-4 pt-5 pb-3">
-            <h2 className="text-[22px] font-bold text-gray-900 leading-snug mb-2">
-              {magazine.title}
-            </h2>
-            {magazine.summary && (
-              <p className="text-[14px] text-gray-600 leading-relaxed mb-3">
-                {magazine.summary}
+            <div className="px-0 py-1">
+              <h2 className="m-0 text-[20px] font-extrabold text-gray-900 dark:text-gray-50 leading-snug">
+                {publishedMagazine?.title || topic.title}
+              </h2>
+            </div>
+
+            <div className="mt-1">
+              <p className="m-0 text-[13px] font-medium text-gray-600 dark:text-gray-300 leading-relaxed">
+                {(publishedMagazine?.subtitle || topic.description) || '현재 올라오는 정보들을 한눈에 알아봐요.'}
               </p>
-            )}
+            </div>
 
-            <div className="flex items-center justify-between mt-1">
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-full bg-sky-100 flex items-center justify-center text-[16px]">
-                  ✈️
-                </div>
-                <div>
-                  <div className="text-[13px] font-semibold text-gray-900">
-                    {magazine.author || 'LiveJourney'}
-                  </div>
-                  {magazine.regionName && (
-                    <div className="text-[11px] text-gray-500">
-                      {magazine.regionName} 여행
-                    </div>
-                  )}
+            {/* 기사형 레이아웃일 때 상단 커버 이미지 */}
+            {publishedMagazine && heroImage && (
+              <div className="mt-4 overflow-hidden rounded-2xl border border-zinc-100 dark:border-zinc-800 shadow-[0_6px_24px_rgba(15,23,42,0.15)]">
+                <div className="w-full bg-gray-100 dark:bg-gray-800" style={{ aspectRatio: '4/3' }}>
+                  <img
+                    src={heroImage}
+                    alt=""
+                    className="w-full h-full object-cover"
+                    loading="lazy"
+                  />
                 </div>
               </div>
-              {createdDate && (
-                <div className="text-[11px] text-gray-400">
-                  {createdDate}
-                </div>
-              )}
-            </div>
-
-            {/* 현재 사진 보기 버튼 */}
-            {magazine.regionName && (
-              <button
-                onClick={() =>
-                  navigate(`/region/${magazine.regionName}`, {
-                    state: { 
-                      region: { name: magazine.regionName },
-                      focusLocation: magazine.detailedLocation || magazine.regionName,
-                    },
-                  })
-                }
-                className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-[13px] font-semibold text-white shadow-md hover:bg-primary/90 transition-colors"
-              >
-                <span className="material-symbols-outlined text-[16px]">
-                  photo_library
-                </span>
-                <span>{magazine.regionName} 지금 사진 보기</span>
-              </button>
             )}
           </section>
 
-          {/* 섹션 단위 컨텐츠 (텍스트 + 사진) */}
-          <section className="px-4 pb-8 space-y-6">
-            {Array.isArray(magazine.content) && magazine.content.length > 0 ? (
-              magazine.content.map((block, index) => {
-                if (block.type === 'image') {
-                  return (
-                    <figure key={index} className="rounded-2xl overflow-hidden bg-gray-100">
-                      <div
-                        style={{
-                          width: '100%',
-                          height: 200,
-                          backgroundImage: `url("${block.imageUrl}")`,
-                          backgroundSize: 'cover',
-                          backgroundPosition: 'center',
-                        }}
-                      />
-                      {block.caption && (
-                        <figcaption className="px-3 py-2 text-[12px] text-gray-600 bg-white">
-                          {block.caption}
-                        </figcaption>
-                      )}
-                    </figure>
-                  );
-                }
-
-                return (
-                  <article key={index} className="space-y-2">
-                    {block.title && (
-                      <h3 className="text-[15px] font-semibold text-gray-900">
-                        {block.title}
-                      </h3>
-                    )}
-                    {block.body && (
-                      <p className="text-[14px] text-gray-800 leading-relaxed whitespace-pre-line">
-                        {block.body}
-                      </p>
-                    )}
-                  </article>
-                );
-              })
+          {/* 위치 기반 큐레이션 (TOP 7) */}
+          <section className="px-0 pb-10 pt-1">
+            {loading ? (
+              <div className="py-10 flex items-center justify-center text-[13px] text-gray-500">
+                실시간 사진을 모으는 중이에요...
+              </div>
+            ) : sectionsToRender.length === 0 ? (
+              <div className="py-10 flex flex-col items-center justify-center text-center text-[13px] text-gray-500 px-6">
+                <p className="mb-1">아직 이 매거진에 포함되는 사진이 없어요.</p>
+                <p>지금 여기를 통해 첫 번째 사진을 올려보세요.</p>
+              </div>
             ) : (
-              <p className="text-[15px] text-gray-900 leading-relaxed whitespace-pre-line">
-                {magazine.content ||
-                  '아직 준비 중인 매거진입니다.\n\n곧 이 지역을 어떻게 돌면 좋은지, 하루 동선과 숨겨진 스팟들을 담은 여행 매거진이 업데이트될 예정이에요.'}
-              </p>
+              <div className="flex flex-col gap-6 pt-4 pb-8">
+                {sectionsToRender.slice(0, 7).map((sec, index) => {
+                  const region = sec.regionKey || '서울';
+                  const media = Array.isArray(sec.sliderMedia) ? sec.sliderMedia : [];
+
+                  const goMore = (e) => {
+                    e?.stopPropagation?.();
+                    navigate(`/region/${encodeURIComponent(region)}`, {
+                      state: { region: { name: region }, focusLocation: sec.locKey },
+                    });
+                  };
+
+                  // 발행 매거진일 때: 기사형(섹션 번호 + 설명 + 장소 카드)
+                  if (publishedMagazine) {
+                    const sectionIndexLabel = `${index + 1}`.padStart(1, ' ');
+                    const aroundSpots = Array.isArray(sec.around) ? sec.around : [];
+                    const mainImage = media[0] || heroImage;
+
+                    return (
+                      <article key={sec.locKey || index} className="px-4">
+                        {/* 섹션 헤더: 번호 + 지역명 */}
+                        <div className="mb-2 flex items-center gap-2">
+                          <div className="inline-flex items-center justify-center rounded-full bg-sky-50 dark:bg-sky-900/40 px-2.5 py-1 text-[11px] font-semibold text-sky-600 dark:text-sky-200">
+                            {sectionIndexLabel}번째 여행지
+                          </div>
+                        </div>
+                        <h3 className="m-0 text-left text-[17px] font-extrabold text-gray-900 dark:text-gray-50 leading-snug">
+                          {sec.locKey}
+                        </h3>
+                        <p className="mt-1 mb-3 text-[13px] leading-relaxed text-gray-700 dark:text-gray-200">
+                          {sec.description || '지금 이 지역의 실시간 사진을 모아봤어요.'}
+                        </p>
+
+                        {/* 섹션 대표 이미지 */}
+                        {mainImage && (
+                          <div className="mb-3 overflow-hidden rounded-2xl border border-zinc-100 dark:border-zinc-800 shadow-[0_4px_18px_rgba(15,23,42,0.12)]">
+                            <div className="w-full bg-gray-100 dark:bg-gray-800" style={{ aspectRatio: '4/3' }}>
+                              <img src={mainImage} alt="" className="w-full h-full object-cover" loading="lazy" />
+                            </div>
+                          </div>
+                        )}
+
+                        {/* 섹션 내 스팟 카드 리스트 */}
+                        {aroundSpots.length > 0 && (
+                          <div className="mt-2">
+                            <div className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 mb-1">
+                              이 근처에서 같이 들르면 좋은 곳
+                            </div>
+                            <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1">
+                              {aroundSpots.slice(0, 4).map((l) => (
+                                <div
+                                  key={`${sec.locKey}-around-${l.id}`}
+                                  className="flex-shrink-0 w-40 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-gray-900 overflow-hidden"
+                                >
+                                  <div className="w-full bg-gray-100 dark:bg-gray-800" style={{ aspectRatio: '4/3' }}>
+                                    {l.image ? (
+                                      <img src={l.image} alt="" className="w-full h-full object-cover" loading="lazy" />
+                                    ) : (
+                                      <div className="w-full h-full flex items-center justify-center text-gray-300">
+                                        <span className="material-symbols-outlined text-[20px]">photo</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div className="px-2 py-1.5">
+                                    <div className="text-[11px] font-semibold text-gray-800 dark:text-gray-100 truncate">
+                                      {l.name}
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* 지역 상세로 이동 버튼 */}
+                        <div className="mt-3">
+                          <button
+                            type="button"
+                            onClick={goMore}
+                            className="inline-flex items-center gap-1 rounded-full bg-white dark:bg-gray-900 border border-zinc-200 dark:border-zinc-700 px-3 py-1.5 text-[12px] font-semibold text-primary"
+                          >
+                            이 지역 실시간 정보 보러가기
+                            <span className="material-symbols-outlined text-[16px]">chevron_right</span>
+                          </button>
+                        </div>
+                      </article>
+                    );
+                  }
+
+                  // 기본 테마 매거진: 기존 카드형 레이아웃 유지
+                  return (
+                    <article key={sec.locKey} className="px-4">
+                      <div className="mb-2 flex items-center justify-between gap-3">
+                        <h3 className="m-0 text-left min-w-0 flex-1 text-[16px] font-extrabold text-gray-900 dark:text-gray-50 truncate">
+                          {sec.locKey}
+                        </h3>
+                        <button
+                          type="button"
+                          onClick={goMore}
+                          className="shrink-0 inline-flex items-center gap-1 rounded-full bg-white dark:bg-gray-900 border border-zinc-200 dark:border-zinc-700 px-3 py-1.5 text-[12px] font-semibold text-primary"
+                        >
+                          더보기
+                          <span className="material-symbols-outlined text-[16px]">chevron_right</span>
+                        </button>
+                      </div>
+
+                      {/* 사진 피드(한 장씩 좌우 슬라이드, 최대 19장) */}
+                      <div className="w-full overflow-hidden rounded-2xl bg-white dark:bg-gray-900 border border-zinc-100 dark:border-zinc-800 shadow-[0_2px_14px_rgba(15,23,42,0.06)]">
+                        <div className="flex overflow-x-auto snap-x snap-mandatory scrollbar-hide">
+                          {(media.length ? media : ['']).slice(0, 19).map((src, i) => (
+                            <div
+                              key={`${sec.locKey}-slide-${i}`}
+                              className="snap-center flex-shrink-0 w-full bg-gray-100 dark:bg-gray-800"
+                              style={{ aspectRatio: '4/3' }}
+                            >
+                              {src ? (
+                                <img src={src} alt="" className="w-full h-full object-cover" loading="lazy" />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center text-gray-300">
+                                  <span className="material-symbols-outlined text-5xl">image</span>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* 사진 정보(업로더 프로필만) */}
+                        <div className="px-3 py-3">
+                          <div className="flex items-center gap-2">
+                            {sec.author.avatar ? (
+                              <img src={sec.author.avatar} alt="" className="w-7 h-7 rounded-full object-cover bg-gray-200" />
+                            ) : (
+                              <div className="w-7 h-7 rounded-full bg-gray-200 flex items-center justify-center text-[12px] font-bold text-gray-700">
+                                {sec.author.username.charAt(0)}
+                              </div>
+                            )}
+                            <div className="min-w-0">
+                              <div className="text-[12px] font-semibold text-gray-900 dark:text-gray-50 truncate">
+                                {sec.author.username}
+                              </div>
+                              <div className="text-[11px] text-gray-500 dark:text-gray-400">
+                                {sec.author.timeLabel || '방금'}
+                              </div>
+                            </div>
+                            {sec.hasMoreMedia && (
+                              <span className="ml-auto text-[11px] font-semibold text-gray-400 dark:text-gray-500">
+                                사진은 19장까지 보여줘요
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 위치 설명(사진 피드와 분리) */}
+                      <div className="mt-2 px-1">
+                        <div className="text-[13px] font-semibold text-gray-900 dark:text-gray-50 mb-1">
+                          위치에 대한 설명
+                        </div>
+                        <p className="m-0 text-[13px] leading-relaxed text-gray-700 dark:text-gray-200 line-clamp-2">
+                          {sec.topChips.length > 0
+                            ? `지금 ${sec.topChips.map((c) => c.name).join(' · ')} 정보를 확인해요.`
+                            : '지금 이 위치의 현재 분위기를 확인해요.'}
+                        </p>
+                      </div>
+
+                      {/* 주변 맛집/명소(가볍게, 작은 사진 3개) */}
+                      <div className="mt-2 px-1">
+                        <div className="text-[12px] font-semibold text-gray-500 dark:text-gray-400 mb-1">
+                          위치 주변 맛집, 가볼만한 곳
+                        </div>
+                        <div className="flex gap-2">
+                          {(Array.isArray(sec.around) ? sec.around : []).slice(0, 3).map((l) => (
+                            <div
+                              key={`${sec.locKey}-around-${l.id}`}
+                              className="flex-1 overflow-hidden rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-gray-900"
+                            >
+                              <div className="w-full bg-gray-100 dark:bg-gray-800" style={{ aspectRatio: '4/3' }}>
+                                {l.image ? (
+                                  <img src={l.image} alt="" className="w-full h-full object-cover" loading="lazy" />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center text-gray-300">
+                                    <span className="material-symbols-outlined">photo</span>
+                                  </div>
+                                )}
+                              </div>
+                              <div className="px-2 py-1.5 text-[11px] font-semibold text-gray-700 dark:text-gray-200 truncate">
+                                {l.name}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
             )}
           </section>
         </main>
