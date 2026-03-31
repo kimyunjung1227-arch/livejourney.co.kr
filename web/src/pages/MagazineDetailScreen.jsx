@@ -66,8 +66,22 @@ const MagazineDetailScreen = () => {
     let alive = true;
     (async () => {
       // state로 넘어온 발행 매거진이 있으면 우선 사용
-      if (state?.magazine && Array.isArray(state.magazine.sections)) {
-        if (alive) setPublishedMagazine(state.magazine);
+      if (state?.magazine) {
+        const rawSections = state.magazine.sections;
+        const sections = Array.isArray(rawSections)
+          ? rawSections
+          : (typeof rawSections === 'string'
+              ? (() => { try { const p = JSON.parse(rawSections); return Array.isArray(p) ? p : []; } catch { return []; } })()
+              : []);
+        if (sections.length > 0) {
+          if (alive) setPublishedMagazine({ ...state.magazine, sections });
+          return;
+        }
+        // 섹션이 비어있더라도 발행 매거진으로 인지되면 set해서 화면이 깨지지 않게 함
+        if (String(state.magazine.id || '').startsWith('pub-')) {
+          if (alive) setPublishedMagazine({ ...state.magazine, sections });
+          return;
+        }
         return;
       }
       // topic이 없거나, id가 pub-* 형식이면 발행 매거진 조회 시도

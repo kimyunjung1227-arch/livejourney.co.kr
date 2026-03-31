@@ -68,6 +68,17 @@ const MagazineWriteScreen = () => {
     });
   }, []);
 
+  const handleRemoveSection = useCallback((id) => {
+    setSections((prev) => {
+      const arr = Array.isArray(prev) ? prev : [];
+      if (arr.length <= 1) {
+        // 마지막 1개는 삭제 대신 초기화
+        return [createEmptySection()];
+      }
+      return arr.filter((s) => s.id !== id);
+    });
+  }, []);
+
   const handleChangeSection = useCallback((id, field, value) => {
     setSections((prev) => (Array.isArray(prev) ? prev.map((s) => (s.id === id ? { ...s, [field]: value } : s)) : prev));
   }, []);
@@ -189,8 +200,17 @@ const MagazineWriteScreen = () => {
 
             {sections.map((sec, idx) => (
               <section key={sec.id} className="pt-2">
-                <div className="mb-2 text-[12px] font-extrabold text-gray-900 dark:text-gray-50">
-                  위치 {idx + 1}
+                <div className="mb-2 flex items-center justify-between">
+                  <div className="text-[12px] font-extrabold text-gray-900 dark:text-gray-50">
+                    위치 {idx + 1}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveSection(sec.id)}
+                    className="text-[12px] font-semibold text-rose-600 px-2 py-1"
+                  >
+                    삭제
+                  </button>
                 </div>
                 <div className="space-y-4">
                   <div>

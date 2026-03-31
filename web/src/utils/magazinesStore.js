@@ -15,10 +15,35 @@ const safeParse = (raw) => {
 const readLocal = () => safeParse(localStorage.getItem(STORAGE_KEY));
 const writeLocal = (arr) => localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.isArray(arr) ? arr : []));
 
+const normalizeSections = (raw) => {
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+};
+
+const normalizeMagazine = (m) => {
+  if (!m) return null;
+  const createdAt = m.createdAt || m.created_at || null;
+  const updatedAt = m.updatedAt || m.updated_at || null;
+  return {
+    ...m,
+    sections: normalizeSections(m.sections),
+    createdAt,
+    updatedAt,
+  };
+};
+
 export const listPublishedMagazines = async () => {
   const res = await fetchMagazinesSupabase();
-  if (res.success) return res.magazines;
-  return readLocal();
+  if (res.success) return (Array.isArray(res.magazines) ? res.magazines : []).map(normalizeMagazine).filter(Boolean);
+  return readLocal().map(normalizeMagazine).filter(Boolean);
 };
 
 export const getPublishedMagazineById = async (id) => {
@@ -42,7 +67,7 @@ export const publishMagazine = async (magazine) => {
     try {
       window.dispatchEvent(new Event('magazinesUpdated'));
     } catch {}
-    return { success: true, magazine: supa.magazine };
+    return { success: true, magazine: normalizeMagazine(supa.magazine) };
   }
 
   try {
@@ -52,7 +77,7 @@ export const publishMagazine = async (magazine) => {
     try {
       window.dispatchEvent(new Event('magazinesUpdated'));
     } catch {}
-    return { success: true, magazine: base, fallback: true, error: supa.error };
+    return { success: true, magazine: normalizeMagazine(base), fallback: true, error: supa.error };
   } catch (e) {
     logger.warn('local magazines 저장 실패:', e);
     return { success: false, error: e };
