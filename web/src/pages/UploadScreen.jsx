@@ -365,7 +365,8 @@ const UploadScreen = () => {
       const hasCategory = analysisResult.category && analysisResult.categoryName;
 
       if (analysisResult.success || hasCategory || hasTags) {
-        const limitedTags = (analysisResult.tags || []).slice(0, 8);
+        // 추천 태그는 총 6개로 제한 (날씨 1~2개 + AI 태그 중심)
+        const limitedTags = (analysisResult.tags || []).slice(0, 12);
 
         const existingTags = formData.tags.map((tag) =>
           tag.startsWith('#') ? tag.substring(1).toLowerCase() : tag.toLowerCase()
@@ -384,26 +385,20 @@ const UploadScreen = () => {
           })
           .slice(0, 8);
 
-        const mergedTags = [
-          ...weatherTags.map((tag) => `#${normalizeTag(tag)}`),
-          ...filteredTags.map((tag) => (String(tag).startsWith('#') ? String(tag) : `#${String(tag).replace(/^#+/, '')}`))
-        ];
+        const weatherHashtags = weatherTags
+          .map((tag) => `#${normalizeTag(tag)}`)
+          .filter(Boolean);
+        const weatherPick = weatherHashtags.slice(0, 2); // 1~2개까지만
 
-        let hashtagged = dedupeHashtags(mergedTags).slice(0, 8);
+        const aiHashtags = filteredTags.map((tag) => {
+          const s = String(tag || '').trim();
+          if (!s) return '';
+          return s.startsWith('#') ? s : `#${s.replace(/^#+/, '')}`;
+        }).filter(Boolean);
 
-        if (hashtagged.length === 0) {
-          const currentMonth = new Date().getMonth() + 1;
-          const fallbackTags = currentMonth >= 3 && currentMonth <= 5
-            ? ['봄날씨', '화창한날씨', '일출', '골든아워', '쾌적한온도']
-            : currentMonth >= 6 && currentMonth <= 8
-              ? ['여름날씨', '맑음', '청명한날씨', '자외선주의', '체감온도높음']
-              : currentMonth >= 9 && currentMonth <= 11
-                ? ['가을날씨', '쾌청한날씨', '일몰', '황금시간대', '쾌적한온도']
-                : ['겨울날씨', '맑음', '청명한날씨', '일출', '체감온도낮음'];
-          hashtagged = fallbackTags.map((tag) => `#${tag}`);
-        }
-
-        setAutoTags(dedupeHashtags(hashtagged));
+        const aiQuota = 6 - Math.min(2, weatherPick.length);
+        const picked = dedupeHashtags([...weatherPick, ...aiHashtags]).slice(0, 6);
+        setAutoTags(picked);
         const slugList = slugsFromAnalysisResult(analysisResult);
         setFormData(prev => ({
           ...prev,
@@ -424,38 +419,9 @@ const UploadScreen = () => {
             aiCategoryIcon: analysisResult.categoryIcon ?? prev.aiCategoryIcon ?? '🏞️'
           }));
         }
-        // 분석 실패 시 날씨 중심 기본 태그 제공 (5개)
-        const existingTags = formData.tags.map(tag =>
-          tag.startsWith('#') ? tag.substring(1).toLowerCase() : tag.toLowerCase()
-        );
-        const currentMonth = new Date().getMonth() + 1;
-        let defaultTags = [];
-
-        if (currentMonth >= 3 && currentMonth <= 5) {
-          defaultTags = ['봄날씨', '화창한날씨', '일출', '골든아워', '쾌적한온도'];
-        } else if (currentMonth >= 6 && currentMonth <= 8) {
-          defaultTags = ['여름날씨', '맑음', '청명한날씨', '자외선주의', '체감온도높음'];
-        } else if (currentMonth >= 9 && currentMonth <= 11) {
-          defaultTags = ['가을날씨', '쾌청한날씨', '일몰', '황금시간대', '쾌적한온도'];
-        } else {
-          defaultTags = ['겨울날씨', '맑음', '청명한날씨', '일출', '체감온도낮음'];
-        }
-
-        const filteredTags = defaultTags
-          .filter(tag => {
-            const tagLower = tag.toLowerCase();
-            return !existingTags.includes(tagLower);
-          })
-          .slice(0, 5);
-
-        const fallbackMerged = [
-          ...weatherTags.map(tag => `#${normalizeTag(tag)}`),
-          ...filteredTags.map(tag => `#${normalizeTag(tag)}`)
-        ];
-        const fallbackDeduped = Array.from(
-          new Map(fallbackMerged.map(tag => [normalizeTag(tag).toLowerCase(), `#${normalizeTag(tag)}`])).values()
-        ).filter(tag => isWeatherTag(tag));
-        setAutoTags(dedupeHashtags(fallbackDeduped).slice(0, 5));
+        // 로컬 추정 태그는 사용하지 않고(요청), 날씨 태그만 최대 2개 노출
+        const weatherPick = (weatherTags || []).map((t) => `#${normalizeTag(t)}`).filter(Boolean).slice(0, 2);
+        setAutoTags(dedupeHashtags(weatherPick).slice(0, 6));
 
         if (!hasCategory) {
           setFormData(prev => ({
@@ -470,32 +436,8 @@ const UploadScreen = () => {
 
     } catch (error) {
       logger.error('AI 분석 실패:', error);
-      // 에러 발생 시에도 날씨 중심 기본 태그 제공 (5개)
-      const existingTags = formData.tags.map(tag =>
-        tag.startsWith('#') ? tag.substring(1).toLowerCase() : tag.toLowerCase()
-      );
-      const currentMonth = new Date().getMonth() + 1;
-      let defaultTags = [];
-
-      if (currentMonth >= 3 && currentMonth <= 5) {
-        defaultTags = ['봄날씨', '화창한날씨', '일출', '골든아워', '쾌적한온도'];
-      } else if (currentMonth >= 6 && currentMonth <= 8) {
-        defaultTags = ['여름날씨', '맑음', '청명한날씨', '자외선주의', '체감온도높음'];
-      } else if (currentMonth >= 9 && currentMonth <= 11) {
-        defaultTags = ['가을날씨', '쾌청한날씨', '일몰', '황금시간대', '쾌적한온도'];
-      } else {
-        defaultTags = ['겨울날씨', '맑음', '청명한날씨', '일출', '체감온도낮음'];
-      }
-
-      const filteredTags = defaultTags
-        .filter(tag => !existingTags.includes(tag.toLowerCase()))
-        .slice(0, 5);
-
-      const fallbackMerged = filteredTags.map(tag => `#${normalizeTag(tag)}`);
-      const fallbackDeduped = Array.from(
-        new Map(fallbackMerged.map(tag => [normalizeTag(tag).toLowerCase(), `#${normalizeTag(tag)}`])).values()
-      ).filter(tag => isWeatherTag(tag));
-      setAutoTags(dedupeHashtags(fallbackDeduped).slice(0, 5));
+      // 로컬 생성 태그는 제거(요청). 실패 시에는 추천 태그를 비웁니다.
+      setAutoTags([]);
 
       setFormData(prev => ({
         ...prev,
@@ -526,17 +468,10 @@ const UploadScreen = () => {
       }
     }
 
-    const noteHintTags = [];
-    const note = (noteText || '').toLowerCase();
-    if (note.includes('비')) noteHintTags.push('비');
-    if (note.includes('눈')) noteHintTags.push('눈');
-    if (note.includes('혼잡') || note.includes('붐빔')) noteHintTags.push('혼잡');
-    if (note.includes('바람')) noteHintTags.push('바람');
-
-    const baseVideoTags = ['동영상', '현장영상', '실시간'];
+    // 로컬 추정 태그 제거(요청). 동영상은 현재 AI 분석 없이 날씨 태그만 최대 2개 추천
     const merged = dedupeHashtags(
-      [...baseVideoTags, ...weatherTags, ...noteHintTags].map((t) => `#${normalizeTag(t)}`)
-    ).slice(0, 8);
+      [...weatherTags].map((t) => `#${normalizeTag(t)}`)
+    ).slice(0, 2);
     setAutoTags(merged);
   }, []);
 
