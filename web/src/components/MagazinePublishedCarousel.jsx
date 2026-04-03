@@ -75,14 +75,14 @@ function HeroRotator({ urls, resetKey, timeLabel }) {
           </span>
         </div>
         {safe.length > 1 && (
-          <div className="pointer-events-none absolute bottom-2 right-2 z-20 flex items-center gap-1.5">
+          <div className="pointer-events-none absolute bottom-2 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1.5">
             {safe.map((_, i) => (
               <span
                 key={`dot-${i}`}
-                className={`block shrink-0 rounded-full leading-none [aspect-ratio:1/1] transition-all duration-200 ease-out ${
+                className={`block shrink-0 rounded-full transition-all duration-200 ease-out ${
                   i === idx
-                    ? 'h-[8px] w-[8px] max-h-[8px] max-w-[8px] bg-primary shadow-[0_0_0_1px_rgba(255,255,255,0.75)]'
-                    : 'h-[6px] w-[6px] max-h-[6px] max-w-[6px] bg-white/40'
+                    ? 'h-1.5 w-5 bg-white'
+                    : 'h-1.5 w-1.5 bg-white/40'
                 }`}
               />
             ))}
@@ -98,6 +98,27 @@ function HeroRotator({ urls, resetKey, timeLabel }) {
  */
 const MagazinePublishedCarousel = ({ slides, postsPerSlide = [], variant = 'list' }) => {
   const navigate = useNavigate();
+  const placesRowRef = useRef(null);
+  const [placeSlideIdx, setPlaceSlideIdx] = useState(0);
+
+  const slidesStableKey = useMemo(
+    () => (slides || []).map((s, i) => `${i}-${s?.sectionIndex ?? ''}-${s?.placeTitle ?? ''}`).join('|'),
+    [slides]
+  );
+
+  useEffect(() => {
+    setPlaceSlideIdx(0);
+    const el = placesRowRef.current;
+    if (el) el.scrollTo({ left: 0, behavior: 'auto' });
+  }, [slidesStableKey]);
+
+  const onPlacesRowScroll = (e) => {
+    const el = e.currentTarget;
+    const w = el.offsetWidth;
+    if (!w || !slides.length) return;
+    const i = Math.round(el.scrollLeft / w);
+    setPlaceSlideIdx(Math.max(0, Math.min(i, slides.length - 1)));
+  };
 
   const handleFeaturedClick = (slide) => {
     if (variant === 'detail') return;
@@ -133,7 +154,25 @@ const MagazinePublishedCarousel = ({ slides, postsPerSlide = [], variant = 'list
         {slides[0]?.magTitle}
       </h2>
 
-      <div className={carouselRowClass}>
+      {slides.length > 1 && (
+        <div className="mb-2 flex justify-center px-2">
+          <div
+            className="inline-flex items-center gap-1.5 rounded-full bg-black/45 px-2.5 py-1.5 backdrop-blur-[6px]"
+            aria-hidden
+          >
+            {slides.map((_, i) => (
+              <span
+                key={`place-idx-${i}`}
+                className={`rounded-full transition-all duration-200 ease-out ${
+                  i === placeSlideIdx ? 'h-1.5 w-5 bg-white' : 'h-1.5 w-1.5 bg-white/40'
+                }`}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div ref={placesRowRef} onScroll={onPlacesRowScroll} className={carouselRowClass}>
         {slides.map((slide, i) => {
           const regionPosts = Array.isArray(postsPerSlide[i]) ? postsPerSlide[i] : [];
           const heroUrls = collectHeroUrls(slide, regionPosts);

@@ -28,6 +28,7 @@ const MagazineDetailScreen = () => {
   const [posts, setPosts] = useState([]);
   const [allPosts, setAllPosts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [sectionPhotoIdx, setSectionPhotoIdx] = useState({});
 
   const normalizeSpace = (s) => String(s || '').replace(/\s+/g, ' ').trim();
   const getLocationKey = (p) =>
@@ -644,8 +645,21 @@ const MagazineDetailScreen = () => {
                       </div>
 
                       {/* 사진 피드(한 장씩 좌우 슬라이드, 최대 19장) */}
-                      <div className="w-full overflow-hidden rounded-[4px] bg-white dark:bg-gray-900 border border-zinc-100 dark:border-zinc-800 shadow-[0_2px_12px_rgba(15,23,42,0.05)]">
-                        <div className="flex overflow-x-auto snap-x snap-mandatory scrollbar-hide">
+                      <div className="relative w-full overflow-hidden rounded-[4px] bg-white dark:bg-gray-900 border border-zinc-100 dark:border-zinc-800 shadow-[0_2px_12px_rgba(15,23,42,0.05)]">
+                        <div
+                          className="flex overflow-x-auto snap-x snap-mandatory scrollbar-hide"
+                          onScroll={(e) => {
+                            const el = e.currentTarget;
+                            const w = el.offsetWidth;
+                            if (!w) return;
+                            const i = Math.round(el.scrollLeft / w);
+                            const max = Math.max(0, (media.length ? media : ['']).slice(0, 19).length - 1);
+                            setSectionPhotoIdx((prev) => ({
+                              ...prev,
+                              [sec.locKey]: Math.max(0, Math.min(i, max)),
+                            }));
+                          }}
+                        >
                           {(media.length ? media : ['']).slice(0, 19).map((src, i) => (
                             <div
                               key={`${sec.locKey}-slide-${i}`}
@@ -674,6 +688,21 @@ const MagazineDetailScreen = () => {
                             </div>
                           ))}
                         </div>
+                        {(media.length ? media : []).length > 1 && (
+                          <div className="pointer-events-none absolute bottom-2 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1.5">
+                            {(media.length ? media : []).slice(0, 19).map((_, di) => {
+                              const cur = sectionPhotoIdx[sec.locKey] ?? 0;
+                              return (
+                                <span
+                                  key={`${sec.locKey}-photo-dot-${di}`}
+                                  className={`rounded-full transition-all duration-200 ease-out ${
+                                    di === cur ? 'h-1.5 w-5 bg-white' : 'h-1.5 w-1.5 bg-white/40'
+                                  }`}
+                                />
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
 
                       {/* 위치 설명 문구 제거: 발행 시 작성한 설명을 사용 */}
