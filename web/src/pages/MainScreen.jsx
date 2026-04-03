@@ -1551,7 +1551,7 @@ const MainScreen = () => {
                                 <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: '#374151' }}>여행 매거진</h3>
                                 <button
                                     type="button"
-                                    onClick={() => navigate('/magazine')}
+                                    onClick={() => navigate('/magazines')}
                                     className="border-none bg-transparent text-primary hover:text-primary-dark dark:hover:text-primary-soft text-sm font-semibold cursor-pointer py-1.5 px-2.5 min-h-[36px] flex items-center gap-1"
                                 >
                                     <span>더보기</span>

@@ -15,6 +15,7 @@ const OnboardingScreen = lazy(() => import('./pages/OnboardingScreen'))
 const AuthCallbackScreen = lazy(() => import('./pages/AuthCallbackScreen'))
 const MainScreen = lazy(() => import('./pages/MainScreen'))
 const MagazineListScreen = lazy(() => import('./pages/MagazineListScreen'))
+const MagazineCollectionScreen = lazy(() => import('./pages/MagazineCollectionScreen'))
 const MagazineDetailScreen = lazy(() => import('./pages/MagazineDetailScreen'))
 const MagazineWriteScreen = lazy(() => import('./pages/MagazineWriteScreen'))
 const MagazineAdminScreen = lazy(() => import('./pages/MagazineAdminScreen'))
@@ -102,6 +103,7 @@ function App() {
                 {/* 로그인 없이도 접근 가능한 페이지 */}
                 <Route path="/main" element={<MainScreen />} />
                 <Route path="/magazine" element={<MagazineListScreen />} />
+                <Route path="/magazines" element={<MagazineCollectionScreen />} />
                 <Route
                   path="/magazine/write"
                   element={

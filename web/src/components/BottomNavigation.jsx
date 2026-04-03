@@ -97,7 +97,8 @@ const BottomNavigation = React.memo(() => {
     if (path === '/main') {
       return location.pathname === '/main' ||
         location.pathname === '/' ||
-        location.pathname.startsWith('/magazine');
+        location.pathname.startsWith('/magazine') ||
+        location.pathname.startsWith('/magazines');
     }
     // 검색 탭: /search 이하 경로
     if (path === '/search') {

@@ -260,8 +260,8 @@ const MagazineListScreen = () => {
     [navigate]
   );
 
-  const hideScrollbar =
-    'overflow-x-auto snap-x snap-mandatory flex [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden';
+  const carouselClass =
+    'w-full flex flex-row overflow-x-auto snap-x snap-mandatory overscroll-x-contain touch-pan-x [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden';
 
   return (
     <div className="screen-layout bg-background-light dark:bg-background-dark h-screen overflow-hidden">
@@ -272,7 +272,7 @@ const MagazineListScreen = () => {
           </h1>
         </header>
 
-        <main className="flex-1 overflow-y-auto px-4 pt-3 pb-24">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden px-4 pt-3 pb-24 max-w-full">
           {loading ? (
             <div className="py-16 text-center text-[13px] text-gray-500">불러오는 중…</div>
           ) : (
@@ -283,33 +283,29 @@ const MagazineListScreen = () => {
                     {slides[0]?.magTitle}
                   </h2>
 
-                  <div className="mb-2">
-                    <div
-                      ref={carouselRef}
-                      className={hideScrollbar}
-                      onScroll={onCarouselScroll}
-                    >
+                  <div className="mb-2 w-full min-w-0">
+                    <div ref={carouselRef} className={carouselClass} onScroll={onCarouselScroll}>
                       {slides.map((slide, i) => (
                         <div
                           key={`slide-${slide.sectionIndex}-${i}`}
-                          className="min-w-full shrink-0 snap-center box-border"
+                          className="flex-[0_0_100%] w-full min-w-0 shrink-0 snap-center box-border px-0"
                         >
-                          <article className="relative mb-2">
+                          <article className="relative mb-2 w-full max-w-full">
                             <button
                               type="button"
                               onClick={handleFeaturedClick}
-                              className="w-full text-left rounded-2xl overflow-hidden shadow-sm border border-zinc-100 dark:border-zinc-800 bg-white dark:bg-gray-900 transition-transform active:scale-[0.99]"
+                              className="w-full max-w-full text-left rounded-2xl overflow-hidden shadow-sm border border-zinc-100 dark:border-zinc-800 bg-white dark:bg-gray-900 transition-transform active:scale-[0.99]"
                             >
-                              <div className="relative h-[min(380px,50vh)] w-full overflow-hidden bg-zinc-100 dark:bg-zinc-800">
+                              <div className="relative w-full aspect-[3/4] max-h-[min(420px,68dvh)] overflow-hidden bg-zinc-100 dark:bg-zinc-800">
                                 {slide.image ? (
                                   <img
                                     src={slide.image}
                                     alt=""
-                                    className="w-full h-full object-cover"
+                                    className="absolute inset-0 h-full w-full object-cover"
                                     loading={i === 0 ? 'eager' : 'lazy'}
                                   />
                                 ) : (
-                                  <div className="flex h-full w-full items-center justify-center text-zinc-400">
+                                  <div className="flex h-full min-h-[200px] w-full items-center justify-center text-zinc-400">
                                     <span className="material-symbols-outlined text-5xl">photo</span>
                                   </div>
                                 )}
