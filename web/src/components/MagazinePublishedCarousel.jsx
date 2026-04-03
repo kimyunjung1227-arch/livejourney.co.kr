@@ -64,12 +64,12 @@ function HeroRotator({ urls, resetKey, timeLabel }) {
           </span>
         </div>
         {safe.length > 1 && (
-          <div className="absolute bottom-2 right-2 z-20 flex gap-1">
+          <div className="absolute bottom-2 right-2 z-20 flex items-center gap-1">
             {safe.map((_, i) => (
               <span
                 key={`dot-${i}`}
-                className={`h-1.5 w-1.5 rounded-full transition-colors ${
-                  i === idx ? 'bg-white shadow' : 'bg-white/45'
+                className={`h-1.5 w-1.5 shrink-0 rounded-full transition-colors ${
+                  i === idx ? 'bg-primary shadow-[0_0_0_1px_rgba(255,255,255,0.6)]' : 'bg-white/40'
                 }`}
               />
             ))}
@@ -266,8 +266,8 @@ const MagazinePublishedCarousel = ({
       </div>
 
       {total > 0 && (
-        <div className="mt-4 flex flex-col items-center gap-2 border-t border-zinc-100/80 pt-4 dark:border-zinc-800/80">
-          <div className="flex items-center justify-center gap-2.5" role="tablist" aria-label="장소 선택">
+        <div className="mt-3 flex flex-col items-center gap-1.5 border-t border-zinc-100/80 pt-3 dark:border-zinc-800/80">
+          <div className="flex items-center justify-center gap-1.5" role="tablist" aria-label="장소 선택">
             {slides.map((_, i) => (
               <button
                 key={`place-dot-${i}`}
@@ -276,16 +276,15 @@ const MagazinePublishedCarousel = ({
                 aria-selected={i === activeSlideIndex}
                 aria-label={`장소 ${i + 1} / ${total}`}
                 onClick={() => scrollToSlide(i)}
-                className={`h-2 w-2 shrink-0 rounded-full transition-all duration-200 ${
-                  i === activeSlideIndex
-                    ? 'scale-110 bg-primary shadow-[0_0_0_2px_rgba(255,255,255,0.95)] dark:shadow-[0_0_0_2px_rgba(24,24,27,0.95)]'
-                    : 'bg-zinc-400/55 hover:bg-zinc-400 dark:bg-zinc-600 dark:hover:bg-zinc-500'
+                className={`h-1.5 w-1.5 shrink-0 rounded-full transition-colors ${
+                  i === activeSlideIndex ? 'bg-primary' : 'bg-zinc-400/45 dark:bg-zinc-600'
                 }`}
               />
             ))}
           </div>
-          <p className="m-0 text-[11px] font-medium tabular-nums text-zinc-500 dark:text-zinc-400">
-            게시물 <span className="font-semibold text-primary">{currentPostCount}</span>
+          <p className="m-0 text-[10px] font-normal tabular-nums leading-none text-zinc-400 dark:text-zinc-500">
+            게시{' '}
+            <span className="font-semibold text-primary">{currentPostCount}</span>
           </p>
         </div>
       )}

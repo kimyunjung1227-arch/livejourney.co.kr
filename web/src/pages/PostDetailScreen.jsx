@@ -1210,11 +1210,11 @@ const PostDetailScreen = () => {
             {(mediaItems.length > 1 || images.length > 1) && (
               <>
                 {/* 페이지 인디케이터 - 클릭 가능 */}
-                <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5 z-10">
+                <div className="absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1.5">
                   {(mediaItems.length > 0 ? mediaItems : images).map((_, index) => (
-                    <div
+                    <button
                       key={index}
-                      role="button"
+                      type="button"
                       tabIndex={0}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' || e.key === ' ') {
@@ -1227,10 +1227,13 @@ const PostDetailScreen = () => {
                         setCurrentImageIndex(index);
                         mediaSwiperRef.current?.slideTo(index);
                       }}
-                      className={`h-1.5 rounded-full transition-all cursor-pointer ${
-                        index === currentImageIndex ? 'w-6 bg-white' : 'w-1.5 bg-white/50 hover:bg-white/70'
+                      aria-label={`사진 ${index + 1} / ${(mediaItems.length > 0 ? mediaItems : images).length}`}
+                      className={`h-1.5 w-1.5 shrink-0 cursor-pointer rounded-full transition-colors ${
+                        index === currentImageIndex
+                          ? 'bg-primary shadow-[0_0_0_1px_rgba(255,255,255,0.85)]'
+                          : 'bg-white/40 hover:bg-white/55'
                       }`}
-                    ></div>
+                    />
                   ))}
                 </div>
               </>
