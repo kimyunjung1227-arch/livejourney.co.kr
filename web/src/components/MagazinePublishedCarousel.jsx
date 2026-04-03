@@ -59,7 +59,7 @@ function HeroRotator({ urls, resetKey, timeLabel }) {
           />
         ))}
         <div className="absolute top-3 left-3 z-20 flex flex-col gap-2">
-          <span className="inline-flex rounded-full bg-white/90 px-2 py-0.5 text-[10px] font-semibold text-amber-900 shadow-sm dark:bg-zinc-900/80 dark:text-amber-100">
+          <span className="inline-flex rounded-full bg-primary px-2.5 py-1 text-[10px] font-bold text-white shadow-md shadow-primary/30">
             {timeLabel}
           </span>
         </div>
@@ -164,9 +164,9 @@ const MagazinePublishedCarousel = ({
                       <button
                         type="button"
                         onClick={(e) => handleAskLight(e, slide)}
-                        className="flex w-full items-center justify-center gap-2 rounded-xl border border-primary/35 bg-white py-2.5 px-3 text-[13px] font-semibold text-primary transition-colors hover:bg-primary/5 dark:border-primary/40 dark:bg-gray-900 dark:text-primary"
+                        className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3 px-4 text-[14px] font-bold text-white shadow-md shadow-primary/25 transition hover:bg-primary/90 active:scale-[0.99] dark:bg-primary dark:text-white"
                       >
-                        <span className="material-symbols-outlined text-[17px]">chat_bubble</span>
+                        <span className="material-symbols-outlined text-[18px] text-white">chat_bubble</span>
                         이 장소 지금 상황 물어보기
                       </button>
                     </div>
@@ -191,9 +191,9 @@ const MagazinePublishedCarousel = ({
                         <button
                           type="button"
                           onClick={(e) => handleAskLight(e, slide)}
-                          className="flex w-full items-center justify-center gap-2 rounded-xl border border-primary/35 bg-white py-2.5 px-3 text-[13px] font-semibold text-primary transition-colors hover:bg-primary/5 dark:border-primary/40 dark:bg-gray-900 dark:text-primary"
+                          className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3 px-4 text-[14px] font-bold text-white shadow-md shadow-primary/25 transition hover:bg-primary/90 active:scale-[0.99] dark:bg-primary dark:text-white"
                         >
-                          <span className="material-symbols-outlined text-[17px]">chat_bubble</span>
+                          <span className="material-symbols-outlined text-[18px] text-white">chat_bubble</span>
                           이 장소 지금 상황 물어보기
                         </button>
                       </div>
@@ -266,35 +266,27 @@ const MagazinePublishedCarousel = ({
       </div>
 
       {total > 0 && (
-        <div className="mt-3 flex flex-col items-center gap-2 border-t border-zinc-100/80 pt-3 dark:border-zinc-800/80">
-          <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[11px] tabular-nums text-gray-600 dark:text-gray-300">
-            <span className="inline-flex items-center gap-1 rounded-full bg-zinc-100/90 px-2.5 py-1 font-medium dark:bg-zinc-800/80">
-              <span className="text-zinc-500 dark:text-zinc-400">장소</span>
-              <span className="font-semibold text-gray-900 dark:text-gray-100">
-                {activeSlideIndex + 1} / {total}
-              </span>
-            </span>
-            <span className="text-zinc-300 dark:text-zinc-600">·</span>
-            <span className="inline-flex items-center gap-1 rounded-full bg-zinc-100/90 px-2.5 py-1 font-medium dark:bg-zinc-800/80">
-              <span className="text-zinc-500 dark:text-zinc-400">게시물</span>
-              <span className="font-semibold text-primary">{currentPostCount}</span>
-            </span>
+        <div className="mt-4 flex flex-col items-center gap-2 border-t border-zinc-100/80 pt-4 dark:border-zinc-800/80">
+          <div className="flex items-center justify-center gap-2.5" role="tablist" aria-label="장소 선택">
+            {slides.map((_, i) => (
+              <button
+                key={`place-dot-${i}`}
+                type="button"
+                role="tab"
+                aria-selected={i === activeSlideIndex}
+                aria-label={`장소 ${i + 1} / ${total}`}
+                onClick={() => scrollToSlide(i)}
+                className={`h-2 w-2 shrink-0 rounded-full transition-all duration-200 ${
+                  i === activeSlideIndex
+                    ? 'scale-110 bg-primary shadow-[0_0_0_2px_rgba(255,255,255,0.95)] dark:shadow-[0_0_0_2px_rgba(24,24,27,0.95)]'
+                    : 'bg-zinc-400/55 hover:bg-zinc-400 dark:bg-zinc-600 dark:hover:bg-zinc-500'
+                }`}
+              />
+            ))}
           </div>
-          {total > 1 && (
-            <div className="flex items-center justify-center gap-1">
-              {slides.map((_, i) => (
-                <button
-                  key={`dot-${i}`}
-                  type="button"
-                  aria-label={`장소 ${i + 1}`}
-                  onClick={() => scrollToSlide(i)}
-                  className={`rounded-full transition-all duration-200 ${
-                    i === activeSlideIndex ? 'h-1 w-4 bg-primary/40 dark:bg-primary/45' : 'h-1 w-1 bg-zinc-200/90 dark:bg-zinc-600/60'
-                  }`}
-                />
-              ))}
-            </div>
-          )}
+          <p className="m-0 text-[11px] font-medium tabular-nums text-zinc-500 dark:text-zinc-400">
+            게시물 <span className="font-semibold text-primary">{currentPostCount}</span>
+          </p>
         </div>
       )}
     </div>
