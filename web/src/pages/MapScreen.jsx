@@ -104,7 +104,7 @@ const MapScreen = () => {
   const [visiblePins, setVisiblePins] = useState([]);
   const [currentLocation, setCurrentLocation] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedFilters, setSelectedFilters] = useState([]); // 필터: ['bloom', 'food', 'scenic', 'waiting'] 중복 선택 가능
+  const [selectedFilters, setSelectedFilters] = useState([]); // 필터: ['bloom', 'scenic'] 중복 선택 가능
   const [searchResults, setSearchResults] = useState([]); // 검색 결과 게시물
   const [isSearching, setIsSearching] = useState(false); // 검색 중인지 여부
   const [kakaoSearchResults, setKakaoSearchResults] = useState([]); // Kakao API 검색 결과 (관광지 등)
@@ -926,12 +926,10 @@ const MapScreen = () => {
             const category = post.category || 'general';
             const cats = Array.isArray(post.categories) ? post.categories : [];
             const hasCat = (slug) => category === slug || cats.includes(slug);
-            // 활성화된 필터 중 하나라도 매칭되면 표시
+            // 활성화된 필터 중 하나라도 매칭되면 표시 (개화 / 가볼만한 곳만 지원)
             return selectedFilters.some(filter => {
               if (filter === 'bloom') return hasCat('bloom');
-              if (filter === 'food') return hasCat('food');
               if (filter === 'scenic') return hasCat('scenic') || hasCat('landmark');
-              if (filter === 'waiting') return hasCat('waiting') || (post.tags && Array.isArray(post.tags) && post.tags.some(t => /웨이팅|대기|줄|waiting|웨이트/i.test(String(t).trim())));
               return false;
             });
           });
@@ -965,12 +963,10 @@ const MapScreen = () => {
           const category = post.category || 'general';
           const cats = Array.isArray(post.categories) ? post.categories : [];
           const hasCat = (slug) => category === slug || cats.includes(slug);
-          // 활성화된 필터 중 하나라도 매칭되면 표시
+          // 활성화된 필터 중 하나라도 매칭되면 표시 (개화 / 가볼만한 곳만 지원)
           return selectedFilters.some(filter => {
             if (filter === 'bloom') return hasCat('bloom');
-            if (filter === 'food') return hasCat('food');
             if (filter === 'scenic') return hasCat('scenic') || hasCat('landmark');
-            if (filter === 'waiting') return hasCat('waiting') || (post.tags && Array.isArray(post.tags) && post.tags.some(t => /웨이팅|대기|줄|waiting|웨이트/i.test(String(t).trim())));
             return false;
           });
         });
@@ -3108,34 +3104,6 @@ const MapScreen = () => {
             onClick={() => {
               if (hasDraggedFilterRef.current) { hasDraggedFilterRef.current = false; return; }
               setSelectedFilters(prev =>
-                prev.includes('food')
-                  ? prev.filter(f => f !== 'food')
-                  : [...prev, 'food']
-              );
-            }}
-            style={{
-              padding: '6px 12px',
-              minHeight: 34,
-              borderRadius: '16px',
-              border: 'none',
-              background: selectedFilters.includes('food') ? '#00BCD4' : 'rgba(255, 255, 255, 0.95)',
-              color: selectedFilters.includes('food') ? 'white' : '#666',
-              fontSize: '12px',
-              fontWeight: '600',
-              cursor: 'pointer',
-              whiteSpace: 'nowrap',
-              backdropFilter: 'blur(10px)',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-              transition: 'all 0.2s',
-              flexShrink: 0
-            }}
-          >
-            🍜 맛집정보
-          </button>
-          <button
-            onClick={() => {
-              if (hasDraggedFilterRef.current) { hasDraggedFilterRef.current = false; return; }
-              setSelectedFilters(prev =>
                 prev.includes('scenic')
                   ? prev.filter(f => f !== 'scenic')
                   : [...prev, 'scenic']
@@ -3159,34 +3127,6 @@ const MapScreen = () => {
             }}
           >
             🏞️ 가볼만한 곳
-          </button>
-          <button
-            onClick={() => {
-              if (hasDraggedFilterRef.current) { hasDraggedFilterRef.current = false; return; }
-              setSelectedFilters(prev =>
-                prev.includes('waiting')
-                  ? prev.filter(f => f !== 'waiting')
-                  : [...prev, 'waiting']
-              );
-            }}
-            style={{
-              padding: '6px 12px',
-              minHeight: 34,
-              borderRadius: '16px',
-              border: 'none',
-              background: selectedFilters.includes('waiting') ? '#00BCD4' : 'rgba(255, 255, 255, 0.95)',
-              color: selectedFilters.includes('waiting') ? 'white' : '#666',
-              fontSize: '12px',
-              fontWeight: '600',
-              cursor: 'pointer',
-              whiteSpace: 'nowrap',
-              backdropFilter: 'blur(10px)',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-              transition: 'all 0.2s',
-              flexShrink: 0
-            }}
-          >
-            웨이팅
           </button>
           {/* 스크롤 끝 여백 (메인 추천여행지 슬라이드와 동일) */}
           <div style={{ width: '16px', flexShrink: 0 }} aria-hidden="true" />

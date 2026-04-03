@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import BottomNavigation from '../components/BottomNavigation';
 import { getRegionDefaultImage } from '../utils/regionDefaultImages';
+import { getMapThumbnailUri } from '../utils/postMedia';
 import { getTimeAgo, filterActivePosts48 } from '../utils/timeUtils';
 import { logger } from '../utils/logger';
 import { getCombinedPosts } from '../utils/mockData';
@@ -777,11 +778,10 @@ const SearchScreen = () => {
                 diverseRegionCards.map((card, index) => {
                   const posts = card.posts || [];
                   const cyclePost = posts.length > 0 ? posts[(cycleIndex + index) % posts.length] : null;
-                  const rawImg = cyclePost
-                    ? (cyclePost.images && cyclePost.images[0]) || cyclePost.image || cyclePost.thumbnail
-                    : card.image;
-                  const imgSrc = getDisplayImageUrl(rawImg || '');
-                  const displayImage = (imgSrc && !String(imgSrc).match(/\.(mp4|webm|mov)(\?|$)/i)) ? imgSrc : getRegionDefaultImage(card.name);
+                  const thumbUri = cyclePost ? getMapThumbnailUri(cyclePost) : null;
+                  const displayImage = thumbUri
+                    ? getDisplayImageUrl(thumbUri)
+                    : getRegionDefaultImage(card.name);
                   const weather = weatherData[card.name];
                   return (
                     <div

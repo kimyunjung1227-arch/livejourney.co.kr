@@ -393,10 +393,11 @@ const UploadScreen = () => {
         const aiHashtags = filteredTags.map((tag) => {
           const s = String(tag || '').trim();
           if (!s) return '';
-          return s.startsWith('#') ? s : `#${s.replace(/^#+/, '')}`;
+          const withHash = s.startsWith('#') ? s : `#${s.replace(/^#+/, '')}`;
+          // AI 태그에서는 날씨 관련 태그는 제외 (날씨 태그는 별도 weatherPick에서만 사용)
+          return isWeatherTag(withHash) ? '' : withHash;
         }).filter(Boolean);
 
-        const aiQuota = 6 - Math.min(2, weatherPick.length);
         const picked = dedupeHashtags([...weatherPick, ...aiHashtags]).slice(0, 6);
         setAutoTags(picked);
         const slugList = slugsFromAnalysisResult(analysisResult);
