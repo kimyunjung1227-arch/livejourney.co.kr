@@ -4,7 +4,7 @@ import { Swiper, SwiperSlide } from 'swiper/react';
 import BottomNavigation from '../components/BottomNavigation';
 import { getPost } from '../api/posts';
 import { getDisplayImageUrl } from '../api/upload';
-import { updatePostLikesSupabase, fetchPostByIdSupabase, addCommentToPostSupabase, updateCommentsInPostSupabase, deletePostSupabase } from '../api/postsSupabase';
+import { updatePostLikesSupabase, fetchPostByIdSupabase, addCommentToPostSupabase, updateCommentsInPostSupabase, deletePostSupabase, getMergedMyPostsForStats } from '../api/postsSupabase';
 import { useAuth } from '../contexts/AuthContext';
 import { getWeatherByRegion } from '../api/weather';
 import { getTimeAgo } from '../utils/dateUtils';
@@ -819,22 +819,30 @@ const PostDetailScreen = () => {
       setRepresentativeBadge(repBadge);
     }
 
-    // 5) 작성자 신뢰지수 (로컬 게시물 + 현재 게시물로 계산, 다른 사용자 게시물에서도 표시)
-    const getPostAuthorId = (p) => {
-      const id = p?.userId ?? (typeof p?.user === 'string' ? p.user : p?.user?.id) ?? p?.user;
-      return id != null ? String(id) : '';
-    };
-    const uploadedPosts = JSON.parse(localStorage.getItem('uploadedPosts') || '[]');
-    const sameAuthorPosts = uploadedPosts.filter((p) => getPostAuthorId(p) === String(postUserId));
-    const withCurrent = post?.id || post?._id
-      ? sameAuthorPosts.some((p) => (p.id || p._id) === (post.id || post._id))
-        ? sameAuthorPosts
-        : [post, ...sameAuthorPosts]
-      : [post, ...sameAuthorPosts];
-    const raw = getTrustRawScore(postUserId, withCurrent.length ? withCurrent : null);
-    const { grade, progressToNext } = getTrustGrade(raw, postUserId, withCurrent.length ? withCurrent : null);
-    setAuthorTrustScore(progressToNext);
-    setAuthorTrustGrade(grade);
+    // 5) 작성자 신뢰지수
+    // - 프로필 화면과 동일하게 Supabase+로컬 병합 게시물 기준으로 계산
+    // - 현재 보고 있는 게시물이 포함되지 않았으면 함께 포함해서 계산
+    (async () => {
+      const authorId = String(postUserId || '');
+      let postsForTrust = [];
+      try {
+        if (authorId) {
+          // 내 프로필과 동일한 로직 사용
+          // (다른 사람 게시물일 때도 해당 userId 기준으로 병합)
+          postsForTrust = await getMergedMyPostsForStats(authorId);
+        }
+      } catch {
+        postsForTrust = [];
+      }
+      // 병합 목록에 현재 게시물이 없으면 추가
+      if (post && post.id && !postsForTrust.some((p) => String(p.id || p._id) === String(post.id || post._id))) {
+        postsForTrust = [post, ...postsForTrust];
+      }
+      const raw = getTrustRawScore(authorId || null, postsForTrust.length ? postsForTrust : null);
+      const { grade, progressToNext } = getTrustGrade(raw, authorId || null, postsForTrust.length ? postsForTrust : null);
+      setAuthorTrustScore(progressToNext);
+      setAuthorTrustGrade(grade);
+    })();
   }, [post]);
 
   // 초기 데이터 로드
