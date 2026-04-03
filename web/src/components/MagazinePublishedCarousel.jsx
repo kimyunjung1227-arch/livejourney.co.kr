@@ -79,10 +79,10 @@ function HeroRotator({ urls, resetKey, timeLabel }) {
             {safe.map((_, i) => (
               <span
                 key={`dot-${i}`}
-                className={`inline-block shrink-0 rounded-full transition-all duration-200 ease-out ${
+                className={`block shrink-0 rounded-full leading-none [aspect-ratio:1/1] transition-all duration-200 ease-out ${
                   i === idx
-                    ? 'size-2 aspect-square bg-primary shadow-[0_0_0_1px_rgba(255,255,255,0.75)]'
-                    : 'size-1.5 aspect-square bg-white/40'
+                    ? 'h-[8px] w-[8px] max-h-[8px] max-w-[8px] bg-primary shadow-[0_0_0_1px_rgba(255,255,255,0.75)]'
+                    : 'h-[6px] w-[6px] max-h-[6px] max-w-[6px] bg-white/40'
                 }`}
               />
             ))}

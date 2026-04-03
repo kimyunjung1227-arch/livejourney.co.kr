@@ -192,6 +192,16 @@ nav button {
   background: transparent;
 }
 
+/* 갤러리·캐러셀 페이지 점: 전역 button min-height(44px) 미적용 → 완전한 원 유지 */
+button.carousel-page-dot {
+  min-height: unset;
+  min-width: unset;
+  padding: 0;
+  line-height: 0;
+  font-size: 0;
+  box-sizing: border-box;
+}
+
 /* 알림 버튼 새 알림 배지 (메인 등) */
 .noti-badge {
   position: absolute;
