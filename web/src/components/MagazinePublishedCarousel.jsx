@@ -297,9 +297,11 @@ const MagazinePublishedCarousel = ({ slides, postsPerSlide = [], variant = 'list
       </div>
       </div>
 
+      {/* 게시물 상세 미디어 인디케이터와 동일: 땡땡이 + 현재 막대 (밝은 배경용 zinc 톤) */}
       {slides.length > 1 && (
-        <div className="mt-3 flex justify-center px-2" role="tablist" aria-label="장소 슬라이드 위치">
-          <div className="inline-flex items-center gap-1.5 rounded-full bg-black/45 px-2.5 py-1.5 backdrop-blur-[6px]">
+        <div className="mt-3 flex flex-col items-center gap-1 px-2 pb-1" aria-live="polite">
+          <span className="sr-only">장소 {slides.length}곳, 현재 {placeSlideIdx + 1}번째</span>
+          <div className="flex items-center gap-1.5" role="tablist" aria-label="장소 슬라이드">
             {slides.map((_, i) => (
               <button
                 key={`place-idx-${i}`}
@@ -307,8 +309,10 @@ const MagazinePublishedCarousel = ({ slides, postsPerSlide = [], variant = 'list
                 role="tab"
                 aria-selected={i === placeSlideIdx}
                 aria-label={`장소 ${i + 1} / ${slides.length}`}
-                className={`rounded-full border-0 p-0 transition-all duration-200 ease-out focus:outline-none focus-visible:ring-2 focus-visible:ring-white/80 ${
-                  i === placeSlideIdx ? 'h-1.5 w-5 bg-white' : 'h-1.5 w-1.5 bg-white/45 hover:bg-white/65'
+                className={`carousel-page-dot inline-flex min-h-0 min-w-0 shrink-0 cursor-pointer items-center justify-center rounded-full border-0 p-0 leading-none transition-all duration-200 ease-out focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 dark:focus-visible:ring-zinc-500 ${
+                  i === placeSlideIdx
+                    ? 'h-1.5 w-5 bg-zinc-800 dark:bg-zinc-100'
+                    : 'h-1.5 w-1.5 bg-zinc-300 hover:bg-zinc-400 dark:bg-zinc-600 dark:hover:bg-zinc-500'
                 }`}
                 onClick={(e) => {
                   e.preventDefault();
@@ -320,10 +324,6 @@ const MagazinePublishedCarousel = ({ slides, postsPerSlide = [], variant = 'list
           </div>
         </div>
       )}
-
-      <p className="mt-2 mb-1 text-center text-[13px] font-semibold text-gray-600 dark:text-gray-400" aria-live="polite">
-        장소 {slides.length}곳
-      </p>
     </div>
   );
 };

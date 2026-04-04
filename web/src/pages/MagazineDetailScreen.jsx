@@ -749,9 +749,17 @@ const MagazineDetailScreen = () => {
                 })}
               </div>
             )}
-            {!loading && sectionsToRender.length > 0 && (
-              <div className="px-4 pb-10 pt-2 text-center text-[13px] font-semibold text-gray-600 dark:text-gray-400 border-t border-zinc-100 dark:border-zinc-800">
-                총 장소 {sectionsToRender.length}곳
+            {!loading && sectionsToRender.length > 1 && (
+              <div className="flex flex-col items-center gap-1 border-t border-zinc-100 px-4 pb-10 pt-3 dark:border-zinc-800">
+                <span className="sr-only">총 장소 {sectionsToRender.length}곳</span>
+                <div className="flex items-center gap-1.5" aria-hidden="true">
+                  {sectionsToRender.map((_, i) => (
+                    <span
+                      key={`mag-place-dot-${i}`}
+                      className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-zinc-300 dark:bg-zinc-600"
+                    />
+                  ))}
+                </div>
               </div>
             )}
           </section>
