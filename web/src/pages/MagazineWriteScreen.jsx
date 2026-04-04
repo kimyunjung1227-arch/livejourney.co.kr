@@ -326,21 +326,23 @@ const MagazineWriteScreen = () => {
   return (
     <div className="screen-layout bg-background-light dark:bg-background-dark h-screen overflow-hidden">
       <div className="screen-content flex flex-col h-full">
-        <header className="screen-header flex-shrink-0 flex items-center justify-between px-4 py-3 bg-white dark:bg-gray-900 border-b border-zinc-100 dark:border-zinc-800">
-          <button
-            type="button"
-            onClick={() => navigate(-1)}
-            className="flex size-10 items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
-            aria-label="뒤로"
-          >
-            <span className="material-symbols-outlined text-[22px] text-text-primary-light dark:text-text-primary-dark">
-              arrow_back
-            </span>
-          </button>
-          <h1 className="text-[17px] font-extrabold text-text-primary-light dark:text-text-primary-dark m-0 truncate px-2">
-            매거진 발행
+        <header className="screen-header flex-shrink-0 grid grid-cols-[minmax(40px,1fr)_auto_minmax(40px,1fr)] items-center gap-1 px-4 py-3 bg-white dark:bg-gray-900 border-b border-zinc-100 dark:border-zinc-800">
+          <div className="flex justify-start min-w-0">
+            <button
+              type="button"
+              onClick={() => navigate(-1)}
+              className="flex size-10 items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
+              aria-label="뒤로"
+            >
+              <span className="material-symbols-outlined text-[22px] text-text-primary-light dark:text-text-primary-dark">
+                arrow_back
+              </span>
+            </button>
+          </div>
+          <h1 className="text-[17px] font-extrabold text-text-primary-light dark:text-text-primary-dark m-0 truncate text-center max-w-[min(280px,70vw)]">
+            {previewSlides.length > 0 ? '여행 매거진' : '매거진 발행'}
           </h1>
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex shrink-0 items-center justify-end gap-2 min-w-0">
             <button
               type="button"
               onClick={saveDraft}
@@ -377,21 +379,30 @@ const MagazineWriteScreen = () => {
             </div>
           ) : (
             <>
+              {/* MagazineDetailScreen(발행 매거진)과 동일: 상단 미리보기 = 캐러셀만 */}
               {previewSlides.length > 0 ? (
-                <div className="w-full shrink-0 mb-6">
+                <div className="w-full shrink-0">
                   <MagazinePublishedCarousel variant="detail" slides={previewSlides} postsPerSlide={previewPostsPerSlide} />
                 </div>
               ) : (
-                <div className="mb-6 rounded-xl border border-dashed border-zinc-200 bg-zinc-50/60 px-3 py-4 text-center dark:border-zinc-700 dark:bg-zinc-900/30">
-                  <p className="m-0 text-[12px] leading-relaxed text-gray-500 dark:text-gray-400">
-                    아래에서 제목·장소를 입력하면 매거진 상세와 같은 화면이 여기에 먼저 표시돼요.
+                <div className="w-full shrink-0 flex flex-col items-center justify-center px-2 py-10 text-center">
+                  <span className="material-symbols-outlined text-5xl text-zinc-300 dark:text-zinc-600 mb-3">book_5</span>
+                  <p className="m-0 text-[14px] font-medium text-gray-800 dark:text-gray-100 mb-1">
+                    미리보기를 불러올 수 있어요
+                  </p>
+                  <p className="m-0 text-[13px] text-gray-500 dark:text-gray-400 max-w-[280px] leading-relaxed">
+                    아래에서 제목과 장소·설명을 입력하면 매거진 상세 화면과 같은 구조로 여기에 표시돼요.
                   </p>
                 </div>
               )}
 
-              <form id="magazine-publish-form" className="space-y-6 pb-8" onSubmit={handleSubmit}>
+              <form
+                id="magazine-publish-form"
+                className="space-y-6 pb-8 mt-4 pt-4 border-t border-zinc-100 dark:border-zinc-800"
+                onSubmit={handleSubmit}
+              >
                 <div className="rounded-xl border border-zinc-100 bg-white px-3 py-3 shadow-sm dark:border-zinc-800 dark:bg-gray-900/40">
-                  <p className="m-0 mb-3 text-[13px] font-bold text-gray-900 dark:text-gray-50">내용 편집</p>
+                  <p className="m-0 mb-3 text-[13px] font-bold text-gray-900 dark:text-gray-50">발행 내용 편집</p>
                   <div>
                     <label className="block mb-2 text-[12px] font-semibold text-gray-700 dark:text-gray-300">매거진 제목</label>
                     <input

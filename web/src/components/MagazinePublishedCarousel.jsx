@@ -11,9 +11,10 @@ const carouselRowClass =
   'flex w-full min-w-0 flex-row overflow-x-auto snap-x snap-mandatory overscroll-x-contain touch-pan-x [-webkit-overflow-scrolling:touch] [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden cursor-grab active:cursor-grabbing select-none';
 
 const MAGAZINE_DRAG_MULTIPLIER = 2.35;
-/** 장소 가로 슬라이드: 살짝만 넘겨도 다음/이전 칸으로 붙도록 (bias 작을수록 민감) */
-const PLACES_ROW_DRAG_MULTIPLIER = 3.6;
-const PLACES_SNAP_BIAS = 0.1;
+/** 장소 가로 슬라이드: 가볍게 넘겨도 다음·이전 장소로 붙도록 (bias 작을수록 적은 스크롤량에 반응) */
+const PLACES_ROW_DRAG_MULTIPLIER = 5.8;
+/** scrollLeft/pageWidth 기준, 약 3~5%만 넘겨도 다음 칸으로 스냅 */
+const PLACES_SNAP_BIAS = 0.03;
 
 /**
  * pages = scrollLeft / pageWidth 일 때 ceil(pages - snapBias) 로 칸 결정 (bias 작을수록 짧은 스와이프에 반응)
