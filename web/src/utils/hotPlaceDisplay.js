@@ -86,8 +86,23 @@ export function getPhotoCategoryLabel(post) {
     if (blob.includes('카페') || blob.includes('cafe') || post.category === 'cafe') return '카페';
     if (post.category === 'food' || blob.includes('맛집')) return '맛집';
     if (post.category === 'scenic' || post.category === 'landmark' || blob.includes('명소')) return '명소';
-    if (post.categoryName) return String(post.categoryName);
+    const cn = post.categoryName && String(post.categoryName).trim();
+    if (cn) return cn;
     return '명소';
+}
+
+/** 실시간 핫플 좌상단 뱃지용 — 카테고리 문구에 맞는 Material Symbol 이름 */
+export function getHotFeedBadgeIconName(label) {
+    const s = String(label || '').toLowerCase();
+    if (s.includes('맛집') || s.includes('음식') || s.includes('식당')) return 'restaurant';
+    if (s.includes('카페') || s.includes('cafe')) return 'local_cafe';
+    if (s.includes('디저트') || s.includes('베이커')) return 'cake';
+    if (s.includes('숙소') || s.includes('호텔') || s.includes('펜션')) return 'hotel';
+    if (s.includes('야경') || s.includes('야간')) return 'nightlight';
+    if (s.includes('해변') || s.includes('바다') || s.includes('해수욕')) return 'beach_access';
+    if (s.includes('산') || s.includes('등산') || s.includes('트레킹')) return 'hiking';
+    if (s.includes('전시') || s.includes('박물관') || s.includes('미술')) return 'museum';
+    return 'photo_camera';
 }
 
 /**

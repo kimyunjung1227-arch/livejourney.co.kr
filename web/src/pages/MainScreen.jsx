@@ -26,6 +26,7 @@ import {
     getPhotoCaptionLine,
     getAvatarUrls,
     computeHotFeedViewingCount,
+    getHotFeedBadgeIconName,
 } from '../utils/hotPlaceDisplay';
 
 /** 이미지 좌상단 카테고리 뱃지 (급상승 / 사람 많음 / 인기 / 실시간) */
@@ -605,7 +606,7 @@ const MainScreen = () => {
         const viewingCount = computeHotFeedViewingCount(post);
         const avatars = getAvatarUrls(post);
         const regionShort = post.region || (post.location || '').trim().split(/\s+/).slice(0, 2).join(' ') || '위치';
-        const categoryLabel = getHotCategoryLabel(post);
+        const engagementTier = getHotCategoryLabel(post);
         const tagHint = (post.reasonTags && post.reasonTags[0])
             ? String(post.reasonTags[0]).replace(/#/g, '').replace(/_/g, ' ').trim()
             : ((Array.isArray(post.aiHotTags) && post.aiHotTags[0])
@@ -614,17 +615,21 @@ const MainScreen = () => {
         let whyHotLine = '';
         if (post._impactLabel) {
             whyHotLine = post._impactLabel;
-        } else if (categoryLabel === '급상승') {
+        } else if (engagementTier === '급상승') {
             whyHotLine = tagHint ? `최근 이 장소에 관심이 급증했어요. ${tagHint}` : '최근 관심이 급증한 실시간 핫플이에요.';
-        } else if (categoryLabel === '사람 많음') {
+        } else if (engagementTier === '사람 많음') {
             whyHotLine = tagHint ? `지금 현장 반응이 뜨거워요. ${tagHint}` : '지금 많은 분들이 몰리는 곳이에요.';
-        } else if (categoryLabel === '인기') {
+        } else if (engagementTier === '인기') {
             whyHotLine = tagHint ? `꾸준히 사랑받는 장소예요. ${tagHint}` : '꾸준히 인기 있는 핫플이에요.';
         } else {
             whyHotLine = tagHint ? `실시간으로 올라온 정보예요. ${tagHint}` : '실시간으로 올라온 핫플 정보예요.';
         }
         const cityDongLine = getCityDongLine(post);
         const photoCategoryLabel = getPhotoCategoryLabel(post);
+        const rawCat = post.categoryName && String(post.categoryName).trim();
+        const isGenericAi = !rawCat || /^(추천\s*장소|추천장소|여행)$/i.test(rawCat);
+        const badgeLabel = isGenericAi ? photoCategoryLabel : rawCat;
+        const badgeIcon = getHotFeedBadgeIconName(badgeLabel);
         const photoCaptionLine = getPhotoCaptionLine(post);
         const loc = (post.location || '').trim();
         const hasUserCaption = !!(post.note || '').trim()
@@ -641,7 +646,8 @@ const MainScreen = () => {
             likeCount,
             avatars,
             regionShort,
-            categoryLabel,
+            badgeLabel,
+            badgeIcon,
             whyHotLine,
             cityDongLine,
             photoCategoryLabel,
@@ -764,9 +770,20 @@ const MainScreen = () => {
 
     // 탭/창 포커스 복귀 시 목록 다시 불러오기 (다른 탭에서 관리자가 삭제한 경우 반영)
     useEffect(() => {
-        const onVisible = () => { fetchPosts(); };
+        const onVisible = () => {
+            if (document.visibilityState === 'visible') fetchPosts();
+        };
         document.addEventListener('visibilitychange', onVisible);
         return () => document.removeEventListener('visibilitychange', onVisible);
+    }, [fetchPosts]);
+
+    // 업로드 직후·기타 화면에서 posts 갱신 시 피드 즉시 재로드
+    useEffect(() => {
+        const onPostsUpdated = () => {
+            fetchPosts();
+        };
+        window.addEventListener('postsUpdated', onPostsUpdated);
+        return () => window.removeEventListener('postsUpdated', onPostsUpdated);
     }, [fetchPosts]);
 
     // 게시물에 날씨가 없을 때 지역 기준으로 기온 조회 (카드에 기온 표시용)
@@ -1253,7 +1270,8 @@ const MainScreen = () => {
                                         likeCount,
                                         avatars,
                                         regionShort,
-                                        categoryLabel,
+                                        badgeLabel,
+                                        badgeIcon,
                                         cityDongLine,
                                         photoCategoryLabel,
                                         captionForCard,
@@ -1293,9 +1311,9 @@ const MainScreen = () => {
                                                 boxShadow: '0 2px 14px rgba(15, 23, 42, 0.07)',
                                             }}
                                         >
-                                            <div style={{ position: 'absolute', top: 8, left: 8, zIndex: 10, display: 'inline-flex', alignItems: 'center', gap: 4, background: badgeBg, color: '#fff', padding: '4px 9px', borderRadius: 9999, fontSize: 10, fontWeight: 800, boxShadow: '0 2px 8px rgba(0,0,0,0.12)' }}>
-                                                <span className="material-symbols-outlined" style={{ fontSize: 14, fontVariationSettings: '"FILL" 1' }}>local_fire_department</span>
-                                                {categoryLabel}
+                                            <div style={{ position: 'absolute', top: 8, left: 8, zIndex: 10, display: 'inline-flex', alignItems: 'center', gap: 4, background: badgeBg, color: '#fff', padding: '4px 9px', borderRadius: 9999, fontSize: 10, fontWeight: 800, boxShadow: '0 2px 8px rgba(0,0,0,0.12)', maxWidth: 'calc(100% - 100px)' }}>
+                                                <span className="material-symbols-outlined shrink-0" style={{ fontSize: 14, fontVariationSettings: '"FILL" 1' }}>{badgeIcon}</span>
+                                                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{badgeLabel}</span>
                                             </div>
                                             {hasWeather ? (
                                                 <div style={{ position: 'absolute', top: 8, right: 8, zIndex: 10, display: 'inline-flex', alignItems: 'center', gap: 4, background: 'rgba(15,23,42,0.52)', backdropFilter: 'blur(8px)', color: '#f8fafc', padding: '4px 9px', borderRadius: 9999, fontSize: 10, fontWeight: 600, maxWidth: '58%' }}>
@@ -1321,6 +1339,8 @@ const MainScreen = () => {
                                                     <img
                                                         src={src.startsWith('data:') ? src : getDisplayImageUrl(src)}
                                                         alt={title}
+                                                        decoding="async"
+                                                        fetchPriority="high"
                                                         style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
                                                     />
                                                 );

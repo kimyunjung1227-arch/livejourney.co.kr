@@ -507,7 +507,7 @@ const BadgeListScreen = () => {
 
         {/* 뱃지 그리드 */}
         <main className="px-4 pb-28" style={{ minHeight: 'calc(100vh - 64px)' }}>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-4 gap-2 sm:gap-4">
             {filteredBadges.map((badge, index) => {
               const hasNumericProgress = badge.progressTarget != null && badge.progressCurrent !== undefined;
               const progressText = hasNumericProgress

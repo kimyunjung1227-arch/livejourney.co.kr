@@ -1192,6 +1192,17 @@ const UploadScreen = () => {
             });
           }
 
+          try {
+            const warmUrl = finalImages[0] ? getDisplayImageUrl(finalImages[0]) : '';
+            if (warmUrl && typeof Image !== 'undefined') {
+              const im = new Image();
+              im.decoding = 'async';
+              im.src = warmUrl;
+            }
+          } catch (_) {}
+
+          window.dispatchEvent(new Event('postsUpdated'));
+
           // Supabase에 게시물 저장 (https URL만 저장, blob URL 제외)
           let supabaseSaved = false;
           try {
@@ -1213,6 +1224,7 @@ const UploadScreen = () => {
                 if (missionContext?.missionId && missionResponseId) {
                   updateMissionResponseLinkedPostId(missionContext.missionId, missionResponseId, supabasePostId);
                 }
+                window.dispatchEvent(new Event('postsUpdated'));
               }
             } else {
               logger.warn('Supabase 게시물 저장 실패:', result?.error, result?.code);
@@ -1255,13 +1267,12 @@ const UploadScreen = () => {
             await checkAndNotifyInterestPlace(uploadedPost);
           }, 200);
 
-          // 게시물 업데이트 이벤트 발생 (localStorage 저장 후)
+          // 보조 리스너용 (postsUpdated는 위에서 즉시 발생)
           setTimeout(() => {
-            logger.log('📢 게시물 업데이트 이벤트 발생 (백엔드)');
+            logger.log('📢 게시물 업데이트 이벤트 발생 (newPostsAdded)');
             window.dispatchEvent(new Event('newPostsAdded'));
-            window.dispatchEvent(new Event('postsUpdated'));
             logger.log('✅ 이벤트 전송 완료');
-          }, 100); // 50ms -> 100ms로 증가하여 저장 완료 대기
+          }, 100);
 
           // 데이터 저장 완료 후 뱃지 체크 (더 긴 지연 시간)
           setTimeout(() => {

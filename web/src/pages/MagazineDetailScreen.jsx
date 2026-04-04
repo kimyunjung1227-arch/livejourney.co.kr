@@ -749,6 +749,11 @@ const MagazineDetailScreen = () => {
                 })}
               </div>
             )}
+            {!loading && sectionsToRender.length > 0 && (
+              <div className="px-4 pb-10 pt-2 text-center text-[13px] font-semibold text-gray-600 dark:text-gray-400 border-t border-zinc-100 dark:border-zinc-800">
+                총 장소 {sectionsToRender.length}곳
+              </div>
+            )}
           </section>
         </main>
       </div>

@@ -303,6 +303,10 @@ const MagazinePublishedCarousel = ({ slides, postsPerSlide = [], variant = 'list
           );
         })}
       </div>
+
+      <p className="mt-4 mb-1 text-center text-[13px] font-semibold text-gray-600 dark:text-gray-400" aria-live="polite">
+        장소 {slides.length}곳
+      </p>
     </div>
   );
 };
