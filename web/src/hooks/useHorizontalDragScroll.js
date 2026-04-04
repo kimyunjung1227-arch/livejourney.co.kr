@@ -6,9 +6,11 @@ import { useRef, useCallback } from 'react';
  * - walk * 1.5로 자연스러운 드래그
  * - hasMovedRef로 클릭 vs 드래그 구분
  * @param {((el: HTMLElement) => void) | undefined} onRelease — mouseup 시 호출 (가장 가까운 스냅 페이지 정렬 등)
+ * @param {{ dragMultiplier?: number }} [options] — dragMultiplier: 마우스 이동 대비 스크롤 배율 (기본 1.5, 매거진 등에서 더 크게)
  * @returns {{ handleDragStart: (e: MouseEvent) => void, hasMovedRef: React.MutableRefObject<boolean> }}
  */
-export function useHorizontalDragScroll(onRelease) {
+export function useHorizontalDragScroll(onRelease, options = {}) {
+  const dragMultiplier = typeof options.dragMultiplier === 'number' ? options.dragMultiplier : 1.5;
   const hasMovedRef = useRef(false);
   const isDraggingRef = useRef(false);
   const scrollStartXRef = useRef(0);
@@ -29,7 +31,7 @@ export function useHorizontalDragScroll(onRelease) {
       if (!isDraggingRef.current) return;
       ev.preventDefault();
       const deltaX = ev.pageX - scrollStartXRef.current;
-      const walk = deltaX * 1.5;
+      const walk = deltaX * dragMultiplier;
       if (Math.abs(walk) > 5) {
         hasMovedRef.current = true;
       }
@@ -49,7 +51,7 @@ export function useHorizontalDragScroll(onRelease) {
 
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);
-  }, []);
+  }, [dragMultiplier]);
 
   return { handleDragStart, hasMovedRef };
 }

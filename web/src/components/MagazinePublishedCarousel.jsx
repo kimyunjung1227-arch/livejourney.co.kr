@@ -9,6 +9,29 @@ import { useHorizontalDragScroll } from '../hooks/useHorizontalDragScroll';
 const carouselRowClass =
   'flex w-full min-w-0 flex-row overflow-x-auto snap-x snap-mandatory overscroll-x-contain touch-pan-x [-webkit-overflow-scrolling:touch] [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden cursor-grab active:cursor-grabbing select-none';
 
+const MAGAZINE_DRAG_MULTIPLIER = 2.35;
+
+/**
+ * 짧은 스와이프에도 다음/이전 칸으로 붙도록 (중간 35%만 '가까운 쪽'으로 반올림)
+ * pages = scrollLeft / pageWidth 일 때 ceil(pages - 0.35) 로 칸 결정
+ */
+function snapIndexFromScroll(scrollLeft, pageWidth, pageCount) {
+  if (!pageWidth || pageCount < 1) return 0;
+  const maxIdx = pageCount - 1;
+  const pages = scrollLeft / pageWidth;
+  const i = Math.ceil(pages - 0.35);
+  return Math.max(0, Math.min(i, maxIdx));
+}
+
+function snapHeroToNearestPage(el, pageCount, setIdxState) {
+  if (!el || pageCount < 2) return;
+  const w = el.clientWidth || el.offsetWidth;
+  if (!w) return;
+  const i = snapIndexFromScroll(el.scrollLeft, w, pageCount);
+  el.scrollTo({ left: i * w, behavior: 'auto' });
+  setIdxState(i);
+}
+
 const collectHeroUrls = (slide, regionPosts) => {
   const set = new Set();
   if (slide?.image) set.add(slide.image);
@@ -20,17 +43,6 @@ const collectHeroUrls = (slide, regionPosts) => {
   });
   return [...set].filter(Boolean).slice(0, 12);
 };
-
-/** 가로 한 장 단위 스냅 (snap-start + 드래그/터치 종료 시 정렬) */
-function snapHeroToNearestPage(el, pageCount, setIdxState) {
-  if (!el || pageCount < 2) return;
-  const w = el.clientWidth || el.offsetWidth;
-  if (!w) return;
-  const raw = Math.round(el.scrollLeft / w);
-  const i = Math.max(0, Math.min(raw, pageCount - 1));
-  el.scrollTo({ left: i * w, behavior: 'auto' });
-  setIdxState(i);
-}
 
 /** 메인 영역: 좌우 스와이프로 사진 넘김 */
 function HeroRotator({ urls, resetKey, timeLabel }) {
@@ -45,7 +57,9 @@ function HeroRotator({ urls, resetKey, timeLabel }) {
     [safe.length]
   );
 
-  const { handleDragStart: handleHeroDragStart } = useHorizontalDragScroll(onHeroRelease);
+  const { handleDragStart: handleHeroDragStart } = useHorizontalDragScroll(onHeroRelease, {
+    dragMultiplier: MAGAZINE_DRAG_MULTIPLIER,
+  });
 
   useEffect(() => {
     setIdx(0);
@@ -72,8 +86,7 @@ function HeroRotator({ urls, resetKey, timeLabel }) {
     const el = e.currentTarget;
     const w = el.clientWidth || el.offsetWidth;
     if (!w || !safe.length) return;
-    const i = Math.round(el.scrollLeft / w);
-    setIdx(Math.max(0, Math.min(i, safe.length - 1)));
+    setIdx(snapIndexFromScroll(el.scrollLeft, w, safe.length));
   };
 
   if (!safe.length) {
@@ -155,15 +168,16 @@ const MagazinePublishedCarousel = ({ slides, postsPerSlide = [], variant = 'list
       if (!node || slides.length < 2) return;
       const w = node.clientWidth || node.offsetWidth;
       if (!w) return;
-      const raw = Math.round(node.scrollLeft / w);
-      const i = Math.max(0, Math.min(raw, slides.length - 1));
+      const i = snapIndexFromScroll(node.scrollLeft, w, slides.length);
       node.scrollTo({ left: i * w, behavior: 'auto' });
       setPlaceSlideIdx(i);
     },
     [slides.length]
   );
 
-  const { handleDragStart: handlePlacesDragStart } = useHorizontalDragScroll(snapPlacesToNearest);
+  const { handleDragStart: handlePlacesDragStart } = useHorizontalDragScroll(snapPlacesToNearest, {
+    dragMultiplier: MAGAZINE_DRAG_MULTIPLIER,
+  });
 
   useEffect(() => {
     setPlaceSlideIdx(0);
@@ -190,8 +204,7 @@ const MagazinePublishedCarousel = ({ slides, postsPerSlide = [], variant = 'list
     const el = e.currentTarget;
     const w = el.clientWidth || el.offsetWidth;
     if (!w || !slides.length) return;
-    const i = Math.round(el.scrollLeft / w);
-    setPlaceSlideIdx(Math.max(0, Math.min(i, slides.length - 1)));
+    setPlaceSlideIdx(snapIndexFromScroll(el.scrollLeft, w, slides.length));
   };
 
   const scrollToPlaceSlide = (index) => {
