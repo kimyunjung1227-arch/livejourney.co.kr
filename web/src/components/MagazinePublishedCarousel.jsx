@@ -3,9 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { getTimeAgo } from '../utils/timeUtils';
 import { getMapThumbnailUri } from '../utils/postMedia';
 import { mediaUrlsFromPost, normalizeSpace } from '../utils/magazinePublishedUi';
+import { useHorizontalDragScroll } from '../hooks/useHorizontalDragScroll';
 
 const carouselRowClass =
-  'flex w-full flex-row overflow-x-auto snap-x snap-mandatory overscroll-x-contain touch-pan-x scroll-smooth [-webkit-overflow-scrolling:touch] [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden';
+  'flex w-full flex-row overflow-x-auto snap-x snap-mandatory overscroll-x-contain touch-pan-x scroll-smooth [-webkit-overflow-scrolling:touch] [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden cursor-grab active:cursor-grabbing select-none';
 
 const collectHeroUrls = (slide, regionPosts) => {
   const set = new Set();
@@ -21,6 +22,7 @@ const collectHeroUrls = (slide, regionPosts) => {
 
 /** 메인 영역: 좌우 스와이프로 사진 넘김 */
 function HeroRotator({ urls, resetKey, timeLabel }) {
+  const { handleDragStart: handleHeroDragStart } = useHorizontalDragScroll();
   const safe = useMemo(() => (Array.isArray(urls) ? urls.filter(Boolean) : []), [urls]);
   const [idx, setIdx] = useState(0);
   const scrollRef = useRef(null);
@@ -48,12 +50,18 @@ function HeroRotator({ urls, resetKey, timeLabel }) {
   }
 
   const heroStripClass =
-    'flex h-full w-full flex-row overflow-x-auto snap-x snap-mandatory overscroll-x-contain touch-pan-x scroll-smooth [-webkit-overflow-scrolling:touch] [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden';
+    'flex h-full w-full flex-row overflow-x-auto snap-x snap-mandatory overscroll-x-contain touch-pan-x scroll-smooth [-webkit-overflow-scrolling:touch] [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden cursor-grab active:cursor-grabbing select-none';
 
   return (
     <div className="relative w-full overflow-hidden bg-zinc-100 dark:bg-zinc-800">
       <div className="relative aspect-[3/4] max-h-[min(300px,42dvh)] w-full">
-        <div ref={scrollRef} onScroll={onHeroScroll} className={heroStripClass}>
+        <div
+          ref={scrollRef}
+          onScroll={onHeroScroll}
+          onMouseDown={handleHeroDragStart}
+          className={heroStripClass}
+          style={{ touchAction: 'pan-x' }}
+        >
           {safe.map((src, i) => (
             <div
               key={`${resetKey}-${src}-${i}`}
@@ -98,6 +106,7 @@ function HeroRotator({ urls, resetKey, timeLabel }) {
  */
 const MagazinePublishedCarousel = ({ slides, postsPerSlide = [], variant = 'list' }) => {
   const navigate = useNavigate();
+  const { handleDragStart: handlePlacesDragStart } = useHorizontalDragScroll();
   const placesRowRef = useRef(null);
   const [placeSlideIdx, setPlaceSlideIdx] = useState(0);
 
@@ -164,7 +173,15 @@ const MagazinePublishedCarousel = ({ slides, postsPerSlide = [], variant = 'list
       </h2>
 
       <div className="w-full min-w-0 overflow-hidden">
-      <div ref={placesRowRef} onScroll={onPlacesRowScroll} className={carouselRowClass}>
+      <div
+        ref={placesRowRef}
+        onScroll={onPlacesRowScroll}
+        onMouseDown={handlePlacesDragStart}
+        className={carouselRowClass}
+        style={{ touchAction: 'pan-x' }}
+        role="region"
+        aria-label="장소별 매거진 슬라이드"
+      >
         {slides.map((slide, i) => {
           const regionPosts = Array.isArray(postsPerSlide[i]) ? postsPerSlide[i] : [];
           const heroUrls = collectHeroUrls(slide, regionPosts);

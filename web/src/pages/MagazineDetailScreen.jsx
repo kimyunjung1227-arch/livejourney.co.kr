@@ -16,9 +16,11 @@ import {
   getGridPostsPool,
   getRegionPostsForSlide,
 } from '../utils/magazinePublishedUi';
+import { useHorizontalDragScroll } from '../hooks/useHorizontalDragScroll';
 
 const MagazineDetailScreen = () => {
   const navigate = useNavigate();
+  const { handleDragStart: handleMagazineHDragStart } = useHorizontalDragScroll();
   const location = useLocation();
   const { id } = useParams();
   const state = location.state || {};
@@ -573,7 +575,11 @@ const MagazineDetailScreen = () => {
                             <div className="mb-2 text-[13px] font-extrabold text-gray-900 dark:text-gray-50">
                               📍 {sec.locKey} 추천 명소
                             </div>
-                            <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory scrollbar-hide pb-2">
+                            <div
+                              className="flex cursor-grab touch-pan-x select-none gap-3 overflow-x-auto snap-x snap-mandatory [-webkit-overflow-scrolling:touch] scrollbar-hide pb-2 active:cursor-grabbing"
+                              style={{ touchAction: 'pan-x' }}
+                              onMouseDown={handleMagazineHDragStart}
+                            >
                               {aroundSpots.slice(0, 3).map((l) => (
                                 <div
                                   key={`${sec.locKey}-around-${l.id}`}
@@ -647,10 +653,12 @@ const MagazineDetailScreen = () => {
                       {/* 사진 피드(한 장씩 좌우 슬라이드, 최대 19장) */}
                       <div className="relative w-full overflow-hidden rounded-[4px] bg-white dark:bg-gray-900 border border-zinc-100 dark:border-zinc-800 shadow-[0_2px_12px_rgba(15,23,42,0.05)]">
                         <div
-                          className="flex overflow-x-auto snap-x snap-mandatory scrollbar-hide"
+                          className="flex cursor-grab touch-pan-x select-none overflow-x-auto snap-x snap-mandatory [-webkit-overflow-scrolling:touch] scrollbar-hide active:cursor-grabbing"
+                          style={{ touchAction: 'pan-x' }}
+                          onMouseDown={handleMagazineHDragStart}
                           onScroll={(e) => {
                             const el = e.currentTarget;
-                            const w = el.offsetWidth;
+                            const w = el.clientWidth || el.offsetWidth;
                             if (!w) return;
                             const i = Math.round(el.scrollLeft / w);
                             const max = Math.max(0, (media.length ? media : ['']).slice(0, 19).length - 1);
@@ -713,7 +721,11 @@ const MagazineDetailScreen = () => {
                           <div className="mb-2 text-[12px] font-extrabold text-gray-900 dark:text-gray-50">
                             주변 맛집 · 명소
                           </div>
-                          <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory scrollbar-hide pb-2">
+                          <div
+                            className="flex cursor-grab touch-pan-x select-none gap-3 overflow-x-auto snap-x snap-mandatory [-webkit-overflow-scrolling:touch] scrollbar-hide pb-2 active:cursor-grabbing"
+                            style={{ touchAction: 'pan-x' }}
+                            onMouseDown={handleMagazineHDragStart}
+                          >
                             {(Array.isArray(sec.around) ? sec.around : []).slice(0, 10).map((l) => (
                               <div
                                 key={`${sec.locKey}-around-${l.id}`}
