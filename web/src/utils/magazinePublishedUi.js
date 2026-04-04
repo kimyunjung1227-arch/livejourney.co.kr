@@ -1,6 +1,7 @@
 import { getTimeAgo, filterRecentPosts } from './timeUtils';
 import { getDisplayImageUrl } from '../api/upload';
 import { getMapThumbnailUri } from './postMedia';
+import { getLandmarksByRegion } from './regionLandmarks';
 
 export const normalizeSpace = (s) => String(s || '').replace(/\s+/g, ' ').trim();
 
@@ -68,7 +69,39 @@ export const buildFieldVoicesFromPosts = (posts, options = {}) => {
       text: truncateVoiceText(String(p.note || p.content || '').trim(), maxChars),
       author: getVoiceAuthor(p),
       timeLabel: getTimeAgo(p.timestamp || p.createdAt),
+      thumbUrl: mediaUrlsFromPost(p)[0] || '',
     }));
+};
+
+/**
+ * 지역명 + 장소 문자열로 주변 명소·맛집 스폿 AI 추천 (로컬 랜드마크 DB + 피드 썸네일 매칭)
+ */
+export const buildAiAroundSuggestions = (locKey, sectionIndex, pickFirstMediaForKeyword) => {
+  const key = normalizeSpace(locKey);
+  const parts = key.split(/\s+/).filter(Boolean);
+  const region = parts[0] || '';
+  if (!region) return [];
+  let landmarks = getLandmarksByRegion(region);
+  if (!landmarks.length && parts.length > 1) {
+    landmarks = getLandmarksByRegion(parts[1]);
+  }
+  const locLower = key.toLowerCase();
+  const filtered = landmarks.filter((l) => {
+    const name = String(l?.name || '').trim();
+    if (!name) return false;
+    return !locLower.includes(name.toLowerCase());
+  });
+  return filtered.slice(0, 6).map((l, i) => {
+    const nm = String(l.name).trim();
+    const kw = Array.isArray(l.keywords) ? l.keywords.find((k) => k && String(k).trim()) : '';
+    const image = pickFirstMediaForKeyword(nm) || (kw ? pickFirstMediaForKeyword(kw) : '');
+    return {
+      id: `ai-ar-${sectionIndex}-${l.id || i}`,
+      name: nm,
+      desc: '이 지역 인기 스폿 · AI 추천',
+      image,
+    };
+  });
 };
 
 export const buildRegionSummary = (posts) => {
@@ -133,20 +166,7 @@ export const buildSlidesForMagazine = (mag, allPosts, gridPosts) => {
       const fallbackImg = gridPosts[0] ? getMapThumbnailUri(gridPosts[0]) : '';
       const heroImage = uniq[0] || fallbackImg;
       const editorDescription = String(sec?.description || '').trim();
-      const rawAround = Array.isArray(sec.around) ? sec.around : [];
-      const aroundDisplay = rawAround
-        .map((a) => {
-          const name = String(a?.info ?? a?.name ?? '').trim();
-          if (!name) return null;
-          return {
-            id: String(a?.id || `ar-${idx}-${name}`),
-            name,
-            desc: String(a?.desc ?? '').trim(),
-            image: pickFirstMediaForKeyword(name),
-          };
-        })
-        .filter(Boolean)
-        .slice(0, 12);
+      const aroundDisplay = buildAiAroundSuggestions(locKey, idx, pickFirstMediaForKeyword);
       const locationInfoLine = String(sec?.locationInfo || '').trim();
 
       return {

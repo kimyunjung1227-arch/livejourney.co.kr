@@ -1,40 +1,15 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Swiper, SwiperSlide } from 'swiper/react';
+import 'swiper/css';
 import { getTimeAgo } from '../utils/timeUtils';
 import { getMapThumbnailUri } from '../utils/postMedia';
 import { mediaUrlsFromPost, normalizeSpace } from '../utils/magazinePublishedUi';
 import MagazineFieldVoices from './MagazineFieldVoices';
-import { useHorizontalDragScroll } from '../hooks/useHorizontalDragScroll';
 
-/** 스무스 스크롤 없음 → 한 장 단위 스냅이 덜 흐트러짐 */
-const carouselRowClass =
-  'flex w-full min-w-0 flex-row overflow-x-auto snap-x snap-mandatory overscroll-x-contain touch-pan-x [-webkit-overflow-scrolling:touch] [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden cursor-grab active:cursor-grabbing select-none';
-
-const MAGAZINE_DRAG_MULTIPLIER = 2.35;
-/** 장소 가로 슬라이드: 가볍게 넘겨도 다음·이전 장소로 붙도록 (bias 작을수록 적은 스크롤량에 반응) */
-const PLACES_ROW_DRAG_MULTIPLIER = 5.8;
-/** scrollLeft/pageWidth 기준, 약 3~5%만 넘겨도 다음 칸으로 스냅 */
-const PLACES_SNAP_BIAS = 0.03;
-
-/**
- * pages = scrollLeft / pageWidth 일 때 ceil(pages - snapBias) 로 칸 결정 (bias 작을수록 짧은 스와이프에 반응)
- */
-function snapIndexFromScroll(scrollLeft, pageWidth, pageCount, snapBias = 0.35) {
-  if (!pageWidth || pageCount < 1) return 0;
-  const maxIdx = pageCount - 1;
-  const pages = scrollLeft / pageWidth;
-  const i = Math.ceil(pages - snapBias);
-  return Math.max(0, Math.min(i, maxIdx));
-}
-
-function snapHeroToNearestPage(el, pageCount, setIdxState) {
-  if (!el || pageCount < 2) return;
-  const w = el.clientWidth || el.offsetWidth;
-  if (!w) return;
-  const i = snapIndexFromScroll(el.scrollLeft, w, pageCount, 0.35);
-  el.scrollTo({ left: i * w, behavior: 'auto' });
-  setIdxState(i);
-}
+/** PostDetailScreen 미디어 스와이프와 동일 */
+const SWIPER_SPEED = 280;
+const SWIPER_RESISTANCE = 0.85;
 
 const collectHeroUrls = (slide, regionPosts) => {
   const set = new Set();
@@ -45,53 +20,20 @@ const collectHeroUrls = (slide, regionPosts) => {
     const thumb = getMapThumbnailUri(p);
     if (thumb) set.add(thumb);
   });
-  return [...set].filter(Boolean).slice(0, 12);
+  return [...set].filter(Boolean).slice(0, 5);
 };
 
-/** 메인 영역: 좌우 스와이프로 사진 넘김 */
+/** 대표 사진(최대 5장) — 게시물 상세와 동일한 Swiper 설정 */
 function HeroRotator({ urls, resetKey, timeLabel }) {
-  const safe = useMemo(() => (Array.isArray(urls) ? urls.filter(Boolean) : []), [urls]);
+  const safe = useMemo(() => (Array.isArray(urls) ? urls.filter(Boolean).slice(0, 5) : []), [urls]);
+  const swiperRef = useRef(null);
   const [idx, setIdx] = useState(0);
-  const scrollRef = useRef(null);
-
-  const onHeroRelease = useCallback(
-    (el) => {
-      snapHeroToNearestPage(el, safe.length, setIdx);
-    },
-    [safe.length]
-  );
-
-  const { handleDragStart: handleHeroDragStart } = useHorizontalDragScroll(onHeroRelease, {
-    dragMultiplier: MAGAZINE_DRAG_MULTIPLIER,
-  });
 
   useEffect(() => {
     setIdx(0);
-    const el = scrollRef.current;
-    if (el) el.scrollTo({ left: 0, behavior: 'auto' });
+    const s = swiperRef.current;
+    if (s) s.slideTo(0, 0);
   }, [resetKey]);
-
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el || safe.length < 2) return;
-    const snap = () => snapHeroToNearestPage(el, safe.length, setIdx);
-    el.addEventListener('scrollend', snap);
-    const onTouchEnd = () => {
-      requestAnimationFrame(() => requestAnimationFrame(snap));
-    };
-    el.addEventListener('touchend', onTouchEnd, { passive: true });
-    return () => {
-      el.removeEventListener('scrollend', snap);
-      el.removeEventListener('touchend', onTouchEnd);
-    };
-  }, [resetKey, safe.length]);
-
-  const onHeroScroll = (e) => {
-    const el = e.currentTarget;
-    const w = el.clientWidth || el.offsetWidth;
-    if (!w || !safe.length) return;
-    setIdx(snapIndexFromScroll(el.scrollLeft, w, safe.length, 0.35));
-  };
 
   if (!safe.length) {
     return (
@@ -101,34 +43,36 @@ function HeroRotator({ urls, resetKey, timeLabel }) {
     );
   }
 
-  const heroStripClass =
-    'flex h-full w-full min-w-0 flex-row overflow-x-auto snap-x snap-mandatory overscroll-x-contain touch-pan-x [-webkit-overflow-scrolling:touch] [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden cursor-grab active:cursor-grabbing select-none';
-
   return (
     <div className="relative w-full overflow-hidden bg-zinc-100 dark:bg-zinc-800">
       <div className="relative aspect-[3/4] max-h-[min(300px,42dvh)] w-full">
-        <div
-          ref={scrollRef}
-          onScroll={onHeroScroll}
-          onMouseDown={handleHeroDragStart}
-          className={heroStripClass}
-          style={{ touchAction: 'pan-x' }}
+        <Swiper
+          nested
+          touchReleaseOnEdges
+          key={resetKey}
+          onSwiper={(s) => {
+            swiperRef.current = s;
+          }}
+          onSlideChange={(s) => setIdx(s.activeIndex)}
+          initialSlide={0}
+          speed={SWIPER_SPEED}
+          resistanceRatio={SWIPER_RESISTANCE}
+          className="h-full w-full"
         >
           {safe.map((src, i) => (
-            <div
-              key={`${resetKey}-${src}-${i}`}
-              className="relative h-full w-full min-w-0 shrink-0 grow-0 basis-full snap-start snap-always"
-            >
-              <img
-                src={src}
-                alt=""
-                className="h-full w-full object-cover"
-                loading={i === 0 ? 'eager' : 'lazy'}
-                draggable={false}
-              />
-            </div>
+            <SwiperSlide key={`${resetKey}-hero-${i}`} className="!flex h-full">
+              <div className="relative h-full min-h-0 w-full min-w-0 flex-1 bg-zinc-100 dark:bg-zinc-800">
+                <img
+                  src={src}
+                  alt=""
+                  className="h-full w-full object-cover"
+                  loading={i === 0 ? 'eager' : 'lazy'}
+                  draggable={false}
+                />
+              </div>
+            </SwiperSlide>
           ))}
-        </div>
+        </Swiper>
         <div className="pointer-events-none absolute top-3 left-3 z-20 flex flex-col gap-2">
           <span className="inline-flex rounded-full bg-primary px-2.5 py-1 text-[10px] font-bold text-white shadow-md shadow-primary/30">
             {timeLabel}
@@ -140,9 +84,7 @@ function HeroRotator({ urls, resetKey, timeLabel }) {
               <span
                 key={`dot-${i}`}
                 className={`block shrink-0 rounded-full transition-all duration-200 ease-out ${
-                  i === idx
-                    ? 'h-1.5 w-5 bg-white'
-                    : 'h-1.5 w-1.5 bg-white/40'
+                  i === idx ? 'h-1.5 w-5 bg-white' : 'h-1.5 w-1.5 bg-white/40'
                 }`}
               />
             ))}
@@ -154,11 +96,11 @@ function HeroRotator({ urls, resetKey, timeLabel }) {
 }
 
 /**
- * 발행 매거진: 제목·가로 슬라이드(장소)·실시간 게시물이 한 세로 스크롤에 함께 움직임
+ * 발행 매거진: 장소별 Swiper(게시물 상세와 동일) + 본문 블록 순서
  */
 const MagazinePublishedCarousel = ({ slides, postsPerSlide = [], variant = 'list' }) => {
   const navigate = useNavigate();
-  const placesRowRef = useRef(null);
+  const placesSwiperRef = useRef(null);
   const [placeSlideIdx, setPlaceSlideIdx] = useState(0);
 
   const slidesStableKey = useMemo(
@@ -166,60 +108,18 @@ const MagazinePublishedCarousel = ({ slides, postsPerSlide = [], variant = 'list
     [slides]
   );
 
-  const snapPlacesToNearest = useCallback(
-    (el) => {
-      const node = el || placesRowRef.current;
-      if (!node || slides.length < 2) return;
-      const w = node.clientWidth || node.offsetWidth;
-      if (!w) return;
-      const i = snapIndexFromScroll(node.scrollLeft, w, slides.length, PLACES_SNAP_BIAS);
-      node.scrollTo({ left: i * w, behavior: 'auto' });
-      setPlaceSlideIdx(i);
-    },
-    [slides.length]
-  );
-
-  const { handleDragStart: handlePlacesDragStart } = useHorizontalDragScroll(snapPlacesToNearest, {
-    dragMultiplier: PLACES_ROW_DRAG_MULTIPLIER,
-  });
-
   useEffect(() => {
     setPlaceSlideIdx(0);
-    const el = placesRowRef.current;
-    if (el) el.scrollTo({ left: 0, behavior: 'auto' });
+    placesSwiperRef.current?.slideTo(0, 0);
   }, [slidesStableKey]);
 
-  useEffect(() => {
-    const el = placesRowRef.current;
-    if (!el || slides.length < 2) return;
-    const snap = () => snapPlacesToNearest(el);
-    el.addEventListener('scrollend', snap);
-    const onTouchEnd = () => {
-      requestAnimationFrame(() => requestAnimationFrame(snap));
-    };
-    el.addEventListener('touchend', onTouchEnd, { passive: true });
-    return () => {
-      el.removeEventListener('scrollend', snap);
-      el.removeEventListener('touchend', onTouchEnd);
-    };
-  }, [slides.length, slidesStableKey, snapPlacesToNearest]);
-
-  const onPlacesRowScroll = (e) => {
-    const el = e.currentTarget;
-    const w = el.clientWidth || el.offsetWidth;
-    if (!w || !slides.length) return;
-    setPlaceSlideIdx(snapIndexFromScroll(el.scrollLeft, w, slides.length, PLACES_SNAP_BIAS));
-  };
-
-  const scrollToPlaceSlide = (index) => {
-    const el = placesRowRef.current;
-    if (!el || !slides.length) return;
-    const w = el.clientWidth || el.offsetWidth;
-    if (!w) return;
+  const scrollToPlaceSlide = useCallback((index) => {
+    const s = placesSwiperRef.current;
+    if (!s || !slides.length) return;
     const i = Math.max(0, Math.min(index, slides.length - 1));
-    el.scrollTo({ left: w * i, behavior: 'auto' });
+    s.slideTo(i);
     setPlaceSlideIdx(i);
-  };
+  }, [slides.length]);
 
   const handleFeaturedClick = (slide) => {
     if (variant === 'detail') return;
@@ -255,13 +155,17 @@ const MagazinePublishedCarousel = ({ slides, postsPerSlide = [], variant = 'list
         {slides[0]?.magTitle}
       </h2>
 
-      <div className="w-full min-w-0 overflow-hidden">
-      <div
-        ref={placesRowRef}
-        onScroll={onPlacesRowScroll}
-        onMouseDown={handlePlacesDragStart}
-        className={carouselRowClass}
-        style={{ touchAction: 'pan-x' }}
+      <Swiper
+        key={slidesStableKey}
+        onSwiper={(sw) => {
+          placesSwiperRef.current = sw;
+        }}
+        onSlideChange={(sw) => setPlaceSlideIdx(sw.activeIndex)}
+        slidesPerView={1}
+        spaceBetween={0}
+        speed={SWIPER_SPEED}
+        resistanceRatio={SWIPER_RESISTANCE}
+        className="w-full min-w-0 overflow-hidden"
         role="region"
         aria-label="장소별 매거진 슬라이드"
       >
@@ -273,57 +177,57 @@ const MagazinePublishedCarousel = ({ slides, postsPerSlide = [], variant = 'list
           const sectionHeading = slide.sectionLabel || `장소 ${(slide.sectionIndex ?? i) + 1}`;
 
           return (
-            <div
+            <SwiperSlide
               key={`slide-${slide.sectionIndex}-${i}`}
-              className="box-border w-full min-w-0 max-w-full shrink-0 grow-0 basis-full snap-start snap-always px-0"
+              className="!box-border w-full min-w-0 max-w-full shrink-0 px-0"
             >
               <article className="w-full max-w-full pb-1">
                 {variant === 'detail' ? (
                   <div className="w-full max-w-full overflow-hidden rounded-2xl border border-zinc-100 bg-white shadow-sm dark:border-zinc-800 dark:bg-gray-900">
-                    <HeroRotator urls={heroUrls} resetKey={heroResetKey} timeLabel={slide.timeLabel} />
-                    <div className="p-4">
+                    {/* 1. 장소 위치 */}
+                    <div className="px-4 pt-4 pb-2">
                       <p className="mb-1 m-0 text-[11px] font-extrabold uppercase tracking-wide text-primary">
                         {sectionHeading}
                       </p>
-                      <h3 className="mb-1 text-base font-bold leading-snug text-gray-900 dark:text-gray-50">
+                      <h3 className="m-0 text-lg font-extrabold leading-snug text-gray-900 dark:text-gray-50">
                         {slide.placeTitle}
                       </h3>
                       {slide.locationInfoLine ? (
-                        <p className="mb-2 m-0 text-[12px] font-medium text-gray-500 dark:text-gray-400">
+                        <p className="mt-1.5 m-0 text-[12px] font-medium text-gray-500 dark:text-gray-400">
                           {slide.locationInfoLine}
                         </p>
                       ) : null}
-                      <p className="mb-3 m-0 text-[14px] leading-relaxed text-gray-600 dark:text-gray-300">
+                    </div>
+
+                    {/* 2. 대표 사진 최대 5장 */}
+                    <HeroRotator urls={heroUrls} resetKey={heroResetKey} timeLabel={slide.timeLabel} />
+
+                    <div className="space-y-3 p-4 pt-3">
+                      {/* 3. 장소 설명 */}
+                      <p className="m-0 text-[14px] leading-relaxed text-gray-600 dark:text-gray-300">
                         {slide.description}
                       </p>
-                      {Array.isArray(slide.fieldVoices) && slide.fieldVoices.length > 0 ? (
-                        <div className="mb-3">
-                          <MagazineFieldVoices voices={slide.fieldVoices} />
-                        </div>
-                      ) : null}
-                      {slide.regionSummary && (
-                        <div className="mb-3 rounded-lg bg-cyan-50/70 px-2.5 py-1.5 text-[11px] text-cyan-900 dark:bg-cyan-950/35 dark:text-cyan-100">
+
+                      {slide.regionSummary ? (
+                        <div className="rounded-lg bg-cyan-50/70 px-2.5 py-1.5 text-[11px] text-cyan-900 dark:bg-cyan-950/35 dark:text-cyan-100">
                           <span className="mr-1 font-semibold">AI 요약</span>
                           {slide.regionSummary}
                         </div>
-                      )}
-                      <button
-                        type="button"
-                        onClick={(e) => handleAskLight(e, slide)}
-                        className="mb-3 flex w-full items-center justify-center gap-1.5 rounded-xl border border-primary/35 bg-primary/[0.07] py-2.5 px-3 text-[13px] font-semibold text-primary shadow-none transition hover:bg-primary/12 active:scale-[0.99] dark:border-primary/45 dark:bg-primary/10 dark:text-primary"
-                      >
-                        <span className="material-symbols-outlined text-[17px] text-primary" style={{ fontVariationSettings: '"FILL" 0' }}>
-                          chat_bubble
-                        </span>
-                        지금 여기 장소에 대해 물어보기
-                      </button>
+                      ) : null}
+
+                      {/* 4. 현장 기록(사진·글) */}
+                      {Array.isArray(slide.fieldVoices) && slide.fieldVoices.length > 0 ? (
+                        <MagazineFieldVoices voices={slide.fieldVoices} />
+                      ) : null}
+
+                      {/* 5. 주변 맛집·명소 AI 추천 */}
                       {Array.isArray(slide.aroundDisplay) && slide.aroundDisplay.length > 0 ? (
-                        <div className="mb-1 rounded-xl border border-zinc-100 bg-zinc-50/90 p-3 dark:border-zinc-700 dark:bg-zinc-900/45">
-                          <h4 className="m-0 mb-1 text-[13px] font-bold text-gray-900 dark:text-gray-50">
-                            {sectionHeading} 주변, 같이 가보면 좋은 곳
+                        <div className="rounded-xl border border-zinc-100 bg-zinc-50/90 p-3 dark:border-zinc-700 dark:bg-zinc-900/45">
+                          <h4 className="m-0 mb-0.5 text-[13px] font-bold text-gray-900 dark:text-gray-50">
+                            주변 맛집 · 명소 추천
                           </h4>
                           <p className="m-0 mb-2.5 text-[11px] leading-snug text-gray-500 dark:text-gray-400">
-                            소개해 둔 주변 명소·맛집이에요. 피드에 새 사진이 올라오면 썸네일이 갱신돼요.
+                            입력하신 장소의 지역을 기준으로 AI가 골랐어요. 피드에 사진이 있으면 썸네일이 붙어요.
                           </p>
                           <div className="-mx-0.5 flex gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                             {slide.aroundDisplay.map((ar) => (
@@ -353,55 +257,72 @@ const MagazinePublishedCarousel = ({ slides, postsPerSlide = [], variant = 'list
                           </div>
                         </div>
                       ) : null}
+
+                      <button
+                        type="button"
+                        onClick={(e) => handleAskLight(e, slide)}
+                        className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-primary/35 bg-primary/[0.07] py-2.5 px-3 text-[13px] font-semibold text-primary shadow-none transition hover:bg-primary/12 active:scale-[0.99] dark:border-primary/45 dark:bg-primary/10 dark:text-primary"
+                      >
+                        <span
+                          className="material-symbols-outlined text-[17px] text-primary"
+                          style={{ fontVariationSettings: '"FILL" 0' }}
+                        >
+                          chat_bubble
+                        </span>
+                        지금 여기 장소에 대해 물어보기
+                      </button>
                     </div>
                   </div>
                 ) : (
                   <>
                     <div className="w-full max-w-full overflow-hidden rounded-2xl border border-zinc-100 bg-white shadow-sm dark:border-zinc-800 dark:bg-gray-900">
-                      <HeroRotator urls={heroUrls} resetKey={heroResetKey} timeLabel={slide.timeLabel} />
-                      <div className="p-4">
+                      <div className="px-4 pt-4 pb-2">
                         <p className="mb-1 m-0 text-[11px] font-extrabold uppercase tracking-wide text-primary">
                           {sectionHeading}
                         </p>
-                        <h3 className="mb-1 text-base font-bold leading-snug text-gray-900 dark:text-gray-50">
+                        <h3 className="m-0 text-lg font-extrabold leading-snug text-gray-900 dark:text-gray-50">
                           {slide.placeTitle}
                         </h3>
                         {slide.locationInfoLine ? (
-                          <p className="mb-2 m-0 text-[12px] font-medium text-gray-500 dark:text-gray-400">
+                          <p className="mt-1.5 m-0 text-[12px] font-medium text-gray-500 dark:text-gray-400">
                             {slide.locationInfoLine}
                           </p>
                         ) : null}
-                        <p className="mb-3 m-0 text-[14px] leading-relaxed text-gray-600 dark:text-gray-300">
+                      </div>
+                      <HeroRotator urls={heroUrls} resetKey={heroResetKey} timeLabel={slide.timeLabel} />
+                      <div className="space-y-3 p-4 pt-3">
+                        <p className="m-0 text-[14px] leading-relaxed text-gray-600 dark:text-gray-300">
                           {slide.description}
                         </p>
-                        {Array.isArray(slide.fieldVoices) && slide.fieldVoices.length > 0 ? (
-                          <div className="mb-3">
-                            <MagazineFieldVoices voices={slide.fieldVoices} />
-                          </div>
-                        ) : null}
-                        {slide.regionSummary && (
-                          <div className="mb-3 rounded-lg bg-cyan-50/70 px-2.5 py-1.5 text-[11px] text-cyan-900 dark:bg-cyan-950/35 dark:text-cyan-100">
+                        {slide.regionSummary ? (
+                          <div className="rounded-lg bg-cyan-50/70 px-2.5 py-1.5 text-[11px] text-cyan-900 dark:bg-cyan-950/35 dark:text-cyan-100">
                             <span className="mr-1 font-semibold">AI 요약</span>
                             {slide.regionSummary}
                           </div>
-                        )}
+                        ) : null}
+                        {Array.isArray(slide.fieldVoices) && slide.fieldVoices.length > 0 ? (
+                          <MagazineFieldVoices voices={slide.fieldVoices} />
+                        ) : null}
                         <button
                           type="button"
                           onClick={(e) => handleAskLight(e, slide)}
-                          className="mb-3 flex w-full items-center justify-center gap-1.5 rounded-xl border border-primary/35 bg-primary/[0.07] py-2.5 px-3 text-[13px] font-semibold text-primary shadow-none transition hover:bg-primary/12 active:scale-[0.99] dark:border-primary/45 dark:bg-primary/10 dark:text-primary"
+                          className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-primary/35 bg-primary/[0.07] py-2.5 px-3 text-[13px] font-semibold text-primary shadow-none transition hover:bg-primary/12 active:scale-[0.99] dark:border-primary/45 dark:bg-primary/10 dark:text-primary"
                         >
-                          <span className="material-symbols-outlined text-[17px] text-primary" style={{ fontVariationSettings: '"FILL" 0' }}>
+                          <span
+                            className="material-symbols-outlined text-[17px] text-primary"
+                            style={{ fontVariationSettings: '"FILL" 0' }}
+                          >
                             chat_bubble
                           </span>
                           지금 여기 장소에 대해 물어보기
                         </button>
                         {Array.isArray(slide.aroundDisplay) && slide.aroundDisplay.length > 0 ? (
-                          <div className="mb-1 rounded-xl border border-zinc-100 bg-zinc-50/90 p-3 dark:border-zinc-700 dark:bg-zinc-900/45">
-                            <h4 className="m-0 mb-1 text-[13px] font-bold text-gray-900 dark:text-gray-50">
-                              {sectionHeading} 주변, 같이 가보면 좋은 곳
+                          <div className="rounded-xl border border-zinc-100 bg-zinc-50/90 p-3 dark:border-zinc-700 dark:bg-zinc-900/45">
+                            <h4 className="m-0 mb-0.5 text-[13px] font-bold text-gray-900 dark:text-gray-50">
+                              주변 맛집 · 명소 추천
                             </h4>
                             <p className="m-0 mb-2.5 text-[11px] leading-snug text-gray-500 dark:text-gray-400">
-                              소개해 둔 주변 명소·맛집이에요. 피드에 새 사진이 올라오면 썸네일이 갱신돼요.
+                              입력하신 장소의 지역을 기준으로 AI가 골랐어요.
                             </p>
                             <div className="-mx-0.5 flex gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                               {slide.aroundDisplay.map((ar) => (
@@ -443,9 +364,10 @@ const MagazinePublishedCarousel = ({ slides, postsPerSlide = [], variant = 'list
                   </>
                 )}
 
+                {/* 6. 이 장소 실시간 사진 */}
                 <div className="mt-4">
                   <div className="mb-2 flex items-center justify-between">
-                    <h3 className="m-0 text-[15px] font-bold text-gray-900 dark:text-gray-50">실시간 게시물</h3>
+                    <h3 className="m-0 text-[15px] font-bold text-gray-900 dark:text-gray-50">실시간으로 올라오는 사진</h3>
                     <button
                       type="button"
                       onClick={() => navigate('/main')}
@@ -495,16 +417,16 @@ const MagazinePublishedCarousel = ({ slides, postsPerSlide = [], variant = 'list
                   )}
                 </div>
               </article>
-            </div>
+            </SwiperSlide>
           );
         })}
-      </div>
-      </div>
+      </Swiper>
 
-      {/* 게시물 상세 미디어 인디케이터와 동일: 땡땡이 + 현재 막대 (밝은 배경용 zinc 톤) */}
       {slides.length > 1 && (
         <div className="mt-3 flex flex-col items-center gap-1 px-2 pb-1" aria-live="polite">
-          <span className="sr-only">장소 {slides.length}곳, 현재 {placeSlideIdx + 1}번째</span>
+          <span className="sr-only">
+            장소 {slides.length}곳, 현재 {placeSlideIdx + 1}번째
+          </span>
           <div className="flex items-center gap-1.5" role="tablist" aria-label="장소 슬라이드">
             {slides.map((_, i) => (
               <button

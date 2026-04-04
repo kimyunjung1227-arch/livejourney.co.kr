@@ -37,21 +37,10 @@ const parseMagazinePaste = (raw) => {
       return mm ? String(mm[1]).trim() : '';
     })();
     const description = extractBetween(body, /위치 설명\s*:\s*/i, /\n\s*위치 주변|\n\s*사진\s*:|$/i);
-    const aroundText = extractBetween(body, /위치 주변[^:]*:\s*/i, /$/i);
-    const boldNames = [];
-    const bRe = /\*\*\s*'?(.*?)'?\s*\*\*/g;
-    let bm;
-    while ((bm = bRe.exec(aroundText)) !== null) {
-      const n = String(bm[1] || '').trim();
-      if (n && !boldNames.includes(n)) boldNames.push(n);
-    }
-    const aroundPlaces = boldNames.slice(0, 8).map((n, i) => ({ id: `ap-${Date.now()}-${i}`, info: n, desc: '' }));
-
     blocks.push({
       locationTitle: name.replace(/^['"]|['"]$/g, '').trim(),
       locationInfo,
       description,
-      aroundPlaces,
     });
   }
 
@@ -64,13 +53,6 @@ const createEmptySection = (seed = {}) => ({
   locationTitle: seed.locationTitle || '',
   locationInfo: seed.locationInfo || '',
   description: seed.description || '',
-  aroundPlaces: Array.isArray(seed.aroundPlaces) && seed.aroundPlaces.length
-    ? seed.aroundPlaces
-    : [
-        { id: `ap-${Date.now()}-1`, info: '', desc: '' },
-        { id: `ap-${Date.now()}-2`, info: '', desc: '' },
-        { id: `ap-${Date.now()}-3`, info: '', desc: '' },
-      ],
 });
 
 const MagazineWriteScreen = () => {
@@ -132,7 +114,6 @@ const MagazineWriteScreen = () => {
               locationTitle: s?.locationTitle,
               locationInfo: s?.locationInfo,
               description: s?.description,
-              aroundPlaces: s?.aroundPlaces,
             })
           )
         );
@@ -164,9 +145,8 @@ const MagazineWriteScreen = () => {
         locationTitle: String(s?.locationTitle || '').trim(),
         locationInfo: String(s?.locationInfo || '').trim(),
         description: String(s?.description || '').trim(),
-        aroundPlaces: Array.isArray(s?.aroundPlaces) ? s.aroundPlaces : [],
       }))
-      .filter((s) => s.locationTitle || s.locationInfo || s.description || (s.aroundPlaces && s.aroundPlaces.length));
+      .filter((s) => s.locationTitle || s.locationInfo || s.description);
     if (normalizedSections.length === 0) return null;
     if (!normalizedSections.some((s) => s.locationTitle && s.description)) return null;
     return {
@@ -179,14 +159,6 @@ const MagazineWriteScreen = () => {
         location: s.locationTitle || s.locationInfo || title.trim(),
         locationInfo: s.locationInfo,
         description: s.description,
-        around: (Array.isArray(s.aroundPlaces) ? s.aroundPlaces : [])
-          .map((p) => ({
-            id: p?.id || `ap-${String(p?.info || '').slice(0, 8)}`,
-            info: String(p?.info || '').trim(),
-            desc: String(p?.desc || '').trim(),
-          }))
-          .filter((p) => p.info || p.desc)
-          .slice(0, 12),
       })),
     };
   }, [title, sections, user?.email, user?.username]);
@@ -232,40 +204,6 @@ const MagazineWriteScreen = () => {
     setSections((prev) => (Array.isArray(prev) ? prev.map((s) => (s.id === id ? { ...s, [field]: value } : s)) : prev));
   }, []);
 
-  const handleAddAroundPlace = useCallback((sectionId) => {
-    setSections((prev) =>
-      (Array.isArray(prev) ? prev : []).map((s) => {
-        if (s.id !== sectionId) return s;
-        const next = Array.isArray(s.aroundPlaces) ? s.aroundPlaces.slice() : [];
-        next.push({ id: `ap-${Date.now()}-${Math.random().toString(16).slice(2)}`, info: '', desc: '' });
-        return { ...s, aroundPlaces: next };
-      })
-    );
-  }, []);
-
-  const handleRemoveAroundPlace = useCallback((sectionId, placeId) => {
-    setSections((prev) =>
-      (Array.isArray(prev) ? prev : []).map((s) => {
-        if (s.id !== sectionId) return s;
-        const next = (Array.isArray(s.aroundPlaces) ? s.aroundPlaces : []).filter((p) => p.id !== placeId);
-        return {
-          ...s,
-          aroundPlaces: next.length ? next : [{ id: `ap-${Date.now()}-1`, info: '', desc: '' }],
-        };
-      })
-    );
-  }, []);
-
-  const handleChangeAroundPlace = useCallback((sectionId, placeId, field, value) => {
-    setSections((prev) =>
-      (Array.isArray(prev) ? prev : []).map((s) => {
-        if (s.id !== sectionId) return s;
-        const next = (Array.isArray(s.aroundPlaces) ? s.aroundPlaces : []).map((p) => (p.id === placeId ? { ...p, [field]: value } : p));
-        return { ...s, aroundPlaces: next };
-      })
-    );
-  }, []);
-
   const handleSubmit = useCallback(
     async (e) => {
       e.preventDefault();
@@ -278,9 +216,8 @@ const MagazineWriteScreen = () => {
           locationTitle: String(s?.locationTitle || '').trim(),
           locationInfo: String(s?.locationInfo || '').trim(),
           description: String(s?.description || '').trim(),
-          aroundPlaces: Array.isArray(s?.aroundPlaces) ? s.aroundPlaces : [],
         }))
-        .filter((s) => s.locationTitle || s.locationInfo || s.description || (s.aroundPlaces && s.aroundPlaces.length));
+        .filter((s) => s.locationTitle || s.locationInfo || s.description);
       if (normalizedSections.length === 0) {
         alert('최소 1개의 위치를 입력해 주세요.');
         return;
@@ -298,14 +235,6 @@ const MagazineWriteScreen = () => {
           location: s.locationTitle || s.locationInfo || title.trim(),
           locationInfo: s.locationInfo,
           description: s.description,
-          around: (Array.isArray(s.aroundPlaces) ? s.aroundPlaces : [])
-            .map((p) => ({
-              id: p?.id || `ap-${Date.now()}`,
-              info: String(p?.info || '').trim(),
-              desc: String(p?.desc || '').trim(),
-            }))
-            .filter((p) => p.info || p.desc)
-            .slice(0, 12),
         })),
       });
       setSaving(false);
@@ -488,61 +417,11 @@ const MagazineWriteScreen = () => {
                         />
                       </div>
 
-                      <div>
-                        <label className="block mb-1.5 text-[12px] font-semibold text-gray-800 dark:text-gray-100">
-                          장소 {idx + 1} 주변, 같이 가보면 좋은 곳
-                        </label>
-                        <p className="mb-2 text-[11px] text-gray-500 dark:text-gray-400 m-0">
-                          명소·맛집 이름을 넣으면 매거진 카드에 순서대로 보여요.
-                        </p>
-                        <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-1">
-                          {(Array.isArray(sec.aroundPlaces) ? sec.aroundPlaces : []).map((p, pi) => (
-                            <div
-                              key={p.id}
-                              className="flex-shrink-0 w-[240px] border border-zinc-200 dark:border-zinc-700 rounded-xl p-3 bg-zinc-50/50 dark:bg-gray-900/30"
-                            >
-                              <div className="flex items-center justify-between mb-2">
-                                <div className="text-[11px] font-bold text-gray-900 dark:text-gray-50">주변 {pi + 1}</div>
-                                <button
-                                  type="button"
-                                  onClick={() => handleRemoveAroundPlace(sec.id, p.id)}
-                                  className="text-[12px] font-semibold text-rose-600"
-                                >
-                                  삭제
-                                </button>
-                              </div>
-                              <div className="space-y-3">
-                                <div>
-                                  <div className="text-[11px] font-semibold text-gray-700 dark:text-gray-200 mb-1">이름</div>
-                                  <input
-                                    className="w-full border-b border-zinc-200 dark:border-zinc-700 bg-transparent px-0 py-2 text-[13px] text-gray-900 dark:text-gray-50 focus:outline-none"
-                                    placeholder="예: 방화수류정"
-                                    value={p.info}
-                                    onChange={(e) => handleChangeAroundPlace(sec.id, p.id, 'info', e.target.value)}
-                                  />
-                                </div>
-                                <div>
-                                  <div className="text-[11px] font-semibold text-gray-700 dark:text-gray-200 mb-1">한 줄 소개</div>
-                                  <input
-                                    className="w-full border-b border-zinc-200 dark:border-zinc-700 bg-transparent px-0 py-2 text-[13px] text-gray-900 dark:text-gray-50 focus:outline-none"
-                                    placeholder="예: 야경이 예쁜 정자"
-                                    value={p.desc}
-                                    onChange={(e) => handleChangeAroundPlace(sec.id, p.id, 'desc', e.target.value)}
-                                  />
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                          <button
-                            type="button"
-                            onClick={() => handleAddAroundPlace(sec.id)}
-                            className="flex-shrink-0 w-[76px] rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white/60 dark:bg-gray-900/40 flex items-center justify-center text-[13px] font-extrabold text-gray-900 dark:text-gray-50"
-                            aria-label="주변 장소 추가"
-                          >
-                            + 추가
-                          </button>
-                        </div>
-                      </div>
+                      <p className="m-0 rounded-lg bg-zinc-50/90 px-3 py-2 text-[11px] leading-relaxed text-gray-600 dark:bg-zinc-900/40 dark:text-gray-400">
+                        장소 이름·위치를 입력하면 미리보기에서{' '}
+                        <span className="font-semibold text-gray-800 dark:text-gray-200">AI가 주변 맛집·명소를 자동 추천</span>
+                        해요. (지역 데이터 + 피드 사진 매칭)
+                      </p>
                     </div>
                   </section>
                 ))}
