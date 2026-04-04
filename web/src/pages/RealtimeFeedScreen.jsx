@@ -1,34 +1,31 @@
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import BottomNavigation from '../components/BottomNavigation';
 import { filterActivePosts48, getTimeAgo } from '../utils/timeUtils';
 import './MainScreen.css';
 
 import { getCombinedPosts } from '../utils/mockData';
+import { getDisplayImageUrl } from '../api/upload';
 import { fetchPostsSupabase } from '../api/postsSupabase';
 import { getWeatherByRegion } from '../api/weather';
-import { toggleLike, isPostLiked } from '../utils/socialInteractions';
-import { updatePostLikesSupabase } from '../api/postsSupabase';
-import HotFeedCard from '../components/HotFeedCard';
-import { buildHotFeedCardProps, getHotFeedSocialLine } from '../utils/hotFeedCardModel';
+import { getGridCoverDisplay } from '../utils/postMedia';
+import {
+  feedGridCardBox,
+  feedGridImageBox,
+  feedGridInfoBox,
+  feedGridTitleStyle,
+  feedGridDescStyle,
+  feedGridMetaRow,
+} from '../utils/feedGridCardStyles';
 
 const RealtimeFeedScreen = () => {
   const navigate = useNavigate();
   const [realtimeData, setRealtimeData] = useState([]);
   const [weatherByRegion, setWeatherByRegion] = useState({});
   const contentRef = useRef(null);
+  const [visibleCount, setVisibleCount] = useState(8);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [realtimeSocialIdx, setRealtimeSocialIdx] = useState(0);
-
-  useEffect(() => {
-    const id = setInterval(() => setRealtimeSocialIdx((i) => (i + 1) % 3), 2800);
-    return () => clearInterval(id);
-  }, []);
-
-  useEffect(() => {
-    setRealtimeSocialIdx(0);
-  }, [realtimeData.length]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -44,9 +41,11 @@ const RealtimeFeedScreen = () => {
       const formattedWithRaw = posts.map((post) => {
         const likesNum = Number(post.likes ?? post.likeCount ?? 0) || 0;
         const commentsArr = Array.isArray(post.comments) ? post.comments : [];
+        const gridCover = getGridCoverDisplay(post, getDisplayImageUrl);
         return {
           ...post,
           id: post.id,
+          gridCover,
           location: post.location,
           time: post.timeLabel || getTimeAgo(post.timestamp || post.createdAt || post.time),
           content: post.note || post.content || `${post.location}의 모습`,
@@ -119,26 +118,35 @@ const RealtimeFeedScreen = () => {
     };
   }, []);
 
-  const handleHotFeedLike = useCallback((e, post) => {
-    e.stopPropagation();
-    const wasLiked = isPostLiked(post.id);
-    const baseLikes = typeof post.likes === 'number'
-      ? post.likes
-      : (typeof post.likeCount === 'number' ? post.likeCount : 0);
-    const result = toggleLike(post.id, baseLikes);
-    if (result.existsInStorage) {
-      setRealtimeData((prev) =>
-        prev.map((p) => (p && p.id === post.id ? { ...p, likes: result.newCount, likeCount: result.newCount } : p))
-      );
-    } else {
-      const delta = wasLiked ? -1 : 1;
-      updatePostLikesSupabase(post.id, delta);
-      setRealtimeData((prev) =>
-        prev.map((p) =>
-          (p && p.id === post.id ? { ...p, likes: result.newCount, likeCount: result.newCount } : p)
-        )
-      );
+  useEffect(() => {
+    if (realtimeData.length > 0) {
+      setVisibleCount(Math.min(8, realtimeData.length));
     }
+  }, [realtimeData.length]);
+
+  const displayedPosts = useMemo(() => {
+    if (!realtimeData || realtimeData.length === 0) return [];
+    return Array.from({ length: visibleCount }, (_, index) => {
+      const srcIndex = index % realtimeData.length;
+      return realtimeData[srcIndex];
+    });
+  }, [realtimeData, visibleCount]);
+
+  useEffect(() => {
+    const container = contentRef.current;
+    if (!container) return;
+
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = container;
+      if (scrollTop + clientHeight >= scrollHeight - 200) {
+        setVisibleCount((prev) => prev + 4);
+      }
+    };
+
+    container.addEventListener('scroll', handleScroll);
+    return () => {
+      container.removeEventListener('scroll', handleScroll);
+    };
   }, []);
 
   return (
@@ -157,10 +165,11 @@ const RealtimeFeedScreen = () => {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          gap: '8px'
+          gap: '8px',
         }}
       >
         <button
+          type="button"
           onClick={() => navigate(-1)}
           style={{
             border: 'none',
@@ -168,16 +177,10 @@ const RealtimeFeedScreen = () => {
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
-            padding: 0
+            padding: 0,
           }}
         >
-          <span
-            className="material-symbols-outlined"
-            style={{
-              color: '#333',
-              fontSize: 24
-            }}
-          >
+          <span className="material-symbols-outlined" style={{ color: '#333', fontSize: 24 }}>
             arrow_back
           </span>
         </button>
@@ -188,7 +191,7 @@ const RealtimeFeedScreen = () => {
             textAlign: 'center',
             fontSize: 18,
             fontWeight: 700,
-            color: '#1f2937'
+            color: '#1f2937',
           }}
         >
           지금 여기는
@@ -200,29 +203,100 @@ const RealtimeFeedScreen = () => {
       <div
         ref={contentRef}
         className="screen-content"
-        style={{ flex: 1, overflow: 'auto', padding: '8px 16px 24px', paddingBottom: '100px' }}
+        style={{ flex: 1, overflow: 'auto', padding: '16px', paddingBottom: '100px' }}
       >
         {realtimeData.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '60px 0', color: '#94a3b8' }}>
-            <span className="material-symbols-outlined" style={{ fontSize: '48px', marginBottom: '16px', display: 'block' }}>schedule</span>
+            <span className="material-symbols-outlined" style={{ fontSize: '48px', marginBottom: '16px', display: 'block' }}>
+              schedule
+            </span>
             <p>아직 게시물이 없어요</p>
           </div>
         ) : (
-          <div className="flex flex-col gap-2 pb-16">
-            {realtimeData.map((post) => {
-              const cardProps = buildHotFeedCardProps(post, weatherByRegion);
-              if (!cardProps) return null;
-              const socialText = getHotFeedSocialLine(cardProps, realtimeSocialIdx);
-              const liked = isPostLiked(post.id);
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+              rowGap: '7px',
+              columnGap: '7px',
+              paddingBottom: '16px',
+            }}
+          >
+            {displayedPosts.map((post, index) => {
+              const regionKey = (post.region || post.location || '').trim().split(/\s+/)[0] || post.region || post.location;
+              const weather = post.weather || weatherByRegion[regionKey] || null;
+              const hasWeather = weather && (weather.icon || weather.temperature);
+              const likeCount = Number(post.likes ?? post.likeCount ?? 0) || 0;
               return (
-                <HotFeedCard
-                  key={post.id}
-                  cardProps={cardProps}
-                  socialText={socialText}
-                  liked={liked}
-                  onCardClick={() => navigate(`/post/${post.id}`, { state: { post, allPosts: realtimeData } })}
-                  onLikeClick={handleHotFeedLike}
-                />
+                <div
+                  key={`${post.id}-${index}`}
+                  onClick={() => navigate(`/post/${post.id}`, { state: { post, allPosts: realtimeData } })}
+                  style={{
+                    ...feedGridCardBox,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    flexDirection: 'column',
+                  }}
+                >
+                  <div style={feedGridImageBox}>
+                    {post.gridCover?.mode === 'img' && post.gridCover.src ? (
+                      <img
+                        src={post.gridCover.src}
+                        alt={post.location}
+                        style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                      />
+                    ) : post.gridCover?.mode === 'video' && post.gridCover.src ? (
+                      <video
+                        src={post.gridCover.src}
+                        muted
+                        playsInline
+                        preload="metadata"
+                        style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                      />
+                    ) : (
+                      <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#cbd5e1' }}>
+                        <span className="material-symbols-outlined" style={{ fontSize: '22px' }}>image</span>
+                      </div>
+                    )}
+                    <div style={{ position: 'absolute', bottom: '8px', right: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          background: 'rgba(255,255,255,0.96)',
+                          color: '#111827',
+                          padding: '4px 8px',
+                          borderRadius: '9999px',
+                          fontSize: '11px',
+                          fontWeight: 600,
+                          boxShadow: '0 2px 6px rgba(15,23,42,0.18)',
+                        }}
+                      >
+                        <span className="material-symbols-outlined" style={{ fontSize: 16, color: '#ef4444', fontVariationSettings: "'FILL' 0" }}>
+                          favorite
+                        </span>
+                        <span>{likeCount}</span>
+                      </span>
+                    </div>
+                  </div>
+
+                  <div style={feedGridInfoBox}>
+                    <div style={feedGridTitleStyle}>{post.location || '어딘가의 지금'}</div>
+                    {(post.content || post.note) && (
+                      <div style={feedGridDescStyle}>{post.content || post.note}</div>
+                    )}
+                    <div style={feedGridMetaRow}>
+                      <span>{post.time}</span>
+                      {hasWeather && (weather.icon || weather.temperature) && (
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          {weather.icon && <span>{weather.icon}</span>}
+                          {weather.temperature && <span>{weather.temperature}</span>}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
               );
             })}
           </div>
@@ -254,7 +328,7 @@ const RealtimeFeedScreen = () => {
           alignItems: 'center',
           justifyContent: 'center',
           cursor: 'pointer',
-          zIndex: 200
+          zIndex: 200,
         }}
         aria-label="위로가기"
       >
