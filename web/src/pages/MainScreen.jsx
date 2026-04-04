@@ -630,6 +630,19 @@ const MainScreen = () => {
         const isGenericAi = !rawCat || /^(추천\s*장소|추천장소|여행)$/i.test(rawCat);
         const badgeLabel = isGenericAi ? photoCategoryLabel : rawCat;
         const badgeIcon = getHotFeedBadgeIconName(badgeLabel);
+        const hotReasonLabel = engagementTier === '사람 많음' ? '인파 많음' : engagementTier;
+        const hotReasonStyle = (() => {
+            switch (engagementTier) {
+                case '급상승':
+                    return { bg: '#ea580c', icon: 'trending_up' };
+                case '사람 많음':
+                    return { bg: '#dc2626', icon: 'groups' };
+                case '인기':
+                    return { bg: '#9333ea', icon: 'favorite' };
+                default:
+                    return { bg: '#475569', icon: 'bolt' };
+            }
+        })();
         const photoCaptionLine = getPhotoCaptionLine(post);
         const loc = (post.location || '').trim();
         const hasUserCaption = !!(post.note || '').trim()
@@ -648,6 +661,8 @@ const MainScreen = () => {
             regionShort,
             badgeLabel,
             badgeIcon,
+            hotReasonLabel,
+            hotReasonStyle,
             whyHotLine,
             cityDongLine,
             photoCategoryLabel,
@@ -1272,6 +1287,8 @@ const MainScreen = () => {
                                         regionShort,
                                         badgeLabel,
                                         badgeIcon,
+                                        hotReasonLabel,
+                                        hotReasonStyle,
                                         cityDongLine,
                                         photoCategoryLabel,
                                         captionForCard,
@@ -1284,7 +1301,7 @@ const MainScreen = () => {
                                     const socialText = socialLines[hotFeedSocialIdx % 3];
                                     const liked = isPostLiked(post.id);
                                     const slideIdx = crowdedData.length ? hotFeedSlideIndex % crowdedData.length : 0;
-                                    const badgeBg = '#26C6DA';
+                                    const categoryBadgeBg = '#26C6DA';
                                     return (
                                     <div
                                         key={`${post.id}-${slideIdx}`}
@@ -1311,9 +1328,58 @@ const MainScreen = () => {
                                                 boxShadow: '0 2px 14px rgba(15, 23, 42, 0.07)',
                                             }}
                                         >
-                                            <div style={{ position: 'absolute', top: 8, left: 8, zIndex: 10, display: 'inline-flex', alignItems: 'center', gap: 4, background: badgeBg, color: '#fff', padding: '4px 9px', borderRadius: 9999, fontSize: 10, fontWeight: 800, boxShadow: '0 2px 8px rgba(0,0,0,0.12)', maxWidth: 'calc(100% - 100px)' }}>
-                                                <span className="material-symbols-outlined shrink-0" style={{ fontSize: 14, fontVariationSettings: '"FILL" 1' }}>{badgeIcon}</span>
-                                                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{badgeLabel}</span>
+                                            <div
+                                                style={{
+                                                    position: 'absolute',
+                                                    top: 8,
+                                                    left: 8,
+                                                    zIndex: 10,
+                                                    display: 'flex',
+                                                    flexDirection: 'row',
+                                                    flexWrap: 'wrap',
+                                                    gap: 6,
+                                                    alignItems: 'center',
+                                                    maxWidth: 'calc(100% - 100px)',
+                                                }}
+                                            >
+                                                <span
+                                                    title="이 게시물이 핫플에 오른 이유"
+                                                    style={{
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: 4,
+                                                        background: hotReasonStyle.bg,
+                                                        color: '#fff',
+                                                        padding: '4px 9px',
+                                                        borderRadius: 9999,
+                                                        fontSize: 10,
+                                                        fontWeight: 800,
+                                                        boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
+                                                        maxWidth: '100%',
+                                                    }}
+                                                >
+                                                    <span className="material-symbols-outlined shrink-0" style={{ fontSize: 14, fontVariationSettings: '"FILL" 1' }}>{hotReasonStyle.icon}</span>
+                                                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{hotReasonLabel}</span>
+                                                </span>
+                                                <span
+                                                    title="장소 카테고리"
+                                                    style={{
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: 4,
+                                                        background: categoryBadgeBg,
+                                                        color: '#fff',
+                                                        padding: '4px 9px',
+                                                        borderRadius: 9999,
+                                                        fontSize: 10,
+                                                        fontWeight: 800,
+                                                        boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
+                                                        maxWidth: '100%',
+                                                    }}
+                                                >
+                                                    <span className="material-symbols-outlined shrink-0" style={{ fontSize: 14, fontVariationSettings: '"FILL" 1' }}>{badgeIcon}</span>
+                                                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{badgeLabel}</span>
+                                                </span>
                                             </div>
                                             {hasWeather ? (
                                                 <div style={{ position: 'absolute', top: 8, right: 8, zIndex: 10, display: 'inline-flex', alignItems: 'center', gap: 4, background: 'rgba(15,23,42,0.52)', backdropFilter: 'blur(8px)', color: '#f8fafc', padding: '4px 9px', borderRadius: 9999, fontSize: 10, fontWeight: 600, maxWidth: '58%' }}>

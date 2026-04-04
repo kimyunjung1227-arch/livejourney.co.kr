@@ -114,10 +114,19 @@ const MagazinePublishedCarousel = ({ slides, postsPerSlide = [], variant = 'list
 
   const onPlacesRowScroll = (e) => {
     const el = e.currentTarget;
-    const w = el.offsetWidth;
+    const w = el.clientWidth || el.offsetWidth;
     if (!w || !slides.length) return;
     const i = Math.round(el.scrollLeft / w);
     setPlaceSlideIdx(Math.max(0, Math.min(i, slides.length - 1)));
+  };
+
+  const scrollToPlaceSlide = (index) => {
+    const el = placesRowRef.current;
+    if (!el || !slides.length) return;
+    const w = el.clientWidth || el.offsetWidth;
+    if (!w) return;
+    const i = Math.max(0, Math.min(index, slides.length - 1));
+    el.scrollTo({ left: w * i, behavior: 'smooth' });
   };
 
   const handleFeaturedClick = (slide) => {
@@ -154,24 +163,7 @@ const MagazinePublishedCarousel = ({ slides, postsPerSlide = [], variant = 'list
         {slides[0]?.magTitle}
       </h2>
 
-      {slides.length > 1 && (
-        <div className="mb-2 flex justify-center px-2">
-          <div
-            className="inline-flex items-center gap-1.5 rounded-full bg-black/45 px-2.5 py-1.5 backdrop-blur-[6px]"
-            aria-hidden
-          >
-            {slides.map((_, i) => (
-              <span
-                key={`place-idx-${i}`}
-                className={`rounded-full transition-all duration-200 ease-out ${
-                  i === placeSlideIdx ? 'h-1.5 w-5 bg-white' : 'h-1.5 w-1.5 bg-white/40'
-                }`}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
+      <div className="w-full min-w-0 overflow-hidden">
       <div ref={placesRowRef} onScroll={onPlacesRowScroll} className={carouselRowClass}>
         {slides.map((slide, i) => {
           const regionPosts = Array.isArray(postsPerSlide[i]) ? postsPerSlide[i] : [];
@@ -303,8 +295,33 @@ const MagazinePublishedCarousel = ({ slides, postsPerSlide = [], variant = 'list
           );
         })}
       </div>
+      </div>
 
-      <p className="mt-4 mb-1 text-center text-[13px] font-semibold text-gray-600 dark:text-gray-400" aria-live="polite">
+      {slides.length > 1 && (
+        <div className="mt-3 flex justify-center px-2" role="tablist" aria-label="장소 슬라이드 위치">
+          <div className="inline-flex items-center gap-1.5 rounded-full bg-black/45 px-2.5 py-1.5 backdrop-blur-[6px]">
+            {slides.map((_, i) => (
+              <button
+                key={`place-idx-${i}`}
+                type="button"
+                role="tab"
+                aria-selected={i === placeSlideIdx}
+                aria-label={`장소 ${i + 1} / ${slides.length}`}
+                className={`rounded-full border-0 p-0 transition-all duration-200 ease-out focus:outline-none focus-visible:ring-2 focus-visible:ring-white/80 ${
+                  i === placeSlideIdx ? 'h-1.5 w-5 bg-white' : 'h-1.5 w-1.5 bg-white/45 hover:bg-white/65'
+                }`}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  scrollToPlaceSlide(i);
+                }}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      <p className="mt-2 mb-1 text-center text-[13px] font-semibold text-gray-600 dark:text-gray-400" aria-live="polite">
         장소 {slides.length}곳
       </p>
     </div>
