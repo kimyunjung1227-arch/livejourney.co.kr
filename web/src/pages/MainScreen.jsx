@@ -793,20 +793,19 @@ const MainScreen = () => {
                                 flexShrink: 0,
                             }}
                         >
-                            라이브저니
+                            Live Journey
                         </span>
                         <button
                             type="button"
                             onClick={() => navigate('/coupons')}
                             style={{
                                 flexShrink: 0,
-                                height: 22,
-                                minWidth: 44,
-                                padding: '0 8px',
-                                display: 'flex',
+                                height: 24,
+                                padding: '0 14px',
+                                display: 'inline-flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                gap: 3,
+                                gap: 4,
                                 borderRadius: 9999,
                                 border: 'none',
                                 background: '#F2F2F2',
@@ -815,15 +814,19 @@ const MainScreen = () => {
                                 fontWeight: 500,
                                 letterSpacing: '-0.02em',
                                 cursor: 'pointer',
+                                whiteSpace: 'nowrap',
+                                width: 'auto',
+                                minHeight: 24,
                             }}
                             aria-label="래플"
                         >
                             <span
                                 className="material-symbols-outlined"
                                 style={{
-                                    fontSize: 13,
+                                    fontSize: 14,
                                     color: '#757575',
                                     fontWeight: 400,
+                                    flexShrink: 0,
                                 }}
                                 aria-hidden
                             >
@@ -879,9 +882,9 @@ const MainScreen = () => {
                 {/* 상단 배너는 현재 사용하지 않음 */}
 
                 {/* 관심 지역/장소 — 라벨 없이 원형 목록만 */}
-                <div style={{ padding: '10px 16px 12px', background: '#ffffff' }}>
+                <div style={{ padding: '6px 16px 8px', background: '#ffffff' }}>
                     <div
-                        style={{ display: 'flex', gap: '10px', padding: '0 0 4px 0', overflowX: 'auto', scrollbarWidth: 'none', cursor: 'grab', scrollSnapType: 'x mandatory' }}
+                        style={{ display: 'flex', gap: '10px', padding: '0 0 2px 0', overflowX: 'auto', scrollbarWidth: 'none', cursor: 'grab', scrollSnapType: 'x mandatory' }}
                         className="hide-scrollbar"
                         onMouseDown={handleDragStart}
                     >
@@ -1009,8 +1012,8 @@ const MainScreen = () => {
 
                 {/* 지금 여기는 — 관심 지역 선택 시 숨김, 한 화면에 핫플까지 보이도록 높이 축소 */}
                 {!selectedInterest && (
-                    <div style={{ padding: '12px 16px 14px', background: '#ffffff' }}>
-                    <div style={{ padding: '0 0 8px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ padding: '6px 16px 10px', background: '#ffffff' }}>
+                    <div style={{ padding: '0 0 4px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: '#111827' }}>지금 여기는</h2>
                         </div>
@@ -1022,7 +1025,7 @@ const MainScreen = () => {
                         </button>
                     </div>
                     <div
-                    style={{ display: 'flex', gap: '7px', padding: '0 0 12px 0', overflowX: 'auto', scrollbarWidth: 'none', scrollSnapType: 'x mandatory', WebkitOverflowScrolling: 'touch', cursor: 'grab', background: '#ffffff' }}
+                    style={{ display: 'flex', gap: '7px', padding: '0 0 8px 0', overflowX: 'auto', scrollbarWidth: 'none', scrollSnapType: 'x mandatory', WebkitOverflowScrolling: 'touch', cursor: 'grab', background: '#ffffff' }}
                         className="hide-scrollbar"
                         onMouseDown={handleDragStart}
                     >
@@ -1207,11 +1210,11 @@ const MainScreen = () => {
                         )}
                     </div>
                 ) : (
-                <div style={{ padding: '8px 16px 24px', background: '#ffffff', minHeight: '100%' }}>
+                <div style={{ padding: '4px 16px 24px', background: '#ffffff', minHeight: '100%' }}>
 
                         {/* 실시간 핫플 — 이미지 4:3 세로 비중 + 섹션 여백 */}
-                        <div style={{ marginBottom: '0', paddingTop: '4px', paddingBottom: '24px', background: '#ffffff' }}>
-                            <div style={{ padding: '0 0 14px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#ffffff' }}>
+                        <div style={{ marginBottom: '0', paddingTop: 0, paddingBottom: '16px', background: '#ffffff' }}>
+                            <div style={{ padding: '0 0 8px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#ffffff' }}>
                                 <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 700, color: '#111827' }}>실시간 핫플</h3>
                                 <button
                                     type="button"
@@ -1223,7 +1226,7 @@ const MainScreen = () => {
                                 </button>
                             </div>
                             {!hotFeedCardProps ? (
-                                <div style={{ textAlign: 'center', padding: '28px 12px', color: '#94a3b8', fontSize: '14px' }}>
+                                <div style={{ textAlign: 'center', padding: '18px 12px', color: '#94a3b8', fontSize: '14px' }}>
                                     아직 실시간 핫플 게시물이 없어요.
                                 </div>
                             ) : (
