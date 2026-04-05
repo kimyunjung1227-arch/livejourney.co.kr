@@ -22,11 +22,8 @@ const MagazineFieldVoices = ({ voices = [], className = '' }) => {
           지금 현장에서 올라온 기록
         </h4>
       </div>
-      <p className="m-0 mb-2.5 text-[11px] leading-snug text-gray-500 dark:text-gray-400">
-        이 장소에 사진과 함께 남긴 짧은 메모예요.
-      </p>
       <div
-        className="-mx-0.5 flex gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="-mx-0.5 flex gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden mt-1"
         role="list"
         aria-label="현장 기록"
       >

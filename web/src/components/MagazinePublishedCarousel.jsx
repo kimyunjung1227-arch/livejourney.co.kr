@@ -35,14 +35,6 @@ function HeroRotator({ urls, resetKey, timeLabel }) {
     if (s) s.slideTo(0, 0);
   }, [resetKey]);
 
-  if (!safe.length) {
-    return (
-      <div className="relative flex min-h-[200px] w-full items-center justify-center bg-zinc-100 dark:bg-zinc-800">
-        <span className="material-symbols-outlined text-5xl text-zinc-400">photo</span>
-      </div>
-    );
-  }
-
   return (
     <div className="relative w-full overflow-hidden bg-zinc-100 dark:bg-zinc-800">
       <div className="relative aspect-[3/4] max-h-[min(300px,42dvh)] w-full">
@@ -59,19 +51,27 @@ function HeroRotator({ urls, resetKey, timeLabel }) {
           resistanceRatio={SWIPER_RESISTANCE}
           className="h-full w-full"
         >
-          {safe.map((src, i) => (
-            <SwiperSlide key={`${resetKey}-hero-${i}`} className="!flex h-full">
-              <div className="relative h-full min-h-0 w-full min-w-0 flex-1 bg-zinc-100 dark:bg-zinc-800">
-                <img
-                  src={src}
-                  alt=""
-                  className="h-full w-full object-cover"
-                  loading={i === 0 ? 'eager' : 'lazy'}
-                  draggable={false}
-                />
+          {safe.length ? (
+            safe.map((src, i) => (
+              <SwiperSlide key={`${resetKey}-hero-${i}`} className="!flex h-full">
+                <div className="relative h-full min-h-0 w-full min-w-0 flex-1 bg-zinc-100 dark:bg-zinc-800">
+                  <img
+                    src={src}
+                    alt=""
+                    className="h-full w-full object-cover"
+                    loading={i === 0 ? 'eager' : 'lazy'}
+                    draggable={false}
+                  />
+                </div>
+              </SwiperSlide>
+            ))
+          ) : (
+            <SwiperSlide className="!flex h-full">
+              <div className="flex h-full min-h-0 w-full flex-1 items-center justify-center bg-zinc-100 dark:bg-zinc-800">
+                <span className="material-symbols-outlined text-5xl text-zinc-400">photo</span>
               </div>
             </SwiperSlide>
-          ))}
+          )}
         </Swiper>
         <div className="pointer-events-none absolute top-3 left-3 z-20 flex flex-col gap-2">
           <span className="inline-flex rounded-full bg-primary px-2.5 py-1 text-[10px] font-bold text-white shadow-md shadow-primary/30">
@@ -217,39 +217,28 @@ const MagazinePublishedCarousel = ({ slides, postsPerSlide = [], variant = 'list
               <article className="w-full max-w-full pb-1">
                 {variant === 'detail' ? (
                   <div className="w-full max-w-full overflow-hidden rounded-2xl border border-zinc-100 bg-white shadow-sm dark:border-zinc-800 dark:bg-gray-900">
-                    {/* 1. 장소 위치 */}
-                    <div className="px-4 pt-4 pb-1">
-                      <p className="m-0 mb-1.5 text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">장소 위치</p>
+                    {/* 제목 영역: 장소마다 설명 시작 위치 맞춤 (위치정보 유무와 무관하게 동일 높이) */}
+                    <div className="px-4 pt-4 pb-2">
                       <p className="mb-1 m-0 text-[11px] font-extrabold uppercase tracking-wide text-primary">{sectionHeading}</p>
                       <h3 className="m-0 text-lg font-extrabold leading-snug text-gray-900 dark:text-gray-50">
                         {slide.placeTitle}
                       </h3>
-                      {slide.locationInfoLine ? (
-                        <p className="mt-1.5 m-0 text-[12px] font-medium text-gray-500 dark:text-gray-400">
-                          {slide.locationInfoLine}
-                        </p>
-                      ) : null}
+                      <div className="mt-1.5 min-h-[2.75rem] text-[12px] font-medium leading-snug text-gray-500 dark:text-gray-400">
+                        {slide.locationInfoLine ? <p className="m-0 line-clamp-2">{slide.locationInfoLine}</p> : null}
+                      </div>
                     </div>
 
-                    {/* 2. 대표 사진 */}
                     <div className={sectionDivider}>
-                      <div className="px-4">
-                        <p className="m-0 mb-2 text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">대표 사진</p>
-                      </div>
                       <HeroRotator urls={heroUrls} resetKey={heroResetKey} timeLabel={slide.timeLabel} />
                     </div>
 
                     <div className="px-4 pb-4">
-                      {/* 3. 장소 설명 */}
                       <section className={sectionDivider}>
-                        <h4 className="m-0 mb-2 text-[12px] font-bold text-gray-900 dark:text-gray-50">장소 설명</h4>
-                        <p className="m-0 text-[14px] leading-relaxed text-gray-600 dark:text-gray-300">{slide.description}</p>
+                        <p className="m-0 text-[14px] leading-relaxed text-gray-700 dark:text-gray-200">{slide.description}</p>
                       </section>
 
-                      {/* 4. AI 요약 */}
                       {slide.regionSummary ? (
                         <section className={sectionDivider}>
-                          <h4 className="m-0 mb-2 text-[12px] font-bold text-gray-900 dark:text-gray-50">AI 요약</h4>
                           <div className="rounded-lg bg-cyan-50/70 px-2.5 py-2 text-[11px] leading-relaxed text-cyan-900 dark:bg-cyan-950/35 dark:text-cyan-100">
                             {slide.regionSummary}
                           </div>
@@ -287,32 +276,24 @@ const MagazinePublishedCarousel = ({ slides, postsPerSlide = [], variant = 'list
                 ) : (
                   <>
                     <div className="w-full max-w-full overflow-hidden rounded-2xl border border-zinc-100 bg-white shadow-sm dark:border-zinc-800 dark:bg-gray-900">
-                      <div className="px-4 pt-4 pb-1">
-                        <p className="m-0 mb-1.5 text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">장소 위치</p>
+                      <div className="px-4 pt-4 pb-2">
                         <p className="mb-1 m-0 text-[11px] font-extrabold uppercase tracking-wide text-primary">{sectionHeading}</p>
                         <h3 className="m-0 text-lg font-extrabold leading-snug text-gray-900 dark:text-gray-50">
                           {slide.placeTitle}
                         </h3>
-                        {slide.locationInfoLine ? (
-                          <p className="mt-1.5 m-0 text-[12px] font-medium text-gray-500 dark:text-gray-400">
-                            {slide.locationInfoLine}
-                          </p>
-                        ) : null}
+                        <div className="mt-1.5 min-h-[2.75rem] text-[12px] font-medium leading-snug text-gray-500 dark:text-gray-400">
+                          {slide.locationInfoLine ? <p className="m-0 line-clamp-2">{slide.locationInfoLine}</p> : null}
+                        </div>
                       </div>
                       <div className={sectionDivider}>
-                        <div className="px-4">
-                          <p className="m-0 mb-2 text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">대표 사진</p>
-                        </div>
                         <HeroRotator urls={heroUrls} resetKey={heroResetKey} timeLabel={slide.timeLabel} />
                       </div>
                       <div className="px-4 pb-4">
                         <section className={sectionDivider}>
-                          <h4 className="m-0 mb-2 text-[12px] font-bold text-gray-900 dark:text-gray-50">장소 설명</h4>
-                          <p className="m-0 text-[14px] leading-relaxed text-gray-600 dark:text-gray-300">{slide.description}</p>
+                          <p className="m-0 text-[14px] leading-relaxed text-gray-700 dark:text-gray-200">{slide.description}</p>
                         </section>
                         {slide.regionSummary ? (
                           <section className={sectionDivider}>
-                            <h4 className="m-0 mb-2 text-[12px] font-bold text-gray-900 dark:text-gray-50">AI 요약</h4>
                             <div className="rounded-lg bg-cyan-50/70 px-2.5 py-2 text-[11px] leading-relaxed text-cyan-900 dark:bg-cyan-950/35 dark:text-cyan-100">
                               {slide.regionSummary}
                             </div>
