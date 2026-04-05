@@ -42,14 +42,21 @@ export default defineConfig({
     port: 3000,
     open: true
   },
+  optimizeDeps: {
+    include: ['react', 'react-dom', 'react-router-dom', 'axios', 'swiper', 'leaflet', 'react-leaflet'],
+  },
   build: {
     outDir: 'dist',
     assetsDir: 'assets',
     sourcemap: false,
+    reportCompressedSize: false,
     // 이전 false는 번들 비대화 원인 — 프로덕션은 esbuild 압축 권장
     minify: 'esbuild',
     target: 'es2020',
     chunkSizeWarningLimit: 900,
+    rollupOptions: {
+      maxParallelFileOps: 2,
+    },
   },
 })
 

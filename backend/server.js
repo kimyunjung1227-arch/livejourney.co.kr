@@ -16,6 +16,12 @@ const connectDB = require('./config/database');
 const app = express();
 const PORT = process.env.PORT || 5000; // .env 파일의 포트 사용
 
+app.disable('x-powered-by');
+// 리버스 프록시(Render/Nginx) 뒤에서 HTTPS·IP 인식
+if (process.env.TRUST_PROXY === '1' || process.env.NODE_ENV === 'production') {
+  app.set('trust proxy', 1);
+}
+
 // ============================================
 // 미들웨어 설정
 // ============================================
@@ -37,8 +43,17 @@ app.use(cors({
   credentials: true
 }));
 
-// 압축
-app.use(compression());
+// gzip (텍스트/JSON 응답 크기 축소)
+app.use(
+  compression({
+    level: 6,
+    threshold: 1024,
+    filter: (req, res) => {
+      if (req.headers['x-no-compression']) return false;
+      return compression.filter(req, res);
+    },
+  })
+);
 
 // 로깅 (개발 환경에서만)
 if (process.env.NODE_ENV !== 'production') {
@@ -266,18 +281,6 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 module.exports = app;
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
