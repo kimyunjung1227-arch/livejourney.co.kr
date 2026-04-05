@@ -778,45 +778,80 @@ const MainScreen = () => {
                         style={{
                             display: 'flex',
                             alignItems: 'center',
-                            gap: 6,
+                            gap: 14,
                             flexShrink: 0,
                         }}
                     >
-                        <span
-                            className="logo-text"
+                        <div
+                            role="img"
+                            aria-label="Live Journey"
                             style={{
-                                fontSize: '15px',
-                                fontWeight: 700,
-                                color: '#0f172a',
-                                letterSpacing: '-0.04em',
-                                lineHeight: 1.1,
+                                display: 'inline-flex',
+                                alignItems: 'baseline',
+                                gap: 3,
                                 flexShrink: 0,
+                                lineHeight: 1,
                             }}
                         >
-                            라이브저니
-                        </span>
+                            <span
+                                className="logo-text"
+                                style={{
+                                    fontSize: '15px',
+                                    fontWeight: 800,
+                                    color: '#000000',
+                                    letterSpacing: '-0.04em',
+                                }}
+                            >
+                                Live
+                            </span>
+                            <span
+                                style={{
+                                    fontFamily:
+                                        "Georgia, 'Times New Roman', 'Noto Serif KR', Times, serif",
+                                    fontSize: '12px',
+                                    fontWeight: 700,
+                                    color: '#A50021',
+                                    letterSpacing: '0.05em',
+                                    textTransform: 'uppercase',
+                                }}
+                            >
+                                JOURNEY
+                            </span>
+                        </div>
                         <button
                             type="button"
                             onClick={() => navigate('/coupons')}
                             style={{
                                 flexShrink: 0,
-                                height: 26,
-                                minWidth: 44,
-                                padding: '0 8px',
+                                height: 28,
+                                minWidth: 52,
+                                padding: '0 14px',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
+                                gap: 5,
                                 borderRadius: 9999,
-                                border: '1px solid rgba(0, 188, 212, 0.4)',
-                                background: 'rgba(0, 188, 212, 0.07)',
-                                color: '#0d9488',
-                                fontSize: 10,
-                                fontWeight: 700,
+                                border: 'none',
+                                background: '#F2F2F2',
+                                color: '#757575',
+                                fontSize: 11,
+                                fontWeight: 500,
                                 letterSpacing: '-0.02em',
                                 cursor: 'pointer',
                             }}
                             aria-label="래플"
                         >
+                            <span
+                                className="material-symbols-outlined"
+                                style={{
+                                    fontSize: 16,
+                                    color: '#757575',
+                                    fontWeight: 400,
+                                }}
+                                aria-hidden
+                            >
+                                confirmation_number
+                            </span>
                             래플
                         </button>
                     </div>
