@@ -484,12 +484,9 @@ const UploadScreen = () => {
 
     const MAX_SIZE = 50 * 1024 * 1024;
     const MAX_VIDEO_SIZE = 100 * 1024 * 1024; // 동영상은 100MB까지
-    const MAX_DIFF_MS = 48 * 60 * 60 * 1000; // 48시간
 
     const imageFiles = [];
     const videoFiles = [];
-    const rejectedOldImages = [];
-    const rejectedNoExif = [];
 
     for (const file of files) {
       const isVideo = file.type.startsWith('video/');
@@ -503,45 +500,8 @@ const UploadScreen = () => {
       if (isVideo) {
         videoFiles.push(file);
       } else {
-        try {
-          const exif = await extractExifData(file);
-          if (!exif?.photoTimestamp) {
-            rejectedNoExif.push(file.name);
-            continue;
-          }
-          const now = Date.now();
-          const diff = now - exif.photoTimestamp;
-          if (diff > MAX_DIFF_MS) {
-            rejectedOldImages.push(file.name);
-            continue;
-          }
-        } catch (error) {
-          logger.warn('EXIF 검사 중 오류:', error);
-          rejectedNoExif.push(file.name);
-          continue;
-        }
         imageFiles.push(file);
       }
-    }
-
-    if (rejectedNoExif.length > 0 && imageFiles.length === 0 && videoFiles.length === 0) {
-      alert(
-        `사진에 촬영 시각(EXIF)이 없으면 실시간 피드에 올릴 수 없어요. 카메라·휴대폰으로 찍은 원본을 선택해 주세요.\n\n제외: ${rejectedNoExif.join(', ')}`
-      );
-      return;
-    }
-
-    if (rejectedNoExif.length > 0 && (imageFiles.length > 0 || videoFiles.length > 0)) {
-      alert(`촬영 시각을 읽을 수 없는 사진은 제외했어요.\n\n제외: ${rejectedNoExif.join(', ')}`);
-    }
-
-    if (rejectedOldImages.length > 0 && imageFiles.length === 0 && videoFiles.length === 0) {
-      alert(`48시간 이내에 촬영한 사진만 업로드할 수 있어요.\n\n제외된 파일: ${rejectedOldImages.join(', ')}`);
-      return;
-    }
-
-    if (rejectedOldImages.length > 0 && imageFiles.length > 0) {
-      alert(`48시간이 지난 사진은 업로드에서 제외했어요.\n\n제외된 파일: ${rejectedOldImages.join(', ')}`);
     }
 
     const imageUrls = imageFiles.map(file => URL.createObjectURL(file));
@@ -828,25 +788,6 @@ const UploadScreen = () => {
     if (!formData.location.trim()) {
       alert('위치를 입력해주세요');
       return;
-    }
-
-    // 업로드 직전 검증: 사진은 EXIF 촬영 시각 필수 + 48시간 이내만 허용 (실시간 피드)
-    const MAX_DIFF_MS = 48 * 60 * 60 * 1000;
-    for (const file of formData.imageFiles || []) {
-      try {
-        const exif = await extractExifData(file);
-        if (!exif?.photoTimestamp) {
-          alert('촬영 시각(EXIF)이 없는 사진은 올릴 수 없어요. 카메라로 찍은 원본 사진을 사용해 주세요.');
-          return;
-        }
-        if ((Date.now() - exif.photoTimestamp) > MAX_DIFF_MS) {
-          alert('촬영 후 48시간이 지난 사진은 업로드할 수 없어요.');
-          return;
-        }
-      } catch (_) {
-        alert('사진 메타데이터를 읽을 수 없어요. 다른 파일로 다시 시도해 주세요.');
-        return;
-      }
     }
 
     if (editingPostId) {
@@ -1621,7 +1562,7 @@ const UploadScreen = () => {
                     사진, 동영상 추가하기
                   </p>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    사진은 EXIF 촬영 시각이 있어야 하고, 촬영 후 48시간 이내만 올릴 수 있어요. 동영상은 파일당 100MB까지예요.
+                    일반 사진·동영상 모두 추가할 수 있어요. 서버에는 위치·촬영 정보가 붙지 않은 이미지로 저장돼요. 동영상은 파일당 100MB까지예요.
                   </p>
                 </button>
               ) : (
@@ -1664,7 +1605,7 @@ const UploadScreen = () => {
                     )}
                     {formData.photoDate && formData.images.length > 0 && (
                       <p className="text-[11px] text-gray-500 dark:text-gray-400">
-                        위 시각은 파일 메타데이터(EXIF)에서 읽은 값이며, 실시간 피드 규칙(48시간)에 사용돼요.
+                        선택한 파일에서 읽은 촬영 시각이에요. 업로드되는 이미지 본문에서는 메타데이터가 제거돼요.
                       </p>
                     )}
                   </div>
