@@ -419,8 +419,8 @@ const MagazineWriteScreen = () => {
 
                       <p className="m-0 rounded-lg bg-zinc-50/90 px-3 py-2 text-[11px] leading-relaxed text-gray-600 dark:bg-zinc-900/40 dark:text-gray-400">
                         장소 이름·위치를 입력하면 미리보기에서{' '}
-                        <span className="font-semibold text-gray-800 dark:text-gray-200">AI가 주변 맛집·명소를 자동 추천</span>
-                        해요. (지역 데이터 + 피드 사진 매칭)
+                        <span className="font-semibold text-gray-800 dark:text-gray-200">주변 맛집·명소 추천</span>이 지역 데이터와
+                        피드 사진을 바탕으로 자동 표시돼요.
                       </p>
                     </div>
                   </section>

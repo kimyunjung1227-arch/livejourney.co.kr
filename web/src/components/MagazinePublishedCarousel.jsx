@@ -95,6 +95,39 @@ function HeroRotator({ urls, resetKey, timeLabel }) {
   );
 }
 
+/** 주변 추천: 한 줄에 3개, 작은 썸네일 */
+function AroundRecommendGrid({ items }) {
+  if (!Array.isArray(items) || items.length === 0) return null;
+  return (
+    <section className="border-t border-zinc-100 pt-3 mt-3 dark:border-zinc-800">
+      <h4 className="m-0 mb-2 text-[12px] font-bold text-gray-900 dark:text-gray-50">주변 맛집 · 명소 추천</h4>
+      <div className="grid grid-cols-3 gap-2">
+        {items.map((ar) => (
+          <div
+            key={ar.id}
+            className="min-w-0 overflow-hidden rounded-lg border border-zinc-100 bg-white shadow-sm dark:border-zinc-700 dark:bg-zinc-900/40"
+          >
+            <div className="relative h-[52px] w-full bg-zinc-100 dark:bg-zinc-800">
+              {ar.image ? (
+                <img src={ar.image} alt="" className="h-full w-full object-cover" loading="lazy" />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center text-zinc-300 dark:text-zinc-600">
+                  <span className="material-symbols-outlined text-[20px]">location_on</span>
+                </div>
+              )}
+            </div>
+            <p className="m-0 px-1 py-1 text-center text-[10px] font-semibold leading-[1.3] text-gray-800 line-clamp-2 dark:text-gray-100">
+              {ar.name}
+            </p>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+const sectionDivider = 'border-t border-zinc-100 pt-3 mt-3 dark:border-zinc-800';
+
 /**
  * 발행 매거진: 장소별 Swiper(게시물 상세와 동일) + 본문 블록 순서
  */
@@ -185,10 +218,9 @@ const MagazinePublishedCarousel = ({ slides, postsPerSlide = [], variant = 'list
                 {variant === 'detail' ? (
                   <div className="w-full max-w-full overflow-hidden rounded-2xl border border-zinc-100 bg-white shadow-sm dark:border-zinc-800 dark:bg-gray-900">
                     {/* 1. 장소 위치 */}
-                    <div className="px-4 pt-4 pb-2">
-                      <p className="mb-1 m-0 text-[11px] font-extrabold uppercase tracking-wide text-primary">
-                        {sectionHeading}
-                      </p>
+                    <div className="px-4 pt-4 pb-1">
+                      <p className="m-0 mb-1.5 text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">장소 위치</p>
+                      <p className="mb-1 m-0 text-[11px] font-extrabold uppercase tracking-wide text-primary">{sectionHeading}</p>
                       <h3 className="m-0 text-lg font-extrabold leading-snug text-gray-900 dark:text-gray-50">
                         {slide.placeTitle}
                       </h3>
@@ -199,110 +231,43 @@ const MagazinePublishedCarousel = ({ slides, postsPerSlide = [], variant = 'list
                       ) : null}
                     </div>
 
-                    {/* 2. 대표 사진 최대 5장 */}
-                    <HeroRotator urls={heroUrls} resetKey={heroResetKey} timeLabel={slide.timeLabel} />
-
-                    <div className="space-y-3 p-4 pt-3">
-                      {/* 3. 장소 설명 */}
-                      <p className="m-0 text-[14px] leading-relaxed text-gray-600 dark:text-gray-300">
-                        {slide.description}
-                      </p>
-
-                      {slide.regionSummary ? (
-                        <div className="rounded-lg bg-cyan-50/70 px-2.5 py-1.5 text-[11px] text-cyan-900 dark:bg-cyan-950/35 dark:text-cyan-100">
-                          <span className="mr-1 font-semibold">AI 요약</span>
-                          {slide.regionSummary}
-                        </div>
-                      ) : null}
-
-                      {/* 4. 현장 기록(사진·글) */}
-                      {Array.isArray(slide.fieldVoices) && slide.fieldVoices.length > 0 ? (
-                        <MagazineFieldVoices voices={slide.fieldVoices} />
-                      ) : null}
-
-                      {/* 5. 주변 맛집·명소 AI 추천 */}
-                      {Array.isArray(slide.aroundDisplay) && slide.aroundDisplay.length > 0 ? (
-                        <div className="rounded-xl border border-zinc-100 bg-zinc-50/90 p-3 dark:border-zinc-700 dark:bg-zinc-900/45">
-                          <h4 className="m-0 mb-0.5 text-[13px] font-bold text-gray-900 dark:text-gray-50">
-                            주변 맛집 · 명소 추천
-                          </h4>
-                          <p className="m-0 mb-2.5 text-[11px] leading-snug text-gray-500 dark:text-gray-400">
-                            입력하신 장소의 지역을 기준으로 AI가 골랐어요. 피드에 사진이 있으면 썸네일이 붙어요.
-                          </p>
-                          <div className="-mx-0.5 flex gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                            {slide.aroundDisplay.map((ar) => (
-                              <div
-                                key={ar.id}
-                                className="w-[132px] shrink-0 overflow-hidden rounded-xl border border-white/80 bg-white shadow-sm dark:border-zinc-600 dark:bg-zinc-900/60"
-                              >
-                                <div className="relative aspect-[4/3] bg-zinc-200 dark:bg-zinc-800">
-                                  {ar.image ? (
-                                    <img src={ar.image} alt="" className="h-full w-full object-cover" loading="lazy" />
-                                  ) : (
-                                    <div className="flex h-full w-full items-center justify-center text-zinc-400">
-                                      <span className="material-symbols-outlined text-2xl">storefront</span>
-                                    </div>
-                                  )}
-                                </div>
-                                <div className="px-2 py-1.5">
-                                  <p className="m-0 truncate text-[11px] font-bold text-gray-900 dark:text-gray-50">{ar.name}</p>
-                                  {ar.desc ? (
-                                    <p className="m-0 mt-0.5 line-clamp-2 text-[10px] leading-snug text-gray-500 dark:text-gray-400">
-                                      {ar.desc}
-                                    </p>
-                                  ) : null}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ) : null}
-
-                      <button
-                        type="button"
-                        onClick={(e) => handleAskLight(e, slide)}
-                        className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-primary/35 bg-primary/[0.07] py-2.5 px-3 text-[13px] font-semibold text-primary shadow-none transition hover:bg-primary/12 active:scale-[0.99] dark:border-primary/45 dark:bg-primary/10 dark:text-primary"
-                      >
-                        <span
-                          className="material-symbols-outlined text-[17px] text-primary"
-                          style={{ fontVariationSettings: '"FILL" 0' }}
-                        >
-                          chat_bubble
-                        </span>
-                        지금 여기 장소에 대해 물어보기
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    <div className="w-full max-w-full overflow-hidden rounded-2xl border border-zinc-100 bg-white shadow-sm dark:border-zinc-800 dark:bg-gray-900">
-                      <div className="px-4 pt-4 pb-2">
-                        <p className="mb-1 m-0 text-[11px] font-extrabold uppercase tracking-wide text-primary">
-                          {sectionHeading}
-                        </p>
-                        <h3 className="m-0 text-lg font-extrabold leading-snug text-gray-900 dark:text-gray-50">
-                          {slide.placeTitle}
-                        </h3>
-                        {slide.locationInfoLine ? (
-                          <p className="mt-1.5 m-0 text-[12px] font-medium text-gray-500 dark:text-gray-400">
-                            {slide.locationInfoLine}
-                          </p>
-                        ) : null}
+                    {/* 2. 대표 사진 */}
+                    <div className={sectionDivider}>
+                      <div className="px-4">
+                        <p className="m-0 mb-2 text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">대표 사진</p>
                       </div>
                       <HeroRotator urls={heroUrls} resetKey={heroResetKey} timeLabel={slide.timeLabel} />
-                      <div className="space-y-3 p-4 pt-3">
-                        <p className="m-0 text-[14px] leading-relaxed text-gray-600 dark:text-gray-300">
-                          {slide.description}
-                        </p>
-                        {slide.regionSummary ? (
-                          <div className="rounded-lg bg-cyan-50/70 px-2.5 py-1.5 text-[11px] text-cyan-900 dark:bg-cyan-950/35 dark:text-cyan-100">
-                            <span className="mr-1 font-semibold">AI 요약</span>
+                    </div>
+
+                    <div className="px-4 pb-4">
+                      {/* 3. 장소 설명 */}
+                      <section className={sectionDivider}>
+                        <h4 className="m-0 mb-2 text-[12px] font-bold text-gray-900 dark:text-gray-50">장소 설명</h4>
+                        <p className="m-0 text-[14px] leading-relaxed text-gray-600 dark:text-gray-300">{slide.description}</p>
+                      </section>
+
+                      {/* 4. AI 요약 */}
+                      {slide.regionSummary ? (
+                        <section className={sectionDivider}>
+                          <h4 className="m-0 mb-2 text-[12px] font-bold text-gray-900 dark:text-gray-50">AI 요약</h4>
+                          <div className="rounded-lg bg-cyan-50/70 px-2.5 py-2 text-[11px] leading-relaxed text-cyan-900 dark:bg-cyan-950/35 dark:text-cyan-100">
                             {slide.regionSummary}
                           </div>
-                        ) : null}
-                        {Array.isArray(slide.fieldVoices) && slide.fieldVoices.length > 0 ? (
+                        </section>
+                      ) : null}
+
+                      {/* 5. 지금 현장에서 올라온 기록 */}
+                      {Array.isArray(slide.fieldVoices) && slide.fieldVoices.length > 0 ? (
+                        <section className={sectionDivider}>
                           <MagazineFieldVoices voices={slide.fieldVoices} />
-                        ) : null}
+                        </section>
+                      ) : null}
+
+                      {/* 6. 주변 맛집 · 명소 추천 */}
+                      <AroundRecommendGrid items={slide.aroundDisplay} />
+
+                      {/* 7. 질문하기 */}
+                      <div className={`${sectionDivider}`}>
                         <button
                           type="button"
                           onClick={(e) => handleAskLight(e, slide)}
@@ -316,42 +281,64 @@ const MagazinePublishedCarousel = ({ slides, postsPerSlide = [], variant = 'list
                           </span>
                           지금 여기 장소에 대해 물어보기
                         </button>
-                        {Array.isArray(slide.aroundDisplay) && slide.aroundDisplay.length > 0 ? (
-                          <div className="rounded-xl border border-zinc-100 bg-zinc-50/90 p-3 dark:border-zinc-700 dark:bg-zinc-900/45">
-                            <h4 className="m-0 mb-0.5 text-[13px] font-bold text-gray-900 dark:text-gray-50">
-                              주변 맛집 · 명소 추천
-                            </h4>
-                            <p className="m-0 mb-2.5 text-[11px] leading-snug text-gray-500 dark:text-gray-400">
-                              입력하신 장소의 지역을 기준으로 AI가 골랐어요.
-                            </p>
-                            <div className="-mx-0.5 flex gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                              {slide.aroundDisplay.map((ar) => (
-                                <div
-                                  key={ar.id}
-                                  className="w-[132px] shrink-0 overflow-hidden rounded-xl border border-white/80 bg-white shadow-sm dark:border-zinc-600 dark:bg-zinc-900/60"
-                                >
-                                  <div className="relative aspect-[4/3] bg-zinc-200 dark:bg-zinc-800">
-                                    {ar.image ? (
-                                      <img src={ar.image} alt="" className="h-full w-full object-cover" loading="lazy" />
-                                    ) : (
-                                      <div className="flex h-full w-full items-center justify-center text-zinc-400">
-                                        <span className="material-symbols-outlined text-2xl">storefront</span>
-                                      </div>
-                                    )}
-                                  </div>
-                                  <div className="px-2 py-1.5">
-                                    <p className="m-0 truncate text-[11px] font-bold text-gray-900 dark:text-gray-50">{ar.name}</p>
-                                    {ar.desc ? (
-                                      <p className="m-0 mt-0.5 line-clamp-2 text-[10px] leading-snug text-gray-500 dark:text-gray-400">
-                                        {ar.desc}
-                                      </p>
-                                    ) : null}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="w-full max-w-full overflow-hidden rounded-2xl border border-zinc-100 bg-white shadow-sm dark:border-zinc-800 dark:bg-gray-900">
+                      <div className="px-4 pt-4 pb-1">
+                        <p className="m-0 mb-1.5 text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">장소 위치</p>
+                        <p className="mb-1 m-0 text-[11px] font-extrabold uppercase tracking-wide text-primary">{sectionHeading}</p>
+                        <h3 className="m-0 text-lg font-extrabold leading-snug text-gray-900 dark:text-gray-50">
+                          {slide.placeTitle}
+                        </h3>
+                        {slide.locationInfoLine ? (
+                          <p className="mt-1.5 m-0 text-[12px] font-medium text-gray-500 dark:text-gray-400">
+                            {slide.locationInfoLine}
+                          </p>
                         ) : null}
+                      </div>
+                      <div className={sectionDivider}>
+                        <div className="px-4">
+                          <p className="m-0 mb-2 text-[11px] font-semibold text-zinc-500 dark:text-zinc-400">대표 사진</p>
+                        </div>
+                        <HeroRotator urls={heroUrls} resetKey={heroResetKey} timeLabel={slide.timeLabel} />
+                      </div>
+                      <div className="px-4 pb-4">
+                        <section className={sectionDivider}>
+                          <h4 className="m-0 mb-2 text-[12px] font-bold text-gray-900 dark:text-gray-50">장소 설명</h4>
+                          <p className="m-0 text-[14px] leading-relaxed text-gray-600 dark:text-gray-300">{slide.description}</p>
+                        </section>
+                        {slide.regionSummary ? (
+                          <section className={sectionDivider}>
+                            <h4 className="m-0 mb-2 text-[12px] font-bold text-gray-900 dark:text-gray-50">AI 요약</h4>
+                            <div className="rounded-lg bg-cyan-50/70 px-2.5 py-2 text-[11px] leading-relaxed text-cyan-900 dark:bg-cyan-950/35 dark:text-cyan-100">
+                              {slide.regionSummary}
+                            </div>
+                          </section>
+                        ) : null}
+                        {Array.isArray(slide.fieldVoices) && slide.fieldVoices.length > 0 ? (
+                          <section className={sectionDivider}>
+                            <MagazineFieldVoices voices={slide.fieldVoices} />
+                          </section>
+                        ) : null}
+                        <AroundRecommendGrid items={slide.aroundDisplay} />
+                        <div className={sectionDivider}>
+                          <button
+                            type="button"
+                            onClick={(e) => handleAskLight(e, slide)}
+                            className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-primary/35 bg-primary/[0.07] py-2.5 px-3 text-[13px] font-semibold text-primary shadow-none transition hover:bg-primary/12 active:scale-[0.99] dark:border-primary/45 dark:bg-primary/10 dark:text-primary"
+                          >
+                            <span
+                              className="material-symbols-outlined text-[17px] text-primary"
+                              style={{ fontVariationSettings: '"FILL" 0' }}
+                            >
+                              chat_bubble
+                            </span>
+                            지금 여기 장소에 대해 물어보기
+                          </button>
+                        </div>
                       </div>
                     </div>
                     <button
@@ -364,10 +351,10 @@ const MagazinePublishedCarousel = ({ slides, postsPerSlide = [], variant = 'list
                   </>
                 )}
 
-                {/* 6. 이 장소 실시간 사진 */}
-                <div className="mt-4">
+                {/* 카드 밖: 실시간 사진 */}
+                <div className="mt-4 border-t border-zinc-100 pt-4 dark:border-zinc-800">
                   <div className="mb-2 flex items-center justify-between">
-                    <h3 className="m-0 text-[15px] font-bold text-gray-900 dark:text-gray-50">실시간으로 올라오는 사진</h3>
+                    <h3 className="m-0 text-[14px] font-bold text-gray-900 dark:text-gray-50">실시간으로 올라오는 사진</h3>
                     <button
                       type="button"
                       onClick={() => navigate('/main')}

@@ -9,26 +9,21 @@ const MagazineFieldVoices = ({ voices = [], className = '' }) => {
   if (list.length === 0) return null;
 
   return (
-    <div
-      className={`rounded-xl border border-amber-200/80 bg-gradient-to-br from-amber-50/95 to-orange-50/40 p-3 dark:border-amber-900/50 dark:from-amber-950/40 dark:to-orange-950/20 ${className}`}
-    >
+    <div className={`${className}`}>
       <div className="mb-2 flex items-center gap-1.5">
         <span
-          className="material-symbols-outlined text-[18px] text-amber-700 dark:text-amber-400"
+          className="material-symbols-outlined text-[17px] text-zinc-500 dark:text-zinc-400"
           style={{ fontVariationSettings: '"FILL" 0' }}
           aria-hidden
         >
           photo_camera
         </span>
-        <h4 className="m-0 text-[13px] font-extrabold tracking-tight text-amber-950 dark:text-amber-100">
+        <h4 className="m-0 text-[12px] font-bold tracking-tight text-gray-900 dark:text-gray-50">
           지금 현장에서 올라온 기록
         </h4>
-        <span className="ml-auto rounded-full bg-amber-100/90 px-2 py-0.5 text-[10px] font-bold text-amber-900 dark:bg-amber-900/50 dark:text-amber-200">
-          사진·글
-        </span>
       </div>
-      <p className="m-0 mb-2.5 text-[11px] leading-snug text-amber-900/75 dark:text-amber-200/85">
-        이 장소에 사진을 남긴 여행자들의 짧은 메모예요.
+      <p className="m-0 mb-2.5 text-[11px] leading-snug text-gray-500 dark:text-gray-400">
+        이 장소에 사진과 함께 남긴 짧은 메모예요.
       </p>
       <div
         className="-mx-0.5 flex gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
@@ -39,7 +34,7 @@ const MagazineFieldVoices = ({ voices = [], className = '' }) => {
           <blockquote
             key={v.id}
             role="listitem"
-            className="w-[min(100%,300px)] shrink-0 overflow-hidden rounded-lg border border-white/80 bg-white/90 shadow-sm dark:border-zinc-700/80 dark:bg-zinc-900/70"
+            className="w-[min(100%,300px)] shrink-0 overflow-hidden rounded-lg border border-zinc-200/90 bg-zinc-50/80 shadow-sm dark:border-zinc-600/80 dark:bg-zinc-900/60"
           >
             {v.thumbUrl ? (
               <div className="aspect-[16/10] w-full bg-zinc-200 dark:bg-zinc-800">

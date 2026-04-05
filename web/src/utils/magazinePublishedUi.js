@@ -98,7 +98,7 @@ export const buildAiAroundSuggestions = (locKey, sectionIndex, pickFirstMediaFor
     return {
       id: `ai-ar-${sectionIndex}-${l.id || i}`,
       name: nm,
-      desc: '이 지역 인기 스폿 · AI 추천',
+      desc: '',
       image,
     };
   });
