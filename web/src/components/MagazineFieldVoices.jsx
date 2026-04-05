@@ -9,7 +9,7 @@ const MagazineFieldVoices = ({ voices = [], className = '' }) => {
   if (list.length === 0) return null;
 
   return (
-    <div className={`${className}`}>
+    <div className={className || undefined}>
       <div className="mb-2 flex items-center gap-1.5">
         <span
           className="material-symbols-outlined text-[17px] text-zinc-500 dark:text-zinc-400"
