@@ -3,7 +3,36 @@ const router = express.Router();
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const fsPromises = fs.promises;
 const { generateSmartTags } = require('../services/aiTagService');
+
+/** 로컬 디스크에 저장된 래스터 이미지에서 EXIF 등 메타데이터 제거 (sharp 사용, 미설치 시 무시) */
+async function stripImageMetadataOnDisk(filePath) {
+  let sharp;
+  try {
+    sharp = require('sharp');
+  } catch {
+    return;
+  }
+  try {
+    const buf = await fsPromises.readFile(filePath);
+    const meta = await sharp(buf).metadata();
+    const pipeline = sharp(buf).rotate();
+    let outBuf;
+    if (meta.format === 'png') {
+      outBuf = await pipeline.png({ compressionLevel: 9 }).toBuffer();
+    } else if (meta.format === 'jpeg' || meta.format === 'jpg') {
+      outBuf = await pipeline.jpeg({ quality: 92, mozjpeg: true }).toBuffer();
+    } else if (meta.format === 'webp') {
+      outBuf = await pipeline.webp({ quality: 92 }).toBuffer();
+    } else {
+      outBuf = await pipeline.jpeg({ quality: 92 }).toBuffer();
+    }
+    await fsPromises.writeFile(filePath, outBuf);
+  } catch (e) {
+    console.warn('이미지 메타데이터 제거(서버) 실패:', e.message);
+  }
+}
 
 // 업로드 라우터 설정
 const uploadDir = path.join(__dirname, '../uploads/images');
@@ -77,9 +106,13 @@ const uploadVideo = multer({
 });
 
 // 단일 이미지 업로드
-router.post('/image', upload.single('image'), (req, res) => {
+router.post('/image', upload.single('image'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ success: false, error: '이미지를 선택해주세요.' });
+
+    if (req.file.path && !req.file.path.startsWith('http')) {
+      await stripImageMetadataOnDisk(req.file.path);
+    }
 
     // Cloudinary인 경우 path가 URL임
     const imageUrl = req.file.path.startsWith('http')
@@ -120,9 +153,15 @@ router.post('/video', uploadVideo.single('video'), (req, res) => {
 });
 
 // 다중 이미지 업로드
-router.post('/images', upload.array('images', 10), (req, res) => {
+router.post('/images', upload.array('images', 10), async (req, res) => {
   try {
     if (!req.files || req.files.length === 0) return res.status(400).json({ success: false, error: '이미지를 선택해주세요.' });
+
+    for (const f of req.files) {
+      if (f.path && !f.path.startsWith('http')) {
+        await stripImageMetadataOnDisk(f.path);
+      }
+    }
 
     const imageUrls = req.files.map(file =>
       file.path.startsWith('http') ? file.path : `/uploads/images/${file.filename}`
@@ -144,6 +183,10 @@ router.post('/analyze-tags', upload.single('image'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ success: false, error: '이미지를 선택해주세요.' });
+    }
+
+    if (req.file.path && !req.file.path.startsWith('http')) {
+      await stripImageMetadataOnDisk(req.file.path);
     }
 
     // Cloudinary인 경우 req.file.path는 URL일 수 있음 (서비스에서 URL 다운로드 지원)

@@ -39,6 +39,73 @@ const fileToBase64 = (file) => {
   });
 };
 
+/**
+ * 디코드 후 재인코딩하여 EXIF/GPS 등 파일 내 메타데이터 제거 (업로드 직전에 사용)
+ */
+const stripImageMetadata = async (file) => {
+  if (!file || !file.type?.startsWith('image/')) return file;
+  if (file.type === 'image/svg+xml') return file;
+
+  try {
+    const bitmap = await createImageBitmap(file);
+    const canvas = document.createElement('canvas');
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      bitmap.close();
+      return file;
+    }
+    if (file.type === 'image/png' || file.type === 'image/webp' || file.type === 'image/gif') {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+    ctx.drawImage(bitmap, 0, 0);
+    bitmap.close();
+
+    const baseName = (file.name || 'image').replace(/\.[^.]+$/, '');
+    let mimeType = 'image/jpeg';
+    let quality = 0.92;
+    if (file.type === 'image/png') {
+      mimeType = 'image/png';
+      quality = undefined;
+    } else if (file.type === 'image/webp') {
+      mimeType = 'image/webp';
+    }
+
+    let outBlob;
+    let outMime = mimeType;
+    let ext = mimeType === 'image/png' ? 'png' : mimeType === 'image/webp' ? 'webp' : 'jpg';
+
+    try {
+      outBlob = await new Promise((resolve, reject) => {
+        canvas.toBlob(
+          (b) => (b ? resolve(b) : reject(new Error('toBlob failed'))),
+          mimeType,
+          quality
+        );
+      });
+    } catch {
+      outMime = 'image/jpeg';
+      ext = 'jpg';
+      outBlob = await new Promise((resolve, reject) => {
+        canvas.toBlob(
+          (b) => (b ? resolve(b) : reject(new Error('toBlob jpeg failed'))),
+          'image/jpeg',
+          0.92
+        );
+      });
+    }
+
+    return new File([outBlob], `${baseName}.${ext}`, {
+      type: outMime,
+      lastModified: Date.now(),
+    });
+  } catch (e) {
+    logger.warn('이미지 메타데이터 제거 실패, 원본 업로드:', e?.message || e);
+    return file;
+  }
+};
+
 // Supabase Storage 에 이미지 업로드 후 public URL 반환 (실패 시 1회 재시도)
 const uploadImageToSupabase = async (file, retry = false) => {
   try {
@@ -94,16 +161,18 @@ const uploadImageToSupabase = async (file, retry = false) => {
 
 // 단일 이미지 업로드
 export const uploadImage = async (file) => {
+  let safeFile = file;
   try {
+    safeFile = await stripImageMetadata(file);
     // 1순위: Supabase Storage 업로드 시도
-    const supabaseResult = await uploadImageToSupabase(file);
+    const supabaseResult = await uploadImageToSupabase(safeFile);
     if (supabaseResult.success && supabaseResult.url) {
       return supabaseResult;
     }
 
     // 2순위: 기존 백엔드 REST API 시도
     const formData = new FormData();
-    formData.append('image', file);
+    formData.append('image', safeFile);
 
     const response = await api.post('/upload/image', formData, {
       headers: {
@@ -116,7 +185,7 @@ export const uploadImage = async (file) => {
     logger.log('⚠️ 이미지 업로드 실패 - Blob URL fallback 사용');
     logger.warn('💡 이미지가 서버(Supabase/백엔드)에 업로드되지 않았습니다. 네트워크 또는 설정을 확인해주세요.');
 
-    const blobUrl = URL.createObjectURL(file);
+    const blobUrl = URL.createObjectURL(safeFile);
 
     return {
       success: true,
@@ -134,8 +203,9 @@ export const uploadImage = async (file) => {
 // 다중 이미지 업로드
 export const uploadImages = async (files) => {
   try {
+    const safeFiles = await Promise.all(files.map((f) => stripImageMetadata(f)));
     const formData = new FormData();
-    files.forEach(file => {
+    safeFiles.forEach(file => {
       formData.append('images', file);
     });
 
@@ -154,8 +224,9 @@ export const uploadImages = async (files) => {
 // 프로필 이미지 업로드
 export const uploadProfileImage = async (file) => {
   try {
+    const safeFile = await stripImageMetadata(file);
     const formData = new FormData();
-    formData.append('profile', file);
+    formData.append('profile', safeFile);
 
     const response = await api.post('/upload/profile', formData, {
       headers: {

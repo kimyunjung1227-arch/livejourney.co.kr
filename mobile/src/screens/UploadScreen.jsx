@@ -18,6 +18,7 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
@@ -209,8 +210,25 @@ const UploadScreen = () => {
         videoFiles.push(asset);
         videoUris.push(asset.uri);
       } else {
-        imageFiles.push(asset);
-        imageUris.push(asset.uri);
+        let outUri = asset.uri;
+        try {
+          const lower = (asset.fileName || asset.uri || '').toLowerCase();
+          const isPng = asset.mimeType === 'image/png' || lower.endsWith('.png');
+          const manipResult = await ImageManipulator.manipulateAsync(
+            asset.uri,
+            [],
+            {
+              compress: isPng ? 1 : 0.92,
+              format: isPng ? ImageManipulator.SaveFormat.PNG : ImageManipulator.SaveFormat.JPEG,
+            }
+          );
+          outUri = manipResult.uri;
+        } catch (e) {
+          console.warn('이미지 메타데이터 제거 실패, 원본 사용:', e);
+        }
+        const processedAsset = { ...asset, uri: outUri };
+        imageFiles.push(processedAsset);
+        imageUris.push(outUri);
       }
     }
 
@@ -272,6 +290,7 @@ const UploadScreen = () => {
           allowsEditing: true,
           quality: 0.8,
           allowsMultipleSelection: false,
+          exif: false,
         });
         
         handleImageSelect(result);
@@ -287,6 +306,7 @@ const UploadScreen = () => {
       allowsEditing: true,
       quality: 0.8,
       allowsMultipleSelection: true,
+      exif: false,
     });
 
         handleImageSelect(result);
