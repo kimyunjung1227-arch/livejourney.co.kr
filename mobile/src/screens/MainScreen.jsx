@@ -30,11 +30,15 @@ import MainHorizontalMedia from '../components/MainHorizontalMedia';
 import { buildMediaItemsFromPost } from '../utils/postMedia';
 import { useFeedVideo } from '../contexts/FeedVideoContext';
 
-// 카드 크기 (웹과 동일한 퍼센트 기준)
+// 카드 크기 — 큰 화면에서도 최대 너비를 제한해 기기 간 비슷한 비율 유지
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const REALTIME_CARD_WIDTH = SCREEN_WIDTH * 0.54; // 웹: 54%
-const CROWDED_CARD_WIDTH = SCREEN_WIDTH * 0.38; // 웹: 38%
-const RECOMMEND_CARD_WIDTH = SCREEN_WIDTH * 0.85; // 웹: 85%
+const LAYOUT_MAX_WIDTH = 428;
+const CONTENT_WIDTH = Math.min(SCREEN_WIDTH, LAYOUT_MAX_WIDTH);
+const REALTIME_CARD_WIDTH = CONTENT_WIDTH * 0.54; // 웹: 54%
+const CROWDED_CARD_WIDTH = CONTENT_WIDTH * 0.38; // 웹: 38%
+const RECOMMEND_CARD_WIDTH = CONTENT_WIDTH * 0.85; // 웹: 85%
+const HOT_PL_IMAGE_HEIGHT = 136; // 실시간 핫플 썸네일 세로 (이전 120)
+const REALTIME_IMAGE_HEIGHT = 300; // 지금 여기는 카드 세로 (이전 280)
 
 const WeatherWidget = ({ region = '서울' }) => {
   const [weather, setWeather] = useState(null);
@@ -329,7 +333,7 @@ const MainScreen = () => {
               )}
             </View>
           ) : (
-            <View style={styles.mainPadding}>
+            <View style={[styles.mainPadding, { alignSelf: 'center', width: '100%', maxWidth: LAYOUT_MAX_WIDTH }]}>
               {/* 지금 여기는 */}
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
@@ -351,7 +355,7 @@ const MainScreen = () => {
                     <TouchableOpacity key={post.id} style={styles.realtimeCard} onPress={() => navigation.navigate('PostDetail', { post })}>
                       <MainHorizontalMedia
                         width={REALTIME_CARD_WIDTH}
-                        height={280}
+                        height={REALTIME_IMAGE_HEIGHT}
                         mediaItems={buildMediaItemsFromPost(post)}
                         instanceId={`main-rt-${post.id}`}
                         playPriority={0}
@@ -386,7 +390,7 @@ const MainScreen = () => {
                       <View style={styles.crowdedImageWrapper}>
                         <MainHorizontalMedia
                           width={CROWDED_CARD_WIDTH}
-                          height={120}
+                          height={HOT_PL_IMAGE_HEIGHT}
                           mediaItems={buildMediaItemsFromPost(post)}
                           instanceId={`main-hot-${post.id}`}
                           playPriority={1}
@@ -560,7 +564,7 @@ const styles = StyleSheet.create({
   interestBannerText: { fontWeight: '700', color: '#0284c7', fontSize: 14 },
   interestBannerBtn: { color: '#0284c7', fontSize: 12, fontWeight: '600' },
   gridContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, paddingHorizontal: 16 },
-  gridCard: { width: (SCREEN_WIDTH - 44) / 2, backgroundColor: '#fff', borderRadius: 12, overflow: 'hidden', shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 8, elevation: 2 },
+  gridCard: { width: (Math.min(SCREEN_WIDTH, LAYOUT_MAX_WIDTH) - 44) / 2, backgroundColor: '#fff', borderRadius: 12, overflow: 'hidden', shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 8, elevation: 2 },
   gridImageWrapper: { height: 150, backgroundColor: '#eee', position: 'relative' },
   gridImage: { width: '100%', height: '100%', resizeMode: 'cover' },
   gridLikeBadge: { position: 'absolute', bottom: 6, right: 6, backgroundColor: 'rgba(255,255,255,0.9)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8 },
@@ -583,14 +587,14 @@ const styles = StyleSheet.create({
   liveBadgeText: { fontSize: 10, color: '#F59E0B', fontWeight: '900' }, // 웹과 동일
   moreText: { fontSize: 13, fontWeight: '500', color: COLORS.primary }, // 웹과 동일
   horizontalScroll: { paddingHorizontal: 16, paddingBottom: 16, gap: 12 }, // 웹: padding: '0 0 16px 0', gap: '12px'
-  realtimeCard: { width: REALTIME_CARD_WIDTH, height: 280, borderRadius: 28, overflow: 'hidden', backgroundColor: '#eee', elevation: 8, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 30, marginRight: 0 }, // 웹: boxShadow: '0 12px 30px rgba(0,0,0,0.12)'
+  realtimeCard: { width: REALTIME_CARD_WIDTH, height: REALTIME_IMAGE_HEIGHT, borderRadius: 28, overflow: 'hidden', backgroundColor: '#eee', elevation: 8, shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 30, marginRight: 0 }, // 웹: boxShadow: '0 12px 30px rgba(0,0,0,0.12)'
   cardFullImage: { width: '100%', height: '100%', resizeMode: 'cover' },
   cardGradient: { position: 'absolute', bottom: 0, left: 0, right: 0, height: '60%' },
   cardOverlay: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 20 },
   cardLocation: { color: '#fff', fontSize: 18, fontWeight: '900', marginBottom: 4, letterSpacing: -0.02 },
   cardMeta: { color: 'rgba(255,255,255,0.85)', fontSize: 12, fontWeight: '600' },
   crowdedCard: { width: CROWDED_CARD_WIDTH, marginRight: 0 }, // 웹: gap으로 간격 처리
-  crowdedImageWrapper: { height: 120, borderRadius: 16, overflow: 'hidden', backgroundColor: '#eee', marginBottom: 8, position: 'relative' }, // 웹과 동일
+  crowdedImageWrapper: { height: HOT_PL_IMAGE_HEIGHT, borderRadius: 16, overflow: 'hidden', backgroundColor: '#eee', marginBottom: 8, position: 'relative' }, // 웹과 동일
   crowdedImage: { width: '100%', height: '100%', resizeMode: 'cover' },
   surgeBadge: { position: 'absolute', top: 8, left: 8, zIndex: 10, backgroundColor: 'rgba(0,0,0,0.7)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 }, // 웹: backdropFilter 추가 불가하므로 약간 어둡게
   surgeBadgeText: { color: '#fff', fontSize: 9, fontWeight: '700' }, // 웹과 동일

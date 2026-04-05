@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,16 +11,25 @@ import {
   ActivityIndicator,
   Dimensions,
   TextInput,
+  FlatList,
 } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import { COLORS, SPACING, TYPOGRAPHY } from '../constants/styles';
 import { getUserDailyTitle } from '../utils/dailyTitleSystem';
 import { getEarnedBadges, getBadgeDisplayName } from '../utils/badgeSystem';
-import { getFollowerCount, getFollowingCount } from '../utils/followSystem';
+import {
+  getFollowerCount,
+  getFollowingCount,
+  getFollowerIds,
+  getFollowingIds,
+  follow,
+  unfollow,
+  isFollowing,
+} from '../utils/followSystem';
 import { getUserLevel } from '../utils/levelSystem';
 import PostGridItem from '../components/PostGridItem';
 import { Modal } from 'react-native';
@@ -29,6 +38,69 @@ import { getCoordinatesByLocation } from '../utils/regionLocationMapping';
 import { LinearGradient } from 'expo-linear-gradient';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+function FollowListFollowButton({ targetId, followListType, onUnfollowFromList, onFollowChange }) {
+  const [isF, setIsF] = useState(false);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    let c = true;
+    (async () => {
+      const v = await isFollowing(null, targetId);
+      if (c) setIsF(v);
+    })();
+    return () => {
+      c = false;
+    };
+  }, [targetId]);
+  return (
+    <TouchableOpacity
+      style={[followListStyles.followBtn, isF && followListStyles.followBtnOn]}
+      disabled={busy}
+      onPress={async () => {
+        setBusy(true);
+        try {
+          if (isF) {
+            await unfollow(targetId);
+            setIsF(false);
+            if (followListType === 'following') onUnfollowFromList();
+          } else {
+            const r = await follow(targetId);
+            if (r.success) setIsF(true);
+          }
+          onFollowChange();
+        } finally {
+          setBusy(false);
+        }
+      }}
+    >
+      <Text style={[followListStyles.followBtnText, isF && followListStyles.followBtnTextOn]}>
+        {isF ? '팔로잉' : '팔로우'}
+      </Text>
+    </TouchableOpacity>
+  );
+}
+
+const followListStyles = StyleSheet.create({
+  followBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 12,
+    backgroundColor: COLORS.primary,
+  },
+  followBtnOn: {
+    backgroundColor: '#f1f5f9',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  followBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  followBtnTextOn: {
+    color: '#64748b',
+  },
+});
 
 const ProfileScreen = () => {
   const { user: authUser, logout } = useAuth();
@@ -52,19 +124,43 @@ const ProfileScreen = () => {
   const [availableDates, setAvailableDates] = useState([]);
   const [followerCount, setFollowerCount] = useState(0);
   const [followingCount, setFollowingCount] = useState(0);
+  const [showFollowListModal, setShowFollowListModal] = useState(false);
+  const [followListType, setFollowListType] = useState('follower'); // 'follower' | 'following'
+  const [followListIds, setFollowListIds] = useState([]);
+  const [followResolvePosts, setFollowResolvePosts] = useState([]);
+
+  useEffect(() => {
+    if (!showFollowListModal) return;
+    (async () => {
+      try {
+        const postsJson = await AsyncStorage.getItem('uploadedPosts');
+        setFollowResolvePosts(postsJson ? JSON.parse(postsJson) : []);
+      } catch {
+        setFollowResolvePosts([]);
+      }
+    })();
+  }, [showFollowListModal]);
+
+  const refreshFollowCounts = useCallback(async () => {
+    const uid = (user || authUser)?.id;
+    if (!uid) return;
+    setFollowerCount(await getFollowerCount(uid));
+    setFollowingCount(await getFollowingCount(uid));
+  }, [user?.id, authUser?.id]);
 
   useEffect(() => {
     loadProfileData();
   }, []);
 
   useEffect(() => {
-    const uid = (user || authUser)?.id;
-    if (!uid) return;
-    (async () => {
-      setFollowerCount(await getFollowerCount(uid));
-      setFollowingCount(await getFollowingCount(uid));
-    })();
-  }, [user?.id, authUser?.id]);
+    refreshFollowCounts();
+  }, [refreshFollowCounts]);
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshFollowCounts();
+    }, [refreshFollowCounts])
+  );
 
   // 날짜 필터 적용
   useEffect(() => {
@@ -436,6 +532,31 @@ const ProfileScreen = () => {
     }
   };
 
+  const resolveUserInfoForList = useCallback(
+    (uid) => {
+      const currentUserData = user || authUser;
+      const myId = currentUserData?.id;
+      if (String(uid) === String(myId) && currentUserData) {
+        return {
+          username: currentUserData.username || '사용자',
+          profileImage: currentUserData.profileImage || null,
+        };
+      }
+      const p = followResolvePosts.find((post) => {
+        const pu = post.userId || (typeof post.user === 'string' ? post.user : post.user?.id);
+        return String(pu) === String(uid);
+      });
+      if (!p) return { username: '사용자', profileImage: null };
+      if (!p.user) return { username: '사용자', profileImage: p.userAvatar || null };
+      if (typeof p.user === 'string') return { username: p.user, profileImage: p.userAvatar || null };
+      return {
+        username: p.user?.username || '사용자',
+        profileImage: p.user?.profileImage || p.userAvatar || null,
+      };
+    },
+    [user, authUser, followResolvePosts]
+  );
+
   if (loading) {
     return (
       <ScreenLayout>
@@ -538,15 +659,37 @@ const ProfileScreen = () => {
 
             {/* 팔로워 / 팔로잉 / 게시물 (디자인 개선) */}
             <View style={styles.statsSection}>
-              <View style={styles.statItem}>
+              <TouchableOpacity
+                style={styles.statItem}
+                activeOpacity={0.7}
+                onPress={async () => {
+                  const uid = (user || authUser)?.id;
+                  if (!uid) return;
+                  const ids = await getFollowerIds(uid);
+                  setFollowListIds(ids);
+                  setFollowListType('follower');
+                  setShowFollowListModal(true);
+                }}
+              >
                 <Text style={styles.statNumber}>{followerCount}</Text>
                 <Text style={styles.statLabel}>팔로워</Text>
-              </View>
+              </TouchableOpacity>
               <View style={styles.statDivider} />
-              <View style={styles.statItem}>
+              <TouchableOpacity
+                style={styles.statItem}
+                activeOpacity={0.7}
+                onPress={async () => {
+                  const uid = (user || authUser)?.id;
+                  if (!uid) return;
+                  const ids = await getFollowingIds(uid);
+                  setFollowListIds(ids);
+                  setFollowListType('following');
+                  setShowFollowListModal(true);
+                }}
+              >
                 <Text style={styles.statNumber}>{followingCount}</Text>
                 <Text style={styles.statLabel}>팔로잉</Text>
-              </View>
+              </TouchableOpacity>
               <View style={styles.statDivider} />
               <View style={styles.statItem}>
                 <Text style={styles.statNumber}>{myPosts.length}</Text>
@@ -801,6 +944,89 @@ const ProfileScreen = () => {
               <Ionicons name="chevron-forward" size={20} color={COLORS.textSubtle} />
             </TouchableOpacity>
           </View>
+
+          {/* 팔로워 / 팔로잉 목록 */}
+          <Modal
+            visible={showFollowListModal}
+            animationType="slide"
+            transparent
+            onRequestClose={() => setShowFollowListModal(false)}
+          >
+            <View style={styles.followListOverlay}>
+              <TouchableOpacity
+                style={styles.followListBackdrop}
+                activeOpacity={1}
+                onPress={() => setShowFollowListModal(false)}
+              />
+              <View style={styles.followListSheet} pointerEvents="box-none">
+                <View style={styles.followListHeader}>
+                  <Text style={styles.followListTitle}>
+                    {followListType === 'follower' ? '팔로워' : '팔로잉'}
+                  </Text>
+                  <TouchableOpacity onPress={() => setShowFollowListModal(false)}>
+                    <Text style={styles.followListClose}>닫기</Text>
+                  </TouchableOpacity>
+                </View>
+                <FlatList
+                  style={styles.followListScroll}
+                  data={followListIds}
+                  keyExtractor={(id) => String(id)}
+                  contentContainerStyle={
+                    followListIds.length === 0
+                      ? { flexGrow: 1, justifyContent: 'center', padding: 24 }
+                      : { paddingBottom: 24 }
+                  }
+                  ListEmptyComponent={
+                    <Text style={styles.followListEmpty}>
+                      {followListType === 'follower'
+                        ? '팔로워가 없습니다'
+                        : '팔로우 중인 사용자가 없습니다'}
+                    </Text>
+                  }
+                  renderItem={({ item: uid }) => {
+                    const { username: uname, profileImage: avatar } = resolveUserInfoForList(uid);
+                    const myId = (user || authUser)?.id;
+                    return (
+                      <View style={styles.followListRow}>
+                        <TouchableOpacity
+                          style={styles.followListUserBtn}
+                          onPress={() => {
+                            setShowFollowListModal(false);
+                            navigation.navigate('UserProfile', {
+                              userId: uid,
+                              username: uname,
+                            });
+                          }}
+                        >
+                          <View style={styles.followListAvatar}>
+                            {avatar ? (
+                              <Image source={{ uri: avatar }} style={styles.followListAvatarImg} />
+                            ) : (
+                              <Ionicons name="person" size={22} color={COLORS.textSubtle} />
+                            )}
+                          </View>
+                          <Text style={styles.followListUsername} numberOfLines={1}>
+                            {uname}
+                          </Text>
+                        </TouchableOpacity>
+                        {myId && String(uid) !== String(myId) ? (
+                          <FollowListFollowButton
+                            targetId={uid}
+                            followListType={followListType}
+                            onUnfollowFromList={() => {
+                              setFollowListIds((prev) => prev.filter((id) => String(id) !== String(uid)));
+                              refreshFollowCounts();
+                            }}
+                            onFollowChange={refreshFollowCounts}
+                          />
+                        ) : null}
+                      </View>
+                    );
+                  }}
+                />
+              </View>
+            </View>
+          </Modal>
 
           {/* 대표 뱃지 선택 모달 */}
           <Modal
@@ -1690,6 +1916,84 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: 'bold',
     color: COLORS.primary,
+  },
+  followListOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  followListBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  followListSheet: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '88%',
+    paddingHorizontal: 16,
+    paddingBottom: 24,
+    zIndex: 2,
+    elevation: 10,
+  },
+  followListScroll: {
+    maxHeight: 420,
+  },
+  followListHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  followListTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: COLORS.text,
+  },
+  followListClose: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.primary,
+  },
+  followListEmpty: {
+    textAlign: 'center',
+    color: COLORS.textSecondary,
+    fontSize: 14,
+  },
+  followListRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  followListUserBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    minWidth: 0,
+    gap: 12,
+  },
+  followListAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#e0f2f1',
+    overflow: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  followListAvatarImg: {
+    width: '100%',
+    height: '100%',
+  },
+  followListUsername: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.text,
   },
 });
 

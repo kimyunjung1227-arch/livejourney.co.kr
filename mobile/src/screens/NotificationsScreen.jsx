@@ -11,8 +11,9 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { COLORS } from '../constants/styles';
 import { getTimeAgo } from '../utils/timeUtils';
+import { useAuth } from '../contexts/AuthContext';
 import {
-  getNotifications,
+  getNotificationsForCurrentUser,
   markNotificationAsRead,
   markAllNotificationsAsRead,
   deleteNotification,
@@ -25,13 +26,14 @@ const formatWhen = (n) => {
 
 const NotificationsScreen = () => {
   const navigation = useNavigation();
+  const { user } = useAuth();
   const [filter, setFilter] = useState('all');
   const [items, setItems] = useState([]);
 
   const load = useCallback(async () => {
-    const list = await getNotifications();
+    const list = await getNotificationsForCurrentUser(user?.id);
     setItems(list);
-  }, []);
+  }, [user?.id]);
 
   useFocusEffect(
     useCallback(() => {

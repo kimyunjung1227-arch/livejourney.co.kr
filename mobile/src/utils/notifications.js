@@ -23,6 +23,20 @@ export const getNotifications = async () => {
     }
 };
 
+/** 현재 로그인 사용자에게 해당하는 알림만 (recipientUserId 필터) */
+export const getNotificationsForCurrentUser = async (currentUserId) => {
+    const all = await getNotifications();
+    if (!currentUserId) {
+        return all.filter((n) => !n.recipientUserId);
+    }
+    const uid = String(currentUserId);
+    return all.filter((n) => !n.recipientUserId || String(n.recipientUserId) === uid);
+};
+
+/**
+ * recipientUserId가 있으면 해당 사용자에게만 보이는 알림 (팔로우 수신 등).
+ * 없으면 기존처럼 전역(현재 기기의 로그인 사용자) 알림으로 취급.
+ */
 export const addNotification = async (notification) => {
     try {
         const notifications = await getNotifications();
@@ -114,13 +128,40 @@ export const notifyBadge = (badgeName, difficulty = '중') => {
     });
 };
 
+/** 상대가 나를 팔로우했을 때 — 알림 수신자(recipientUserId)는 피팔로우 유저 */
+export const notifyFollowReceived = async (followerUsername, recipientUserId) => {
+    if (!recipientUserId) return null;
+    return addNotification({
+        type: 'follow',
+        title: '👥 새로운 팔로워',
+        message: `${followerUsername}님이 회원님을 팔로우하기 시작했습니다.`,
+        recipientUserId: String(recipientUserId),
+        link: 'ProfileTab',
+    });
+};
+
+/** 내가 누군가를 팔로우했을 때 — 수신자는 나 */
+export const notifyFollowingStarted = async (targetUsername, recipientUserId) => {
+    if (!recipientUserId) return null;
+    return addNotification({
+        type: 'follow',
+        title: '👥 팔로우했어요',
+        message: `${targetUsername}님을 팔로우하기 시작했습니다.`,
+        recipientUserId: String(recipientUserId),
+        link: 'ProfileTab',
+    });
+};
+
 export default {
     getNotifications,
+    getNotificationsForCurrentUser,
     addNotification,
     markNotificationAsRead,
     markAllNotificationsAsRead,
     clearAllNotifications,
     deleteNotification,
     getUnreadCountSync,
-    notifyBadge
+    notifyBadge,
+    notifyFollowReceived,
+    notifyFollowingStarted,
 };

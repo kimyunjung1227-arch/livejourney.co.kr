@@ -42,7 +42,7 @@ const NOTIFICATION_TYPES = {
   }
 };
 
-// 알림 목록 가져오기
+// 알림 목록 가져오기 (저장소 전체)
 export const getNotifications = () => {
   try {
     const notifications = localStorage.getItem(NOTIFICATIONS_KEY);
@@ -51,6 +51,27 @@ export const getNotifications = () => {
     logger.error('알림 불러오기 실패:', error);
     return [];
   }
+};
+
+const getCurrentUserIdFromStorage = () => {
+  try {
+    const u = localStorage.getItem('user');
+    if (!u) return null;
+    const o = JSON.parse(u);
+    return o?.id ? String(o.id) : null;
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * 현재 로그인 사용자에게 보여야 할 알림만 (recipientUserId가 있으면 해당 유저만)
+ */
+export const getNotificationsForCurrentUser = () => {
+  const uid = getCurrentUserIdFromStorage();
+  const all = getNotifications();
+  if (!uid) return all.filter((n) => !n.recipientUserId);
+  return all.filter((n) => !n.recipientUserId || String(n.recipientUserId) === uid);
 };
 
 // 알림 추가
@@ -108,14 +129,15 @@ export const markNotificationAsRead = (notificationId) => {
   }
 };
 
-// 모든 알림 읽음 처리
+// 모든 알림 읽음 처리 (현재 사용자에게 보이는 항목만 읽음 처리)
 export const markAllNotificationsAsRead = () => {
   try {
-    const notifications = getNotifications();
-    const updated = notifications.map(n => ({ ...n, read: true }));
+    const all = getNotifications();
+    const visibleIds = new Set(getNotificationsForCurrentUser().map((n) => n.id));
+    const updated = all.map((n) => (visibleIds.has(n.id) ? { ...n, read: true } : n));
     localStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(updated));
 
-    // 알림 카운트 업데이트 이벤트 발생
+    window.dispatchEvent(new Event('notificationUpdate'));
     window.dispatchEvent(new Event('notificationCountChanged'));
 
     logger.log('✅ 모든 알림 읽음 처리');
@@ -143,11 +165,10 @@ export const deleteNotification = (notificationId) => {
   }
 };
 
-// 읽지 않은 알림 개수
+// 읽지 않은 알림 개수 (현재 사용자 기준)
 export const getUnreadCount = () => {
   try {
-    const notifications = getNotifications();
-    return notifications.filter(n => !n.read).length;
+    return getNotificationsForCurrentUser().filter((n) => !n.read).length;
   } catch (error) {
     logger.error('읽지 않은 알림 개수 조회 실패:', error);
     return 0;
@@ -226,13 +247,37 @@ export const notifyComment = (username, postLocation, comment) => {
   });
 };
 
-// 팔로우 알림
+/** 피팔로우 유저에게: 누군가 나를 팔로우함 */
+export const notifyFollowReceived = (followerUsername, recipientUserId) => {
+  if (!recipientUserId) return null;
+  return addNotification({
+    type: 'follow',
+    title: '👥 새로운 팔로워',
+    message: `${followerUsername}님이 회원님을 팔로우하기 시작했습니다.`,
+    recipientUserId: String(recipientUserId),
+    link: '/profile',
+  });
+};
+
+/** 팔로우한 사람에게: 내가 누군가를 팔로우함 */
+export const notifyFollowingStarted = (targetUsername, recipientUserId) => {
+  if (!recipientUserId) return null;
+  return addNotification({
+    type: 'follow',
+    title: '👥 팔로우했어요',
+    message: `${targetUsername}님을 팔로우하기 시작했습니다.`,
+    recipientUserId: String(recipientUserId),
+    link: '/profile',
+  });
+};
+
+/** @deprecated recipientUserId 없음 — 가능하면 notifyFollowReceived / notifyFollowingStarted 사용 */
 export const notifyFollow = (username) => {
   addNotification({
     type: 'follow',
     title: '👥 새로운 팔로워',
     message: `${username}님이 회원님을 팔로우하기 시작했습니다.`,
-    link: '/profile'
+    link: '/profile',
   });
 };
 
@@ -249,6 +294,7 @@ export const notifySystem = (title, message, link = null) => {
 
 export default {
   getNotifications,
+  getNotificationsForCurrentUser,
   addNotification,
   markNotificationAsRead,
   markAllNotificationsAsRead,
@@ -259,5 +305,7 @@ export default {
   notifyLike,
   notifyComment,
   notifyFollow,
-  notifySystem
+  notifyFollowReceived,
+  notifyFollowingStarted,
+  notifySystem,
 };

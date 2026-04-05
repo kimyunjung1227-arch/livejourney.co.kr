@@ -20,6 +20,9 @@ import { guessWeatherRegionKey, getWeatherByRegion } from '../utils/weatherApi';
 import { buildMediaItemsFromPost, getMapThumbnailUri } from '../utils/postMedia';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
+const LAYOUT_MAX_WIDTH = 428;
+const GRID_CONTENT_WIDTH = Math.min(SCREEN_WIDTH, LAYOUT_MAX_WIDTH);
+const POST_TILE_WIDTH = (GRID_CONTENT_WIDTH - SPACING.md * 3) / 2;
 
 const PostItem = ({ item, index, onPress }) => {
     const [isLiked, setIsLiked] = useState(false);
@@ -205,7 +208,7 @@ const RealtimeFeedScreen = () => {
                             renderItem={renderPostItem}
                             keyExtractor={(item) => item.id.toString()}
                             numColumns={2}
-                            contentContainerStyle={styles.gridContainer}
+                            contentContainerStyle={[styles.gridContainer, { alignSelf: 'center', width: GRID_CONTENT_WIDTH }]}
                             columnWrapperStyle={styles.gridRow}
                             onEndReached={loadMoreItems}
                             onEndReachedThreshold={0.5}
@@ -238,8 +241,8 @@ const styles = StyleSheet.create({
     emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: SPACING.xl, marginTop: 100 },
     emptyTitle: { fontSize: 16, color: '#6B7280', marginTop: SPACING.md },
 
-    postItem: { width: (SCREEN_WIDTH - SPACING.md * 3) / 2, marginBottom: SPACING.md },
-    postImageContainer: { width: '100%', aspectRatio: 4 / 5, borderRadius: 12, overflow: 'hidden', marginBottom: 8, backgroundColor: COLORS.borderLight, position: 'relative' },
+    postItem: { width: POST_TILE_WIDTH, marginBottom: SPACING.md },
+    postImageContainer: { width: '100%', aspectRatio: 3 / 4, borderRadius: 12, overflow: 'hidden', marginBottom: 8, backgroundColor: COLORS.borderLight, position: 'relative' },
     postImage: { width: '100%', height: '100%' },
     postImagePlaceholder: { backgroundColor: COLORS.borderLight, justifyContent: 'center', alignItems: 'center' },
     videoThumbPlaceholder: { backgroundColor: '#e8eaed', justifyContent: 'center', alignItems: 'center' },

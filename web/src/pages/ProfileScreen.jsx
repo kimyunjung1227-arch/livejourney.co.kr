@@ -5,7 +5,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import BackButton from '../components/BackButton';
 import { useAuth } from '../contexts/AuthContext';
 import BottomNavigation from '../components/BottomNavigation';
-import { getUnreadCount } from '../utils/notifications';
+import { getUnreadCount, notifyFollowReceived, notifyFollowingStarted } from '../utils/notifications';
 import { getEarnedBadgesForDisplay, getBadgeDisplayName } from '../utils/badgeSystem';
 import { getTrustScore, getTrustRawScore, getTrustGrade, TRUST_GRADES } from '../utils/trustIndex';
 import { getCoordinatesByLocation } from '../utils/regionLocationMapping';
@@ -2266,7 +2266,12 @@ const ProfileScreen = () => {
                                     setFollowListIds((prev) => prev.filter((id) => String(id) !== String(uid)));
                                   }
                                 } else {
-                                  follow(uid);
+                                  const r = follow(uid);
+                                  if (r.success) {
+                                    const me = currentUserData?.username || '여행자';
+                                    notifyFollowReceived(me, uid);
+                                    notifyFollowingStarted(username, myId);
+                                  }
                                 }
                               }}
                               className={`shrink-0 py-2 px-4 rounded-xl text-sm font-semibold transition-colors ${isFollowing(null, uid)

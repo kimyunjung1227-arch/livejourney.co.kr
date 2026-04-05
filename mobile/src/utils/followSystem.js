@@ -101,5 +101,21 @@ export const getFollowingCount = async (userId) => {
   return arr.filter((x) => String(x.followerId) === t).length;
 };
 
+/** userId를 팔로우하는 사람 ID 목록 (팔로워) */
+export const getFollowerIds = async (userId) => {
+  if (!userId) return [];
+  const t = String(userId);
+  const arr = await getRaw();
+  return [...new Set(arr.filter((x) => String(x.followingId) === t).map((x) => String(x.followerId)))];
+};
+
+/** userId가 팔로우하는 사람 ID 목록 (팔로잉) */
+export const getFollowingIds = async (userId) => {
+  if (!userId) return [];
+  const t = String(userId);
+  const arr = await getRaw();
+  return [...new Set(arr.filter((x) => String(x.followerId) === t).map((x) => String(x.followingId)))];
+};
+
 /** 현재 로그인 사용자 id (없으면 null) */
 export { getCurrentUserId };

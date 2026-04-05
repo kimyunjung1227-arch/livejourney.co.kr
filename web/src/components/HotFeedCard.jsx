@@ -118,52 +118,6 @@ const HotFeedCard = ({
                         />
                     );
                 })()}
-                {(() => {
-                    const raw = Array.isArray(post.images)
-                        ? post.images
-                        : post.images
-                            ? [post.images]
-                            : post.image
-                                ? [post.image]
-                                : post.thumbnail
-                                    ? [post.thumbnail]
-                                    : [];
-                    const thumbs = raw.map((v) => getDisplayImageUrl(v)).filter(Boolean).slice(0, 3);
-                    const showThumbs = thumbs.length > 1;
-                    if (!showThumbs) return null;
-                    return (
-                        <div
-                            style={{
-                                position: 'absolute',
-                                left: 10,
-                                bottom: 10,
-                                zIndex: 12,
-                                display: 'flex',
-                                gap: 6,
-                                padding: '6px 8px',
-                                borderRadius: 9999,
-                                background: 'rgba(15,23,42,0.38)',
-                                backdropFilter: 'blur(8px)',
-                            }}
-                        >
-                            {thumbs.map((src, i) => (
-                                <img
-                                    key={`${post.id}-thumb-${i}`}
-                                    src={src}
-                                    alt=""
-                                    style={{
-                                        width: 34,
-                                        height: 34,
-                                        borderRadius: 10,
-                                        objectFit: 'cover',
-                                        border: '1px solid rgba(255,255,255,0.55)',
-                                        boxShadow: '0 1px 5px rgba(0,0,0,0.18)',
-                                    }}
-                                />
-                            ))}
-                        </div>
-                    );
-                })()}
             </div>
             <div style={{ padding: '10px 2px 4px', background: 'transparent', border: 'none', boxShadow: 'none' }}>
                 <h4 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#111827', lineHeight: 1.3 }}>{title}</h4>

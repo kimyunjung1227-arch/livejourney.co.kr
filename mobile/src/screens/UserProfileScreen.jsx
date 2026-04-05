@@ -22,6 +22,7 @@ import { getEarnedBadgesForUser, BADGES, getBadgeDisplayName } from '../utils/ba
 import { getUserLevel } from '../utils/levelSystem';
 import { getCoordinatesByLocation } from '../utils/regionLocationMapping';
 import { follow, unfollow, isFollowing, getFollowerCount, getFollowingCount } from '../utils/followSystem';
+import { notifyFollowReceived, notifyFollowingStarted } from '../utils/notifications';
 import PostGridItem from '../components/PostGridItem';
 import { ScreenLayout, ScreenContent, ScreenHeader, ScreenBody } from '../components/ScreenLayout';
 
@@ -93,46 +94,43 @@ const UserProfileScreen = () => {
       // 해당 사용자의 정보 찾기 (게시물에서)
       const uploadedPostsJson = await AsyncStorage.getItem('uploadedPosts');
       const uploadedPosts = uploadedPostsJson ? JSON.parse(uploadedPostsJson) : [];
-      
-      // userId 매칭 (여러 형태 지원)
-      const userPost = uploadedPosts.find(p => {
-        const postUserId = p.userId || 
-                          (typeof p.user === 'string' ? p.user : p.user?.id) ||
-                          p.user;
-        return postUserId === userId;
+
+      const postsOfUser = uploadedPosts.filter((p) => {
+        const postUserId =
+          p.userId ||
+          (typeof p.user === 'string' ? p.user : p.user?.id) ||
+          p.user;
+        return String(postUserId) === String(userId);
       });
-      
-      // 사진 상세화면에서 넘어온 사용자 이름이 있다면,
-      // 그 이름을 최우선으로 사용해서 프로필 화면에서도 항상 동일하게 보여준다.
-      if (passedUsername) {
-        setUser({
-          id: userId,
-          username: passedUsername,
-          profileImage: null,
-        });
-      } else if (userPost) {
+
+      const pickProfileImageFromPosts = (posts) => {
+        for (const p of posts) {
+          if (p.userAvatar) return p.userAvatar;
+          if (p.user && typeof p.user === 'object' && p.user.profileImage) return p.user.profileImage;
+        }
+        return null;
+      };
+
+      const avatarFromPosts = pickProfileImageFromPosts(postsOfUser);
+      const userPost = postsOfUser[0];
+
+      let resolvedUsername = passedUsername || '사용자';
+      if (!passedUsername && userPost) {
         const postUserId =
           userPost.userId ||
           (typeof userPost.user === 'string' ? userPost.user : userPost.user?.id) ||
           userPost.user;
-        const resolvedUsername =
+        resolvedUsername =
           (typeof userPost.user === 'string' ? userPost.user : userPost.user?.username) ||
           postUserId ||
           '사용자';
-        const foundUser = {
-          id: userId,
-          username: resolvedUsername,
-          profileImage: null,
-        };
-        setUser(foundUser);
-      } else {
-        // 사용자 정보를 찾을 수 없으면 기본값
-        setUser({
-          id: userId,
-          username: '사용자',
-          profileImage: null,
-        });
       }
+
+      setUser({
+        id: userId,
+        username: resolvedUsername,
+        profileImage: avatarFromPosts,
+      });
 
       // 24시간 타이틀 로드
       const title = await getUserDailyTitle(userId);
@@ -195,13 +193,8 @@ const UserProfileScreen = () => {
       
       setEarnedBadges(badges || []);
 
-      // 해당 사용자의 게시물 로드 (여러 형태 지원)
-      const posts = uploadedPosts.filter(post => {
-        const postUserId = post.userId || 
-                          (typeof post.user === 'string' ? post.user : post.user?.id) ||
-                          post.user;
-        return postUserId === userId;
-      });
+      // 해당 사용자의 게시물 (위에서 필터한 목록과 동일)
+      const posts = postsOfUser;
       setUserPosts(posts);
 
       // 사용 가능한 날짜 목록 (최신순) - 사진/동영상이 있는 게시물이 있는 날만 표시
@@ -400,9 +393,16 @@ const UserProfileScreen = () => {
                         setIsFollow(false);
                         setFollowerCount((c) => Math.max(0, c - 1));
                       } else {
-                        await follow(userId);
-                        setIsFollow(true);
-                        setFollowerCount((c) => c + 1);
+                        const r = await follow(userId);
+                        if (r.success) {
+                          setIsFollow(true);
+                          setFollowerCount((c) => c + 1);
+                          const myLabel =
+                            currentUser?.username || currentUser?.name || '여행자';
+                          const theirName = user?.username || '사용자';
+                          await notifyFollowReceived(myLabel, userId);
+                          await notifyFollowingStarted(theirName, currentUser.id);
+                        }
                       }
                       setFollowLoading(false);
                     }}

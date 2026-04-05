@@ -30,6 +30,7 @@ import { BADGES, getEarnedBadgesForUser } from '../utils/badgeSystem';
 import { getUserLevel } from '../utils/levelSystem';
 import { useAuth } from '../contexts/AuthContext';
 import { follow, unfollow, isFollowing } from '../utils/followSystem';
+import { notifyFollowReceived, notifyFollowingStarted } from '../utils/notifications';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -521,7 +522,7 @@ const PostDetailScreen = () => {
   useEffect(() => {
     const checkFollowStatus = async () => {
       if (postAuthorId && user?.id && postAuthorId !== user.id) {
-        const following = await isFollowing(user.id, postAuthorId);
+        const following = await isFollowing(null, postAuthorId);
         setIsFollowAuthor(following);
       }
     };
@@ -820,11 +821,17 @@ const PostDetailScreen = () => {
                     ]}
                     onPress={async () => {
                       if (isFollowAuthor) {
-                        await unfollow(user.id, postAuthorId);
+                        await unfollow(postAuthorId);
                         setIsFollowAuthor(false);
                       } else {
-                        await follow(user.id, postAuthorId);
-                        setIsFollowAuthor(true);
+                        const r = await follow(postAuthorId);
+                        if (r.success) {
+                          setIsFollowAuthor(true);
+                          const myLabel =
+                            user?.username || user?.name || '여행자';
+                          await notifyFollowReceived(myLabel, postAuthorId);
+                          await notifyFollowingStarted(userName, user.id);
+                        }
                       }
                     }}
                     activeOpacity={0.7}

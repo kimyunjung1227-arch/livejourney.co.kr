@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 import BottomNavigation from '../components/BottomNavigation';
-import { getNotifications, markAllNotificationsAsRead, markNotificationAsRead, deleteNotification } from '../utils/notifications';
+import { getNotificationsForCurrentUser, markAllNotificationsAsRead, markNotificationAsRead, deleteNotification } from '../utils/notifications';
 
 // 간단한 알림 아이콘 컴포넌트
 const NotificationIcon = ({ type }) => {
@@ -17,15 +18,15 @@ const NotificationIcon = ({ type }) => {
 
 const NotificationsScreen = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [filter, setFilter] = useState('all'); // 'all', 'interest'
   const [showMarkAllReadModal, setShowMarkAllReadModal] = useState(false);
   const [allNotifications, setAllNotifications] = useState([]);
 
-  // 알림 불러오기
+  // 알림 불러오기 (로그인 사용자 기준 필터)
   useEffect(() => {
     loadNotifications();
 
-    // 알림 변경 이벤트 리스너
     const handleNotificationUpdate = () => {
       loadNotifications();
     };
@@ -35,11 +36,10 @@ const NotificationsScreen = () => {
     return () => {
       window.removeEventListener('notificationUpdate', handleNotificationUpdate);
     };
-  }, []);
+  }, [user?.id]);
 
   const loadNotifications = () => {
-    const notifications = getNotifications();
-    setAllNotifications(notifications);
+    setAllNotifications(getNotificationsForCurrentUser());
   };
 
   // 필터링된 알림

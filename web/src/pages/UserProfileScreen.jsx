@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { getEarnedBadgesForUser, BADGES, getBadgeDisplayName } from '../utils/badgeSystem';
 import { getCoordinatesByLocation } from '../utils/regionLocationMapping';
 import { follow, unfollow, isFollowing, getFollowerCount, getFollowingCount } from '../utils/followSystem';
+import { notifyFollowReceived, notifyFollowingStarted } from '../utils/notifications';
 import { logger } from '../utils/logger';
 import { getDisplayImageUrl } from '../api/upload';
 import { getPosts } from '../api/posts';
@@ -489,9 +490,15 @@ const UserProfileScreen = () => {
                           setIsFollow(false);
                           setFollowerCount((c) => Math.max(0, c - 1));
                         } else {
-                          follow(userId);
-                          setIsFollow(true);
-                          setFollowerCount((c) => c + 1);
+                          const r = follow(userId);
+                          if (r.success) {
+                            setIsFollow(true);
+                            setFollowerCount((c) => c + 1);
+                            const myName = currentUser?.username || '여행자';
+                            const theirName = user?.username || '사용자';
+                            notifyFollowReceived(myName, userId);
+                            notifyFollowingStarted(theirName, currentUser.id);
+                          }
                         }
                         setFollowLoading(false);
                       }}

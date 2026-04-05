@@ -13,6 +13,7 @@ import { toggleInterestPlace, isInterestPlace } from '../utils/interestPlaces';
 import { getEarnedBadgesForUser } from '../utils/badgeSystem';
 import { getTrustRawScore, getTrustGrade } from '../utils/trustIndex';
 import { follow, unfollow, isFollowing } from '../utils/followSystem';
+import { notifyFollowReceived, notifyFollowingStarted } from '../utils/notifications';
 import { recordConversion, CONVERSION_TYPES } from '../utils/conversionEvents';
 import { logger } from '../utils/logger';
 import { buildMediaItemsFromPost } from '../utils/postMedia';
@@ -1141,8 +1142,13 @@ const PostDetailScreen = () => {
                           unfollow(postUserId);
                           setIsFollowAuthor(false);
                         } else {
-                          follow(postUserId);
-                          setIsFollowAuthor(true);
+                          const r = follow(postUserId);
+                          if (r.success) {
+                            setIsFollowAuthor(true);
+                            const myName = user?.username || '여행자';
+                            notifyFollowReceived(myName, postUserId);
+                            notifyFollowingStarted(userName, user.id);
+                          }
                         }
                       }}
                       className={`shrink-0 py-1.5 px-3 rounded-xl text-xs font-semibold ${
