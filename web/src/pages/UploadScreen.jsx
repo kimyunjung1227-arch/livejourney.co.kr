@@ -248,6 +248,19 @@ const UploadScreen = () => {
     };
   }, [editingPostId, navigate]);
 
+  // 신규 업로드 진입 시: 가이드를 먼저 보고 업로드하도록 유도 (편집 화면은 제외)
+  useEffect(() => {
+    if (editingPostId) return;
+    if (location?.state?.fromUploadGuide) return;
+    try {
+      const seen = sessionStorage.getItem('uploadGuideConfirmedThisSession');
+      if (seen === '1') return;
+      navigate('/upload/guide', { replace: true, state: { returnTo: '/upload' } });
+    } catch (_) {
+      navigate('/upload/guide', { replace: true, state: { returnTo: '/upload' } });
+    }
+  }, [editingPostId, location?.state, navigate]);
+
   // 업로드 가이드는 한 번 보고 나면 5번 업로드 동안은 다시 나오지 않도록 제어
   useEffect(() => {
     try {

@@ -1,8 +1,10 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 const UploadGuideScreen = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const returnTo = location?.state?.returnTo || '/upload';
 
   return (
     <div className="screen-layout bg-background-light dark:bg-background-dark min-h-screen flex flex-col">
@@ -101,6 +103,28 @@ const UploadGuideScreen = () => {
                   </li>
                 </ul>
               </section>
+            </div>
+
+            <div className="mt-6 px-1">
+              <button
+                type="button"
+                onClick={() => {
+                  try {
+                    sessionStorage.setItem('uploadGuideConfirmedThisSession', '1');
+                  } catch (_) {}
+                  navigate(returnTo, { replace: true, state: { fromUploadGuide: true } });
+                }}
+                className="w-full rounded-xl bg-primary px-4 py-3 text-sm font-bold text-white hover:bg-primary-dark transition-colors"
+              >
+                가이드 확인하고 업로드하기
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate(-1)}
+                className="mt-2 w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800 transition-colors"
+              >
+                나중에 할게요
+              </button>
             </div>
           </div>
         </div>
