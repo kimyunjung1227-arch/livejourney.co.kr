@@ -69,6 +69,23 @@ const UploadScreen = () => {
 
   const normalizeTag = (tag) => (tag || '').replace('#', '').trim();
 
+  // "#태그1 #태그2" / "#태그1#태그2" / "태그1, 태그2" 등 입력을 개별 태그로 분리
+  const parseTagsFromInput = (text) => {
+    const raw = String(text || '').trim();
+    if (!raw) return [];
+
+    // #로 시작하는 토큰이 하나라도 있으면 해시태그 패턴을 우선 사용
+    const hashMatches = raw.match(/#[^\s#]+/g);
+    if (hashMatches && hashMatches.length > 0) {
+      return hashMatches.map((t) => normalizeTag(t)).filter(Boolean);
+    }
+
+    return raw
+      .split(/[\s,]+/g)
+      .map((t) => normalizeTag(t))
+      .filter(Boolean);
+  };
+
   const dedupeHashtags = (tags) => {
     const map = new Map();
     (tags || []).forEach((tag) => {
@@ -193,11 +210,13 @@ const UploadScreen = () => {
       const loc = typeof locRaw === 'string' ? locRaw : locRaw?.name || '';
       const note = post.note || post.content || '';
       const tagList = Array.isArray(post.tags) ? post.tags : [];
-      const tagsNormalized = tagList.map((t) => {
-        const s = typeof t === 'string' ? t : String(t?.name ?? t?.label ?? '');
-        const c = s.replace(/^#+/, '').trim();
-        return c ? `#${c}` : '';
-      }).filter(Boolean);
+      const tagsNormalized = dedupeHashtags(
+        tagList.flatMap((t) => {
+          const s = typeof t === 'string' ? t : String(t?.name ?? t?.label ?? '');
+          const parsed = parseTagsFromInput(s);
+          return parsed.map((p) => `#${p}`);
+        })
+      );
 
       setFormData((prev) => ({
         ...prev,
@@ -657,20 +676,19 @@ const UploadScreen = () => {
   }, [handleImageSelect]);
 
   const addTag = useCallback(() => {
-    const cleaned = normalizeTag(tagInput);
-    if (!cleaned) return;
+    const parsed = parseTagsFromInput(tagInput);
+    if (!parsed.length) return;
 
-    const exists = formData.tags.some(tag => {
-      return normalizeTag(tag).toLowerCase() === cleaned.toLowerCase();
-    });
+    const next = dedupeHashtags([
+      ...(formData.tags || []),
+      ...parsed.map((t) => `#${t}`),
+    ]);
 
-    if (!exists) {
-      setFormData(prev => ({
-        ...prev,
-        tags: [...prev.tags, `#${cleaned}`]
-      }));
-      setTagInput('');
-    }
+    setFormData((prev) => ({
+      ...prev,
+      tags: next,
+    }));
+    setTagInput('');
   }, [tagInput, formData.tags]);
 
   const removeTag = useCallback((tag) => {
