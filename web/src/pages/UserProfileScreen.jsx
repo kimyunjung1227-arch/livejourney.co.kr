@@ -46,6 +46,29 @@ const UserProfileScreen = () => {
   const mapRef = useRef(null);
   const mapInstance = useRef(null);
   const markersRef = useRef([]);
+  const [geoCoordsByKey, setGeoCoordsByKey] = useState({});
+
+  const getPostCoords = useCallback((post) => {
+    if (!post) return null;
+    const c = post.coordinates;
+    if (c && (c.lat != null || c.latitude != null) && (c.lng != null || c.longitude != null)) {
+      return { lat: Number(c.lat ?? c.latitude), lng: Number(c.lng ?? c.longitude) };
+    }
+    const locObj = post.location;
+    if (locObj && typeof locObj === 'object' && (locObj.lat != null || locObj.lon != null)) {
+      const lat = locObj.lat ?? locObj.latitude;
+      const lng = locObj.lng ?? locObj.lon ?? locObj.longitude;
+      if (lat != null && lng != null) return { lat: Number(lat), lng: Number(lng) };
+    }
+    const name = post.detailedLocation || (typeof post.location === 'string' ? post.location : null) || post.placeName;
+    const mapped = name ? getCoordinatesByLocation(name) : null;
+    if (mapped) return mapped;
+    if (name) {
+      const cached = geoCoordsByKey[String(name)];
+      if (cached && cached.lat != null && cached.lng != null) return cached;
+    }
+    return null;
+  }, [geoCoordsByKey]);
 
   useEffect(() => {
     if (!userId) {
@@ -320,10 +343,49 @@ const UserProfileScreen = () => {
   // 지도에 표시할 수 있는 게시물 (filteredUserPosts 중 coordinates 또는 지역명으로 좌표 추출 가능)
   const postsForMap = React.useMemo(() => {
     return filteredUserPosts.filter(post => {
-      const coords = post.coordinates || getCoordinatesByLocation(post.detailedLocation || post.location);
+      const coords = getPostCoords(post);
       return coords && coords.lat != null && coords.lng != null;
     });
-  }, [filteredUserPosts]);
+  }, [filteredUserPosts, getPostCoords]);
+
+  // 좌표가 없는 게시물은 카카오 지오코딩으로 좌표 보강 (캐시)
+  useEffect(() => {
+    const missing = filteredUserPosts
+      .map((p) => {
+        const key = p?.detailedLocation || (typeof p?.location === 'string' ? p.location : null) || p?.placeName || '';
+        return { post: p, key: String(key).trim() };
+      })
+      .filter(({ post, key }) => post && key && !getPostCoords(post));
+
+    if (missing.length === 0) return;
+    if (!window.kakao || !window.kakao.maps || !window.kakao.maps.services) return;
+
+    const geocoder = new window.kakao.maps.services.Geocoder();
+    let cancelled = false;
+
+    const run = async () => {
+      for (const { key } of missing.slice(0, 12)) {
+        if (cancelled) return;
+        if (geoCoordsByKey[key]) continue;
+
+        await new Promise((resolve) => {
+          geocoder.addressSearch(key, (result, status) => {
+            if (cancelled) return resolve();
+            if (status === window.kakao.maps.services.Status.OK && result && result[0]) {
+              const lat = Number(result[0].y);
+              const lng = Number(result[0].x);
+              if (!Number.isNaN(lat) && !Number.isNaN(lng)) {
+                setGeoCoordsByKey((prev) => ({ ...prev, [key]: { lat, lng } }));
+              }
+            }
+            resolve();
+          });
+        });
+      }
+    };
+    run();
+    return () => { cancelled = true; };
+  }, [filteredUserPosts, getPostCoords, geoCoordsByKey]);
 
   // 여행 지도 초기화 (다른 사용자 프로필에서 해당 사용자의 여행 경로 표시)
   const initTravelMap = useCallback(() => {
@@ -355,7 +417,7 @@ const UserProfileScreen = () => {
 
       let centerLat = 37.5665, centerLng = 126.9780, level = 6;
       const first = postsForMap[0];
-      const firstCoords = first.coordinates || getCoordinatesByLocation(first.detailedLocation || first.location);
+      const firstCoords = getPostCoords(first);
       if (firstCoords) {
         centerLat = firstCoords.lat;
         centerLng = firstCoords.lng;
@@ -384,7 +446,7 @@ const UserProfileScreen = () => {
       );
 
       sorted.forEach((post, index) => {
-        const coords = post.coordinates || getCoordinatesByLocation(post.detailedLocation || post.location);
+        const coords = getPostCoords(post);
         if (!coords) return;
         const position = new window.kakao.maps.LatLng(coords.lat, coords.lng);
         pathCoordinates.push(position);
@@ -437,7 +499,7 @@ const UserProfileScreen = () => {
     } finally {
       setMapLoading(false);
     }
-  }, [postsForMap, filteredUserPosts]);
+  }, [postsForMap, filteredUserPosts, getPostCoords]);
 
   useEffect(() => {
     if (postsForMap.length > 0) {
