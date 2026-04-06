@@ -29,6 +29,8 @@ export const createPostSupabase = async (post) => {
       detailed_location: post.detailedLocation || null,
       place_name: post.placeName || null,
       region: post.region || null,
+      // 업로드 시점 날씨(고정) — jsonb 컬럼 가정
+      weather: post.weatherSnapshot || post.weather || null,
       tags: Array.isArray(post.tags)
         ? post.tags.map((t) => (typeof t === 'string' ? t.replace(/^#+/, '') : String(t || '')))
         : [],
@@ -105,6 +107,8 @@ export const updatePostSupabase = async (postId, updates) => {
     if (updates.detailed_location !== undefined) payload.detailed_location = updates.detailed_location;
     if (updates.place_name !== undefined) payload.place_name = updates.place_name;
     if (updates.region !== undefined) payload.region = updates.region;
+    // 업로드 시점 날씨(고정) 갱신 허용
+    if (updates.weather !== undefined) payload.weather = updates.weather;
     if (Array.isArray(updates.tags)) payload.tags = updates.tags.map((t) => (typeof t === 'string' ? t.replace(/^#+/, '') : String(t || '')));
     if (Array.isArray(updates.images)) payload.images = onlyPersistentUrls(updates.images);
     if (Array.isArray(updates.videos)) payload.videos = onlyPersistentUrls(updates.videos);
