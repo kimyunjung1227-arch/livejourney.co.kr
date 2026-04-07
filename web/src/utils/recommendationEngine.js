@@ -272,23 +272,23 @@ export const getRecommendedRegions = (posts, recommendationType = 'blooming') =>
     const t = stat.lastPostTimeAgoLabel || '방금';
     if (typeId === 'season_peak') {
       const n = extra?.season3h ?? 0;
-      return `검색해 보면 다 예쁘다는데, 진짜 지금 절정은 여기래! · ${t} · 최근 3시간 ${n}개`;
+      return `지금이 절정인 곳만 골랐어요. ${t} 갱신 — 3시간 내 피크 신호 ${n}건`;
     }
     if (typeId === 'silent_healing') {
       const n = extra?.silent3h ?? 0;
-      return `주말인데 여기는 왜 조용하지? 지금 가기 딱 좋은 쉼표 스팟 · ${t} · 최근 3시간 ${n}개`;
+      return `“오늘은 조용하게.” 한적함 제보가 쌓인 쉼표 스팟 (${t}) · 조용 신호 ${n}`;
     }
     if (typeId === 'deep_sea_blue') {
       const n = extra?.sea3h ?? 0;
-      return `바다 보고 힐링하고 싶을 때, 지금 물색이 예쁜 곳 · ${t} · 최근 3시간 ${n}개`;
+      return `파도/윤슬 감성 당기면 여기. ${t} 올라온 바다 무드 ${n}개`;
     }
     if (typeId === 'lively_vibe') {
       const n = extra?.recent1h ?? 0;
-      return `지금 여기 분위기 최고! 사람들 에너지가 느껴지는 핫플 · ${t} · 최근 1시간 ${n}개`;
+      return `지금 제일 “핫”한 공기. 1시간 업로드 ${n}개 · ${t}`;
     }
     if (typeId === 'easy_walking') {
       const n = extra?.easy3h ?? 0;
-      return `아이/반려견과 가도 괜찮을까? 지금 현장 인증 스팟 · ${t} · 최근 3시간 ${n}개`;
+      return `아이/반려견 동반 OK 느낌 나는 곳 위주로. ${t} · 동반 신호 ${n}`;
     }
     return `${t} 새 소식`;
   };
