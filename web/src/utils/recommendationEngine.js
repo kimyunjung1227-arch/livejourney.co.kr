@@ -103,31 +103,56 @@ const matchesAny = (text, keywords) => {
   return (keywords || []).some((kw) => t.includes(normalizeText(kw)));
 };
 
-// 테마 추적용 대표 태그(업로드 AI 자동태그에 섞어 넣는 대상)
-const THEME_TAGS = {
-  season_peak: ['지금이절정', '절정', '만개', '개화', '단풍', '설경'],
-  silent_healing: ['한적한아지트', '한적', '조용한', '여유로운', '힐링'],
-  deep_sea_blue: ['딥씨블루', '바다', '윤슬', '물멍', '푸른바다', '청량'],
-  lively_vibe: ['힙활기', '힙한', '활기찬', '핫플', '북적', '인생샷'],
-};
+// 테마 자체가 태그로 노출되는 것은 제거하고,
+// 사용자 입력/AI 태그(테마 외) → 신호 태그 → 테마로 매핑합니다.
+const THEME_TAG_BLOCKLIST = new Set([
+  '지금이절정',
+  '한적한아지트',
+  '딥씨블루',
+  '힙활기',
+  '안심나들이',
+].map((t) => normalizeText(t)));
 
-const getPostTagTokens = (post) => {
-  const raw = [
+const getPostSignalTokens = (post) => {
+  const tags = [
     ...(Array.isArray(post?.tags) ? post.tags : []),
     ...(Array.isArray(post?.aiLabels) ? post.aiLabels : []),
-    ...(Array.isArray(post?.aiCategories) ? post.aiCategories : []),
   ]
-    .map((x) => (typeof x === 'string' ? x : (x?.name || x?.label || x?.category || '')))
+    .map((x) => (typeof x === 'string' ? x : (x?.name || x?.label || '')))
     .filter(Boolean)
     .map((s) => normalizeText(String(s).replace(/^#+/, '')));
-  return raw;
+
+  return tags.filter((t) => t && !THEME_TAG_BLOCKLIST.has(t));
 };
 
-const hasAnyThemeTag = (post, themeId) => {
-  const tokens = getPostTagTokens(post);
-  const targets = (THEME_TAGS[themeId] || []).map((t) => normalizeText(t));
-  if (targets.length === 0) return false;
-  return tokens.some((tok) => targets.some((t) => tok === t || tok.includes(t) || t.includes(tok)));
+const THEME_SIGNALS = {
+  season_peak: ['만개', '개화', '벚꽃', '단풍', '설경', '절정', '윤슬', '일출', '일몰', '풍경', '전망', '경치'],
+  silent_healing: ['한적', '조용', '여유', '고즈넉', '힐링', '산책', '쉼', '쉼표', '책', '웨이팅없', '줄없'],
+  deep_sea_blue: ['바다', '해변', '파도', '윤슬', '물멍', '에메랄드', '푸른', '파란', '청량', '맑은하늘'],
+  lively_vibe: ['힙', '핫플', '북적', '활기', '인생샷', '축제', '공연', '버스킹', '팝업', '웨이팅', '대기'],
+  easy_walking: ['아이', '키즈', '유모차', '가족', '반려', '반려견', '강아지', '펫', '주차', '잔디', '놀이터'],
+};
+
+const inferThemeScoreForPost = (post) => {
+  const text = getPostTextBlob(post);
+  const tokens = getPostSignalTokens(post);
+  const blob = `${text} ${tokens.join(' ')}`;
+
+  const scoreBy = {};
+  Object.keys(THEME_SIGNALS).forEach((themeId) => {
+    const signals = THEME_SIGNALS[themeId] || [];
+    let s = 0;
+    signals.forEach((kw) => {
+      const k = normalizeText(kw);
+      if (!k) return;
+      if (blob.includes(k)) s += 1;
+    });
+    // 카테고리 가중치 (기본 데이터 품질 보정)
+    if (themeId === 'season_peak' && (hasCategory(post, 'bloom') || hasCategory(post, 'scenic') || hasCategory(post, 'landmark'))) s += 1;
+    if (themeId === 'deep_sea_blue' && hasCategory(post, 'scenic')) s += 0.5;
+    scoreBy[themeId] = s;
+  });
+  return scoreBy;
 };
 
 const KEYWORDS = {
@@ -249,24 +274,25 @@ export const getRecommendedRegions = (posts, recommendationType = 'blooming') =>
     const recent24h = filterRecentPosts(postsForRegion, 1, 24);
 
     const seasonPred = (p) => {
-      const t = getPostTextBlob(p);
-      const scenicLike = hasCategory(p, 'scenic') || hasCategory(p, 'landmark') || hasCategory(p, 'bloom');
-      return (hasAnyThemeTag(p, 'season_peak') || (scenicLike && matchesAny(t, KEYWORDS.seasonPeak)));
+      const scores = inferThemeScoreForPost(p);
+      return (scores.season_peak || 0) >= 2;
     };
     const silentPred = (p) => {
-      const t = getPostTextBlob(p);
-      const hasQuiet = matchesAny(t, KEYWORDS.silentHealing);
-      const hasWaiting = matchesAny(t, ['웨이팅', '대기', '줄', 'queue', 'waiting']) || hasCategory(p, 'waiting');
-      const tagged = hasAnyThemeTag(p, 'silent_healing');
-      return (tagged || hasQuiet) && !hasWaiting;
+      const scores = inferThemeScoreForPost(p);
+      const hasWaiting = matchesAny(getPostTextBlob(p), ['웨이팅', '대기', '줄', 'queue', 'waiting']) || hasCategory(p, 'waiting');
+      return (scores.silent_healing || 0) >= 2 && !hasWaiting;
     };
     const seaPred = (p) => {
-      const t = getPostTextBlob(p);
-      return hasAnyThemeTag(p, 'deep_sea_blue') || matchesAny(t, KEYWORDS.deepSeaBlue) || isCoastal;
+      const scores = inferThemeScoreForPost(p);
+      return (scores.deep_sea_blue || 0) >= 2 || isCoastal;
     };
     const livelyPred = (p) => {
-      const t = getPostTextBlob(p);
-      return hasAnyThemeTag(p, 'lively_vibe') || matchesAny(t, KEYWORDS.livelyVibe);
+      const scores = inferThemeScoreForPost(p);
+      return (scores.lively_vibe || 0) >= 2;
+    };
+    const easyPred = (p) => {
+      const scores = inferThemeScoreForPost(p);
+      return (scores.easy_walking || 0) >= 2;
     };
 
     const count = (arr, pred) => (Array.isArray(arr) ? arr.filter((x) => pred(x)).length : 0);
@@ -279,6 +305,8 @@ export const getRecommendedRegions = (posts, recommendationType = 'blooming') =>
     const sea24h = count(recent24h, seaPred);
     const lively1h = count(recent1h, livelyPred);
     const lively3h = count(recent3h, livelyPred);
+    const easy3h = count(recent3h, easyPred);
+    const easy24h = count(recent24h, easyPred);
 
     const avgLikes = postsForRegion.reduce((s, p) => s + (p?.likes || 0), 0) / Math.max(1, postsForRegion.length);
 
@@ -310,49 +338,79 @@ export const getRecommendedRegions = (posts, recommendationType = 'blooming') =>
       const score = recent1h.length * 8 + lively1h * 4 + lively3h * 2 + vividBoost * 6 + avgLikes * 0.45;
       return { score, extra: { recent1h: recent1h.length, lively1h } };
     }
+    if (type === 'easy_walking') {
+      const score = easy3h * 9 + easy24h * 3 + avgLikes * 0.2;
+      return { score, extra: { easy3h, easy24h } };
+    }
     const score = recent1h.length * 6 + recent3h.length * 3 + avgLikes * 0.3;
     return { score, extra: { recent1h: recent1h.length } };
   };
 
   const buildEdgePointScript = (typeId, regionKey, extra) => {
-    const n3 = extra?.season3h ?? extra?.silent3h ?? extra?.sea3h ?? 0;
-    const n1 = extra?.recent1h ?? 0;
     if (typeId === 'season_peak') {
-      return `남들 다 아는 곳 말고, 지금 막 ‘절정’ 찍은 ${regionKey}를 확인하세요. (3시간 피크 신호 ${n3})`;
+      return '놓치면 일 년을 기다려야 할, 찰나의 풍경';
     }
     if (typeId === 'silent_healing') {
-      return `지금 ${regionKey}은 멈춰있어요. 당신의 휴식을 위해 가장 조용한 흐름을 골랐습니다. (조용 신호 ${n3})`;
+      return '북적임 대신 바람 소리만 들리는, 잠시 멈춘 동네';
     }
     if (typeId === 'deep_sea_blue') {
-      return `흐려도 괜찮아요. 지금 ${regionKey}의 ‘물색’이 예쁘다는 제보가 모였어요. (바다 무드 ${n3})`;
+      return '가슴 뻥 뚫리는 파도 소리, 에메랄드빛 파란 맛';
     }
     if (typeId === 'lively_vibe') {
-      return `지금 제일 힙한 공기, ${regionKey}. 방금 올라온 열기가 쌓이는 중! (1시간 업로드 ${n1})`;
+      return '유행의 중심에서 즐기는, 기분 좋은 에너지';
+    }
+    if (typeId === 'easy_walking') {
+      return '아이와 댕댕이가 마음껏 뛰노는, 걱정 없는 주말';
     }
     return `${regionKey}의 최신 제보를 모았어요.`;
   };
 
   const buildStatusBadges = (typeId, stat, extra) => {
-    const postsForRegion = stat.regionPosts || [];
-    const blobAll = postsForRegion.map((p) => getPostTextBlob(p)).join(' ');
-    const quietSignals = (extra?.silent3h ?? 0) + (extra?.silent24h ?? 0);
-    const waitingSignals = matchesAny(blobAll, ['웨이팅', '대기', '줄', '북적']) ? 1 : 0;
-    const quietPct = Math.max(0, Math.min(95, 80 + quietSignals * 4 - waitingSignals * 12));
+    const postsForRegion = Array.isArray(stat.regionPosts) ? stat.regionPosts : [];
+    const recent = Array.isArray(stat.recent3hPosts) ? stat.recent3hPosts : postsForRegion;
+    const blobAll = recent.map((p) => getPostTextBlob(p)).join(' ');
 
-    const bloomSignals = (extra?.season3h ?? 0) + (extra?.season24h ?? 0);
-    const seaSignals = (extra?.sea3h ?? 0) + (extra?.sea24h ?? 0);
+    const countKw = (kwList) => kwList.reduce((s, kw) => s + (blobAll.includes(normalizeText(kw)) ? 1 : 0), 0);
+    const totalSignals = Math.max(1, recent.length);
+
+    // 사용자 입력(노트/내용/태그) 기반 비율 산출
+    const waitingHits = countKw(['웨이팅', '대기', '줄', 'queue', 'waiting']);
+    const quietHits = countKw(['한적', '조용', '여유', '고즈넉', '힐링', '쉼']);
+    const seasonHits = countKw(['만개', '개화', '벚꽃', '단풍', '설경', '눈', '절정']);
+    const seaHits = countKw(['바다', '해변', '파도', '윤슬', '물멍', '에메랄드', '청량']);
+    const parkingHits = countKw(['주차', '주차장', '주차편']);
+    const kidPetHits = countKw(['아이', '키즈', '유모차', '반려', '반려견', '강아지', '펫', '잔디', '놀이터']);
+    const popupHits = countKw(['팝업', '버스킹', '공연', '축제', '이벤트']);
+
+    const quietPct = Math.max(0, Math.min(95, Math.round(70 + (quietHits / (quietHits + waitingHits + 1)) * 30)));
 
     const out = [];
-    if (typeId === 'silent_healing') out.push(`● 한적함 ${quietPct}%`);
-    if (typeId === 'season_peak' && bloomSignals > 0) out.push('● 만개/절정');
-    if (typeId === 'deep_sea_blue' && seaSignals > 0) out.push('● 바다 무드');
-    if (typeId === 'lively_vibe') out.push('● 분위기 UP');
+    if (quietHits > 0 && waitingHits === 0) out.push(`● 한적함 ${quietPct}%`);
+    if (waitingHits > 0) out.push('● 웨이팅 있음');
+    if (seasonHits > 0) out.push('● 절정/만개');
+    if (seaHits > 0) out.push('● 바다 무드');
+    if (kidPetHits > 0) out.push('● 아이/반려 동반');
+    if (parkingHits > 0) out.push('● 주차 정보');
+    if (popupHits > 0) out.push('● 이벤트/공연');
 
-    // 공통 보조(간단)
-    if (matchesAny(blobAll, ['주차', '주차장', '주차편'])) out.push('● 주차 원활');
-    if (matchesAny(blobAll, ['비', '우천', '비옴', '비와'])) out.push('● 비 소식');
-    if (out.length === 0) out.push('● 최신 제보');
-    return out.slice(0, 3);
+    // 테마에 따라 우선순위 조정
+    const prefer = {
+      season_peak: ['● 절정/만개', '● 주차 정보', '● 이벤트/공연'],
+      silent_healing: [`● 한적함 ${quietPct}%`, '● 주차 정보', '● 바다 무드'],
+      deep_sea_blue: ['● 바다 무드', '● 주차 정보', '● 한적함'],
+      lively_vibe: ['● 이벤트/공연', '● 웨이팅 있음', '● 주차 정보'],
+      easy_walking: ['● 아이/반려 동반', '● 주차 정보', '● 한적함'],
+    };
+
+    const order = prefer[typeId] || [];
+    const sorted = [
+      ...order.filter((x) => out.some((v) => v.startsWith(x.replace(/\s*\d+%/, '').trim())) || out.includes(x)),
+      ...out.filter((x) => !order.some((o) => x.startsWith(o.replace(/\s*\d+%/, '').trim()) || x === o)),
+    ];
+
+    const uniq = [];
+    sorted.forEach((b) => { if (b && !uniq.includes(b)) uniq.push(b); });
+    return uniq.slice(0, 3);
   };
 
   const pickLiveImage = (stat) => {
@@ -374,11 +432,10 @@ export const getRecommendedRegions = (posts, recommendationType = 'blooming') =>
       typeId === 'deep_sea_blue' ? '바다 무드' :
       typeId === 'lively_vibe' ? '힙한 분위기' :
       '최신성';
-    // "1일 전후로 ..." 같은 문구는 제거 (오래된 정보 느낌 제거)
-    const omitTime = /\d+\s*일\s*전/.test(String(t || ''));
-    const proofSummary = omitTime
-      ? `${proofCount}명의 여행자가 ‘${vibeWord}’을(를) 인증했어요.`
-      : `${t} 전후 ${proofCount}명의 여행자가 ‘${vibeWord}’을(를) 인증했어요.`;
+    if (proofCount <= 0) return { proofSummary: '', timelineThumbs: [] };
+
+    // 시간문장(“~ 전후로”, “1일 전후…”) 제거: 숫자만 남김
+    const proofSummary = `${proofCount}명이 ‘${vibeWord}’을 인증했어요.`;
 
     const thumbs = (Array.isArray(stat.recent3hPosts) ? stat.recent3hPosts : [])
       .slice()
@@ -399,8 +456,9 @@ export const getRecommendedRegions = (posts, recommendationType = 'blooming') =>
   const toBadge = (typeId) => {
     if (typeId === 'season_peak') return '🌸 지금이 절정';
     if (typeId === 'silent_healing') return '🌿 한적한 아지트';
-    if (typeId === 'deep_sea_blue') return '🌊 딥씨블루';
-    if (typeId === 'lively_vibe') return '🔥 지금 힙한 곳';
+    if (typeId === 'deep_sea_blue') return '🌊 시원한 바다';
+    if (typeId === 'lively_vibe') return '🔥 힙 & 활기';
+    if (typeId === 'easy_walking') return '🧸 안심 나들이';
     return '✨ 추천';
   };
 
@@ -451,25 +509,31 @@ export const RECOMMENDATION_TYPES = [
   {
     id: 'season_peak',
     name: '지금이 절정',
-    description: '최근 3시간 내 계절·풍경 키워드가 급증한 장소',
+    description: '놓치면 일 년을 기다려야 할, 찰나의 풍경',
     icon: '🌸'
   },
   {
     id: 'silent_healing',
     name: '한적한 아지트',
-    description: '조용·여유 키워드가 감지되는 쉼표 스팟',
+    description: '북적임 대신 바람 소리만 들리는, 잠시 멈춘 동네',
     icon: '🌿'
   },
   {
     id: 'deep_sea_blue',
-    name: '딥씨 블루',
-    description: '바다·파도·윤슬 등 “파란 감성” 신호가 강한 장소',
+    name: '시원한 바다',
+    description: '가슴 뻥 뚫리는 파도 소리, 에메랄드빛 파란 맛',
     icon: '🌊'
   },
   {
     id: 'lively_vibe',
     name: '힙&활기',
-    description: '최근 1시간 업로드가 몰린 에너지 스팟',
+    description: '유행의 중심에서 즐기는, 기분 좋은 에너지',
     icon: '🔥'
+  },
+  {
+    id: 'easy_walking',
+    name: '안심 나들이',
+    description: '아이와 댕댕이가 마음껏 뛰노는, 걱정 없는 주말',
+    icon: '🧸'
   }
 ];

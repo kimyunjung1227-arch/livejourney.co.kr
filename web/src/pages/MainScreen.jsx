@@ -1300,6 +1300,7 @@ const MainScreen = () => {
                                                 transition: 'all 0.18s ease-out',
                                             }}
                                         >
+                                            <span style={{ fontSize: 13, lineHeight: 1 }}>{tag.icon}</span>
                                             <span>{tag.name}</span>
                                         </button>
                                     );

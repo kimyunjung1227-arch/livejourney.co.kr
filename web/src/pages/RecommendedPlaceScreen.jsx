@@ -71,7 +71,8 @@ const RecommendedPlaceScreen = () => {
                 flexShrink: 0
               }}
             >
-              {tag.name}
+              <span style={{ fontSize: 13, lineHeight: 1 }}>{tag.icon}</span>
+              <span>{tag.name}</span>
             </button>
           ))}
         </div>
