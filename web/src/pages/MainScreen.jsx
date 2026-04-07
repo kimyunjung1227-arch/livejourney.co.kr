@@ -1361,11 +1361,11 @@ const MainScreen = () => {
                                                 )}
                                             </div>
                                             <div style={{ padding: '6px 2px 10px' }}>
-                                                <div style={{ color: '#111827', fontSize: '14px', fontWeight: 800, marginBottom: '3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                <div style={{ color: '#111827', fontSize: '14px', fontWeight: 800, marginBottom: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                                     {item.title}
                                                 </div>
                                                 {statusBadges.length > 0 && (
-                                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, margin: '6px 0 6px' }}>
+                                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
                                                         {statusBadges.map((b, i) => (
                                                             <span key={`${idx}-b-${i}`} style={{ fontSize: 11, fontWeight: 800, color: '#0f172a', background: 'rgba(2,132,199,0.08)', border: '1px solid rgba(2,132,199,0.12)', padding: '3px 8px', borderRadius: 999, whiteSpace: 'nowrap' }}>
                                                                 {String(b || '').replace(/^●\s*/, '')}
@@ -1374,7 +1374,7 @@ const MainScreen = () => {
                                                     </div>
                                                 )}
                                                 {item?.proofSummary && (
-                                                    <div style={{ color: '#334155', fontSize: 12, fontWeight: 700, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                    <div style={{ color: '#334155', fontSize: 12, fontWeight: 700, marginTop: 8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                                         {item.proofSummary}
                                                     </div>
                                                 )}
