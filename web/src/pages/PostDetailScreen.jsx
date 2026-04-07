@@ -380,7 +380,11 @@ const PostDetailScreen = () => {
     } else {
       // Supabase 게시물: DB에 좋아요 수 반영 (실패해도 화면/이벤트는 이미 로컬 기준으로 처리됨)
       const delta = optimisticLiked ? 1 : -1;
-      updatePostLikesSupabase(post.id, delta);
+      updatePostLikesSupabase(post.id, delta).then((res) => {
+        if (res && res.success && typeof res.likesCount === 'number') {
+          setLikeCount(res.likesCount);
+        }
+      });
       setLiked(optimisticLiked);
     }
 

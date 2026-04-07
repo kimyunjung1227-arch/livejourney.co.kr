@@ -120,6 +120,7 @@ export const markNotificationAsRead = (notificationId) => {
     localStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(updated));
 
     // 알림 카운트 업데이트 이벤트 발생
+    window.dispatchEvent(new Event('notificationUpdate'));
     window.dispatchEvent(new Event('notificationCountChanged'));
 
     return true;
@@ -156,6 +157,7 @@ export const deleteNotification = (notificationId) => {
     localStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(filtered));
 
     // 알림 카운트 업데이트 이벤트 발생
+    window.dispatchEvent(new Event('notificationUpdate'));
     window.dispatchEvent(new Event('notificationCountChanged'));
 
     return true;

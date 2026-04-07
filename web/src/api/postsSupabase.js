@@ -1,6 +1,39 @@
 import { supabase } from '../utils/supabaseClient';
 import { logger } from '../utils/logger';
 
+const POST_LIKES_OVERRIDE_KEY = 'postLikesOverride_v1';
+const readLikesOverrideMap = () => {
+  try {
+    const s = localStorage.getItem(POST_LIKES_OVERRIDE_KEY);
+    return s ? JSON.parse(s) : {};
+  } catch {
+    return {};
+  }
+};
+const writeLikesOverrideMap = (map) => {
+  try {
+    localStorage.setItem(POST_LIKES_OVERRIDE_KEY, JSON.stringify(map || {}));
+  } catch {
+    /* ignore */
+  }
+};
+const setLikesOverride = (postId, likesCount) => {
+  if (!postId) return;
+  const map = readLikesOverrideMap();
+  map[String(postId)] = { likesCount: Number(likesCount) || 0, updatedAt: Date.now() };
+  writeLikesOverrideMap(map);
+};
+const getLikesOverride = (postId) => {
+  if (!postId) return null;
+  const map = readLikesOverrideMap();
+  const v = map[String(postId)];
+  if (!v || typeof v !== 'object') return null;
+  const updatedAt = Number(v.updatedAt) || 0;
+  // 서버 반영 지연/재진입 롤백 방지용: 짧은 시간(10분)만 로컬 override 유지
+  if (!updatedAt || Date.now() - updatedAt > 10 * 60 * 1000) return null;
+  return { likesCount: Number(v.likesCount) || 0, updatedAt };
+};
+
 // blob: URL은 새로고침 시 사라지므로 Supabase에는 https URL만 저장
 const onlyPersistentUrls = (arr) => {
   if (!Array.isArray(arr)) return [];
@@ -183,6 +216,12 @@ export const updatePostLikesSupabase = async (postId, delta) => {
       logger.warn('updatePostLikesSupabase: update 실패', updateErr.message);
       return { success: false };
     }
+    // 재진입 시 0으로 롤백되는 케이스 방지: 로컬 override도 함께 저장
+    setLikesOverride(trimmed, newCount);
+    // 화면 간 동기화 이벤트
+    try {
+      window.dispatchEvent(new CustomEvent('postLikeUpdated', { detail: { postId: trimmed, likesCount: newCount } }));
+    } catch {}
     return { success: true, likesCount: newCount };
   } catch (e) {
     logger.warn('updatePostLikesSupabase 예외:', e?.message);
@@ -198,6 +237,9 @@ const mapRowToPost = (row) => {
     uid != null
       ? { id: uid, username: row.author_username || null, profileImage: row.author_avatar_url || null }
       : uid;
+  const fromRow = Number(row.likes_count) || 0;
+  const ov = getLikesOverride(row.id);
+  const likesCount = ov ? ov.likesCount : fromRow;
   return {
     id: row.id,
     userId: uid,
@@ -214,8 +256,8 @@ const mapRowToPost = (row) => {
     timestamp: row.created_at ? new Date(row.created_at).getTime() : null,
     createdAt: row.created_at || null,
     photoDate: row.captured_at || row.created_at || null,
-    likes: Number(row.likes_count) || 0,
-    likeCount: Number(row.likes_count) || 0,
+    likes: likesCount,
+    likeCount: likesCount,
     comments: Array.isArray(row.comments) ? row.comments : [],
     category: row.category || null,
     categoryName: row.category_name || null,
@@ -311,36 +353,7 @@ export const fetchPostsByUserIdSupabase = async (userId) => {
     if (error) throw error;
     if (!data) return [];
 
-    return data.map((row) => {
-      const uid = row.user_id;
-      const userObj =
-        uid != null
-          ? { id: uid, username: row.author_username || null, profileImage: row.author_avatar_url || null }
-          : uid;
-      return {
-        id: row.id,
-        userId: uid,
-        user: userObj,
-        images: Array.isArray(row.images) ? row.images : [],
-        videos: Array.isArray(row.videos) ? row.videos : [],
-        location: row.location || '',
-        detailedLocation: row.detailed_location || '',
-        placeName: row.place_name || '',
-        region: row.region || '',
-        tags: Array.isArray(row.tags) ? row.tags : [],
-        note: row.content || '',
-        content: row.content || '',
-        timestamp: row.created_at ? new Date(row.created_at).getTime() : null,
-        createdAt: row.created_at || null,
-        photoDate: row.captured_at || row.created_at || null,
-        likes: Number(row.likes_count) || 0,
-        likeCount: Number(row.likes_count) || 0,
-        comments: Array.isArray(row.comments) ? row.comments : [],
-        category: row.category || null,
-        categoryName: row.category_name || null,
-        thumbnail: (Array.isArray(row.images) && row.images[0]) || null,
-      };
-    });
+    return data.map(mapRowToPost).filter(Boolean);
   } catch (error) {
     logger.warn('Supabase fetchPostsByUserId 실패:', error?.message);
     return [];
@@ -372,36 +385,7 @@ export const fetchPostsSupabase = async () => {
 
     if (!data) return [];
 
-    return data.map((row) => {
-      const uid = row.user_id;
-      const userObj =
-        uid != null
-          ? { id: uid, username: row.author_username || null, profileImage: row.author_avatar_url || null }
-          : uid;
-      return {
-      id: row.id,
-      userId: uid,
-      user: userObj,
-      images: Array.isArray(row.images) ? row.images : [],
-      videos: Array.isArray(row.videos) ? row.videos : [],
-      location: row.location || '',
-      detailedLocation: row.detailed_location || '',
-      placeName: row.place_name || '',
-      region: row.region || '',
-      tags: Array.isArray(row.tags) ? row.tags : [],
-      note: row.content || '',
-      content: row.content || '',
-      timestamp: row.created_at ? new Date(row.created_at).getTime() : null,
-      createdAt: row.created_at || null,
-      photoDate: row.captured_at || row.created_at || null,
-      likes: Number(row.likes_count) || 0,
-      likeCount: Number(row.likes_count) || 0,
-      comments: Array.isArray(row.comments) ? row.comments : [],
-      category: row.category || null,
-      categoryName: row.category_name || null,
-      thumbnail: (Array.isArray(row.images) && row.images[0]) || null,
-    };
-    });
+    return data.map(mapRowToPost).filter(Boolean);
   } catch (error) {
     logger.warn('Supabase fetchPosts 실패 (localStorage fallback 사용):', error);
     return [];

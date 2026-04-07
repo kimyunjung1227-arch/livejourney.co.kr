@@ -627,7 +627,7 @@ const MainScreen = () => {
         return () => clearInterval(id);
     }, [hotFeedPost?.id]);
 
-    const handleHotFeedLike = useCallback((e, post) => {
+    const handleHotFeedLike = useCallback(async (e, post) => {
         e.stopPropagation();
         const wasLiked = isPostLiked(post.id);
         const baseLikes = typeof post.likes === 'number'
@@ -640,10 +640,11 @@ const MainScreen = () => {
             );
         } else {
             const delta = wasLiked ? -1 : 1;
-            updatePostLikesSupabase(post.id, delta);
+            const res = await updatePostLikesSupabase(post.id, delta);
+            const nextCount = (res && res.success && typeof res.likesCount === 'number') ? res.likesCount : result.newCount;
             setCrowdedData((prev) =>
                 prev.map((p) =>
-                    (p && p.id === post.id ? { ...p, likes: result.newCount, likeCount: result.newCount } : p)
+                    (p && p.id === post.id ? { ...p, likes: nextCount, likeCount: nextCount } : p)
                 )
             );
         }
