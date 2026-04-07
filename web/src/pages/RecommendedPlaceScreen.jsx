@@ -10,7 +10,7 @@ const PLACEHOLDER_IMAGE = 'https://images.unsplash.com/photo-1548115184-bc65ae49
 
 const RecommendedPlaceScreen = () => {
   const navigate = useNavigate();
-  const [selectedTag, setSelectedTag] = useState('blooming');
+  const [selectedTag, setSelectedTag] = useState('season_peak');
   const [recommendedData, setRecommendedData] = useState([]);
   const [allPosts, setAllPosts] = useState([]);
 

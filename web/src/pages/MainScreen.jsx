@@ -47,7 +47,7 @@ const MainScreen = () => {
     const [selectedCity, setSelectedCity] = useState('서울 전체');
     const [selectedInterestLabels, setSelectedInterestLabels] = useState([]);
     const [deleteConfirmPlace, setDeleteConfirmPlace] = useState(null);
-    const [selectedRecommendTag, setSelectedRecommendTag] = useState('active');
+    const [selectedRecommendTag, setSelectedRecommendTag] = useState('season_peak');
     const [hotFeedSlideIndex, setHotFeedSlideIndex] = useState(0);
     const [hotFeedSocialIdx, setHotFeedSocialIdx] = useState(0);
     const { handleDragStart, hasMovedRef } = useHorizontalDragScroll();
