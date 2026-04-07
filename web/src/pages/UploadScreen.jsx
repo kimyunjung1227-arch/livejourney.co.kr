@@ -432,7 +432,27 @@ const UploadScreen = () => {
           return isWeatherTag(withHash) ? '' : withHash;
         }).filter(Boolean);
 
-        const picked = dedupeHashtags([...weatherPick, ...aiHashtags]).slice(0, 6);
+        // 테마 추적용 키워드 태그를 자동 태그에 섞어서(최대 1~2개) 추천/집계에 활용
+        const inferThemeHashtags = () => {
+          const text = `${location || ''} ${note || ''} ${(analysisResult.tags || []).join(' ')} ${(analysisResult.categoryName || '')}`.toLowerCase();
+          const out = [];
+          const push = (t) => out.push(`#${normalizeTag(t)}`);
+
+          const hasSeason = /만개|개화|벚꽃|단풍|설경|절정/.test(text);
+          const hasChill = /한적|조용|여유|힐링|쉼표/.test(text);
+          const hasOcean = /바다|해변|파도|윤슬|물멍|푸른|청량/.test(text);
+          const hasTrendy = /힙|핫플|북적|인생샷|축제|감성/.test(text);
+
+          if (hasSeason) push('지금이절정');
+          if (hasChill) push('한적한아지트');
+          if (hasOcean) push('딥씨블루');
+          if (hasTrendy) push('힙활기');
+
+          return out.filter(Boolean);
+        };
+
+        const themePick = inferThemeHashtags().slice(0, 2);
+        const picked = dedupeHashtags([...weatherPick, ...themePick, ...aiHashtags]).slice(0, 6);
         setAutoTags(picked);
         const slugList = slugsFromAnalysisResult(analysisResult);
         setFormData(prev => ({

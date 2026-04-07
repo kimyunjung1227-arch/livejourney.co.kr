@@ -103,6 +103,33 @@ const matchesAny = (text, keywords) => {
   return (keywords || []).some((kw) => t.includes(normalizeText(kw)));
 };
 
+// 테마 추적용 대표 태그(업로드 AI 자동태그에 섞어 넣는 대상)
+const THEME_TAGS = {
+  season_peak: ['지금이절정', '절정', '만개', '개화', '단풍', '설경'],
+  silent_healing: ['한적한아지트', '한적', '조용한', '여유로운', '힐링'],
+  deep_sea_blue: ['딥씨블루', '바다', '윤슬', '물멍', '푸른바다', '청량'],
+  lively_vibe: ['힙활기', '힙한', '활기찬', '핫플', '북적', '인생샷'],
+};
+
+const getPostTagTokens = (post) => {
+  const raw = [
+    ...(Array.isArray(post?.tags) ? post.tags : []),
+    ...(Array.isArray(post?.aiLabels) ? post.aiLabels : []),
+    ...(Array.isArray(post?.aiCategories) ? post.aiCategories : []),
+  ]
+    .map((x) => (typeof x === 'string' ? x : (x?.name || x?.label || x?.category || '')))
+    .filter(Boolean)
+    .map((s) => normalizeText(String(s).replace(/^#+/, '')));
+  return raw;
+};
+
+const hasAnyThemeTag = (post, themeId) => {
+  const tokens = getPostTagTokens(post);
+  const targets = (THEME_TAGS[themeId] || []).map((t) => normalizeText(t));
+  if (targets.length === 0) return false;
+  return tokens.some((tok) => targets.some((t) => tok === t || tok.includes(t) || t.includes(tok)));
+};
+
 const KEYWORDS = {
   seasonPeak: [
     '만개', '만개함', '개화', '꽃피', '벚꽃', '매화', '유채', '수국', '코스모스', '철쭉', '튤립',
@@ -224,21 +251,22 @@ export const getRecommendedRegions = (posts, recommendationType = 'blooming') =>
     const seasonPred = (p) => {
       const t = getPostTextBlob(p);
       const scenicLike = hasCategory(p, 'scenic') || hasCategory(p, 'landmark') || hasCategory(p, 'bloom');
-      return scenicLike && matchesAny(t, KEYWORDS.seasonPeak);
+      return (hasAnyThemeTag(p, 'season_peak') || (scenicLike && matchesAny(t, KEYWORDS.seasonPeak)));
     };
     const silentPred = (p) => {
       const t = getPostTextBlob(p);
       const hasQuiet = matchesAny(t, KEYWORDS.silentHealing);
       const hasWaiting = matchesAny(t, ['웨이팅', '대기', '줄', 'queue', 'waiting']) || hasCategory(p, 'waiting');
-      return hasQuiet && !hasWaiting;
+      const tagged = hasAnyThemeTag(p, 'silent_healing');
+      return (tagged || hasQuiet) && !hasWaiting;
     };
     const seaPred = (p) => {
       const t = getPostTextBlob(p);
-      return matchesAny(t, KEYWORDS.deepSeaBlue) || isCoastal;
+      return hasAnyThemeTag(p, 'deep_sea_blue') || matchesAny(t, KEYWORDS.deepSeaBlue) || isCoastal;
     };
     const livelyPred = (p) => {
       const t = getPostTextBlob(p);
-      return matchesAny(t, KEYWORDS.livelyVibe);
+      return hasAnyThemeTag(p, 'lively_vibe') || matchesAny(t, KEYWORDS.livelyVibe);
     };
 
     const count = (arr, pred) => (Array.isArray(arr) ? arr.filter((x) => pred(x)).length : 0);
@@ -346,7 +374,11 @@ export const getRecommendedRegions = (posts, recommendationType = 'blooming') =>
       typeId === 'deep_sea_blue' ? '바다 무드' :
       typeId === 'lively_vibe' ? '힙한 분위기' :
       '최신성';
-    const proofSummary = `${t} 전후로 ${proofCount}명의 여행자가 ‘${vibeWord}’을(를) 인증했어요.`;
+    // "1일 전후로 ..." 같은 문구는 제거 (오래된 정보 느낌 제거)
+    const omitTime = /\d+\s*일\s*전/.test(String(t || ''));
+    const proofSummary = omitTime
+      ? `${proofCount}명의 여행자가 ‘${vibeWord}’을(를) 인증했어요.`
+      : `${t} 전후 ${proofCount}명의 여행자가 ‘${vibeWord}’을(를) 인증했어요.`;
 
     const thumbs = (Array.isArray(stat.recent3hPosts) ? stat.recent3hPosts : [])
       .slice()
