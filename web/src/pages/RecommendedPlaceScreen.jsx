@@ -171,7 +171,7 @@ const RecommendedPlaceScreen = () => {
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
                         {statusBadges.map((b, i) => (
                           <span key={`${idx}-sb-${i}`} style={{ fontSize: 10, fontWeight: 800, color: '#0f172a', background: 'rgba(2,132,199,0.08)', border: '1px solid rgba(2,132,199,0.12)', padding: '3px 7px', borderRadius: 999, whiteSpace: 'nowrap' }}>
-                            {b}
+                            {String(b || '').replace(/^●\s*/, '')}
                           </span>
                         ))}
                       </div>

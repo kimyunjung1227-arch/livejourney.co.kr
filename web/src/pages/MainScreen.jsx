@@ -1368,7 +1368,7 @@ const MainScreen = () => {
                                                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, margin: '6px 0 6px' }}>
                                                         {statusBadges.map((b, i) => (
                                                             <span key={`${idx}-b-${i}`} style={{ fontSize: 11, fontWeight: 800, color: '#0f172a', background: 'rgba(2,132,199,0.08)', border: '1px solid rgba(2,132,199,0.12)', padding: '3px 8px', borderRadius: 999, whiteSpace: 'nowrap' }}>
-                                                                {b}
+                                                                {String(b || '').replace(/^●\s*/, '')}
                                                             </span>
                                                         ))}
                                                     </div>
