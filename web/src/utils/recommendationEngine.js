@@ -130,7 +130,7 @@ const THEME_SIGNALS = {
   silent_healing: ['한적', '조용', '여유', '고즈넉', '힐링', '산책', '쉼', '쉼표', '책', '웨이팅없', '줄없'],
   deep_sea_blue: ['바다', '해변', '파도', '윤슬', '물멍', '에메랄드', '푸른', '파란', '청량', '맑은하늘'],
   lively_vibe: ['힙', '핫플', '북적', '활기', '인생샷', '축제', '공연', '버스킹', '팝업', '웨이팅', '대기'],
-  easy_walking: ['아이', '키즈', '유모차', '가족', '반려', '반려견', '강아지', '펫', '주차', '잔디', '놀이터'],
+  night_good: ['밤', '야경', '야시장', '야간', '조명', '라이트', '빛', '불빛', '노을', '일몰', '밤바다', '루프탑'],
 };
 
 const inferThemeScoreForPost = (post) => {
@@ -290,9 +290,9 @@ export const getRecommendedRegions = (posts, recommendationType = 'blooming') =>
       const scores = inferThemeScoreForPost(p);
       return (scores.lively_vibe || 0) >= 2;
     };
-    const easyPred = (p) => {
+    const nightPred = (p) => {
       const scores = inferThemeScoreForPost(p);
-      return (scores.easy_walking || 0) >= 2;
+      return (scores.night_good || 0) >= 2;
     };
 
     const count = (arr, pred) => (Array.isArray(arr) ? arr.filter((x) => pred(x)).length : 0);
@@ -305,8 +305,8 @@ export const getRecommendedRegions = (posts, recommendationType = 'blooming') =>
     const sea24h = count(recent24h, seaPred);
     const lively1h = count(recent1h, livelyPred);
     const lively3h = count(recent3h, livelyPred);
-    const easy3h = count(recent3h, easyPred);
-    const easy24h = count(recent24h, easyPred);
+    const night3h = count(recent3h, nightPred);
+    const night24h = count(recent24h, nightPred);
 
     const avgLikes = postsForRegion.reduce((s, p) => s + (p?.likes || 0), 0) / Math.max(1, postsForRegion.length);
 
@@ -338,9 +338,10 @@ export const getRecommendedRegions = (posts, recommendationType = 'blooming') =>
       const score = recent1h.length * 8 + lively1h * 4 + lively3h * 2 + vividBoost * 6 + avgLikes * 0.45;
       return { score, extra: { recent1h: recent1h.length, lively1h } };
     }
-    if (type === 'easy_walking') {
-      const score = easy3h * 9 + easy24h * 3 + avgLikes * 0.2;
-      return { score, extra: { easy3h, easy24h } };
+    if (type === 'night_good') {
+      const nightBoost = matchesAny(blobAll, ['야경', '조명', '불빛', '야간', '루프탑', '야시장']) ? 2 : 0;
+      const score = night3h * 9 + night24h * 3 + nightBoost * 6 + avgLikes * 0.25;
+      return { score, extra: { night3h, night24h } };
     }
     const score = recent1h.length * 6 + recent3h.length * 3 + avgLikes * 0.3;
     return { score, extra: { recent1h: recent1h.length } };
@@ -359,8 +360,8 @@ export const getRecommendedRegions = (posts, recommendationType = 'blooming') =>
     if (typeId === 'lively_vibe') {
       return '유행의 중심에서 즐기는, 기분 좋은 에너지';
     }
-    if (typeId === 'easy_walking') {
-      return '아이와 댕댕이가 마음껏 뛰노는, 걱정 없는 주말';
+    if (typeId === 'night_good') {
+      return '낮보다 더 반짝이는, 밤에 더 좋은 장면';
     }
     return `${regionKey}의 최신 제보를 모았어요.`;
   };
@@ -379,7 +380,7 @@ export const getRecommendedRegions = (posts, recommendationType = 'blooming') =>
     const seasonHits = countKw(['만개', '개화', '벚꽃', '단풍', '설경', '눈', '절정']);
     const seaHits = countKw(['바다', '해변', '파도', '윤슬', '물멍', '에메랄드', '청량']);
     const parkingHits = countKw(['주차', '주차장', '주차편']);
-    const kidPetHits = countKw(['아이', '키즈', '유모차', '반려', '반려견', '강아지', '펫', '잔디', '놀이터']);
+    const nightHits = countKw(['야경', '밤', '야시장', '조명', '불빛', '야간', '루프탑', '일몰', '노을']);
     const popupHits = countKw(['팝업', '버스킹', '공연', '축제', '이벤트']);
 
     const quietPct = Math.max(0, Math.min(95, Math.round(70 + (quietHits / (quietHits + waitingHits + 1)) * 30)));
@@ -389,7 +390,7 @@ export const getRecommendedRegions = (posts, recommendationType = 'blooming') =>
     if (waitingHits > 0) out.push('● 웨이팅 있음');
     if (seasonHits > 0) out.push('● 절정/만개');
     if (seaHits > 0) out.push('● 바다 무드');
-    if (kidPetHits > 0) out.push('● 아이/반려 동반');
+    if (nightHits > 0) out.push('● 야경/밤 무드');
     if (parkingHits > 0) out.push('● 주차 정보');
     if (popupHits > 0) out.push('● 이벤트/공연');
 
@@ -399,7 +400,7 @@ export const getRecommendedRegions = (posts, recommendationType = 'blooming') =>
       silent_healing: [`● 한적함 ${quietPct}%`, '● 주차 정보', '● 바다 무드'],
       deep_sea_blue: ['● 바다 무드', '● 주차 정보', '● 한적함'],
       lively_vibe: ['● 이벤트/공연', '● 웨이팅 있음', '● 주차 정보'],
-      easy_walking: ['● 아이/반려 동반', '● 주차 정보', '● 한적함'],
+      night_good: ['● 야경/밤 무드', '● 이벤트/공연', '● 주차 정보'],
     };
 
     const order = prefer[typeId] || [];
@@ -431,6 +432,7 @@ export const getRecommendedRegions = (posts, recommendationType = 'blooming') =>
       typeId === 'season_peak' ? '절정' :
       typeId === 'deep_sea_blue' ? '바다 무드' :
       typeId === 'lively_vibe' ? '힙한 분위기' :
+      typeId === 'night_good' ? '야경 무드' :
       '최신성';
     if (proofCount <= 0) return { proofSummary: '', timelineThumbs: [] };
 
@@ -458,7 +460,7 @@ export const getRecommendedRegions = (posts, recommendationType = 'blooming') =>
     if (typeId === 'silent_healing') return '🌿 한적한 아지트';
     if (typeId === 'deep_sea_blue') return '🌊 시원한 바다';
     if (typeId === 'lively_vibe') return '🔥 힙 & 활기';
-    if (typeId === 'easy_walking') return '🧸 안심 나들이';
+    if (typeId === 'night_good') return '🌙 밤에 더 좋은';
     return '✨ 추천';
   };
 
@@ -508,32 +510,32 @@ export const getRecommendedRegions = (posts, recommendationType = 'blooming') =>
 export const RECOMMENDATION_TYPES = [
   {
     id: 'season_peak',
-    name: '지금이 절정',
+    name: '지금 만개한 벚꽃 명소',
     description: '놓치면 일 년을 기다려야 할, 찰나의 풍경',
     icon: '🌸'
   },
   {
     id: 'silent_healing',
-    name: '한적한 아지트',
+    name: '생각 정리하기 좋은 지역',
     description: '북적임 대신 바람 소리만 들리는, 잠시 멈춘 동네',
-    icon: '🌿'
+    icon: '🌾'
   },
   {
     id: 'deep_sea_blue',
-    name: '시원한 바다',
+    name: '바다 보며 멍 때리기 좋은 곳',
     description: '가슴 뻥 뚫리는 파도 소리, 에메랄드빛 파란 맛',
     icon: '🌊'
   },
   {
     id: 'lively_vibe',
-    name: '힙&활기',
+    name: '지금 사람 몰리는 핫플',
     description: '유행의 중심에서 즐기는, 기분 좋은 에너지',
     icon: '🔥'
   },
   {
-    id: 'easy_walking',
-    name: '안심 나들이',
-    description: '아이와 댕댕이가 마음껏 뛰노는, 걱정 없는 주말',
-    icon: '🧸'
+    id: 'night_good',
+    name: '밤에 더 좋은 장소',
+    description: '낮보다 더 반짝이는, 밤에 더 좋은 장면',
+    icon: '🌙'
   }
 ];

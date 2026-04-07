@@ -1042,10 +1042,27 @@ const UploadScreen = () => {
         logger.warn('📍 좌표를 확정하지 못했습니다. 지도에서는 장소명 검색으로 표시됩니다.');
       }
 
+      const formatDateLabel = (ts) => {
+        const d = new Date(Number(ts) || Date.now());
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}.${m}.${day}`;
+      };
+
+      const withDateInDescription = (rawNote, ts) => {
+        const note = String(rawNote || '').trim();
+        const dateLabel = formatDateLabel(ts);
+        if (note.startsWith(dateLabel)) return note;
+        if (note.startsWith(`[${dateLabel}]`)) return note;
+        if (!note) return `${dateLabel} ${formData.location}에서의 여행 기록`;
+        return `${dateLabel} ${note}`;
+      };
+
       const postData = {
         images: uploadedImageUrls.length > 0 ? uploadedImageUrls : formData.images,
         videos: uploadedVideoUrls.length > 0 ? uploadedVideoUrls : formData.videos,
-        content: formData.note || `${formData.location}에서의 여행 기록`,
+        content: withDateInDescription(formData.note, formData.photoDate ? new Date(formData.photoDate).getTime() : Date.now()),
         location: {
           name: formData.verifiedLocation || formData.location,
           lat: coordinates?.lat ?? null,
@@ -1131,6 +1148,8 @@ const UploadScreen = () => {
             logger.warn('업로드 시 날씨 정보 가져오기 실패 (무시):', weatherError);
           }
 
+          const descriptionWithDate = withDateInDescription(formData.note, photoTimestamp);
+
           const uploadedPost = {
             id: backendPost?._id || backendPost?.id || `backend-${Date.now()}`,
             userId: currentUserId,
@@ -1138,7 +1157,8 @@ const UploadScreen = () => {
             videos: finalVideos,
             location: formData.location,
             tags: Array.isArray(finalTags) ? finalTags : [],
-            note: formData.note,
+            note: descriptionWithDate,
+            content: descriptionWithDate,
             timestamp: photoTimestamp,
             createdAt: backendPost?.createdAt || getCurrentTimestamp(),
             photoDate: formData.photoDate || null, // EXIF에서 추출한 촬영 날짜
@@ -1175,7 +1195,7 @@ const UploadScreen = () => {
               id: missionResponseId,
               responderId: currentUserId,
               responderName: username,
-              note: formData.note || `${formData.location} 현장 정보`,
+              note: descriptionWithDate || `${formData.location} 현장 정보`,
               photoUrl: finalImages[0] || '',
               linkedPostId: uploadedPost.id,
               locationName: missionContext.missionLocationName || formData.location,
