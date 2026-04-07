@@ -1325,11 +1325,14 @@ const MainScreen = () => {
                                         (p.placeName && String(p.placeName).includes(item.regionName))
                                     );
                                     const rawImages = [
-                                        item.image,
+                                        item.liveImage || item.image,
                                         ...regionPosts.flatMap(p => (p.images && p.images.length ? p.images : [p.thumbnail || p.image].filter(Boolean)))
                                     ].filter(Boolean).slice(0, 5);
                                     const displayImages = rawImages.map(url => getDisplayImageUrl(url)).filter(Boolean);
                                     const mainSrc = displayImages[0] || 'https://images.unsplash.com/photo-1548115184-bc65ae4986cf?w=800&q=80';
+                                    const statusBadges = Array.isArray(item.statusBadges) ? item.statusBadges : [];
+                                    const timelineThumbs = Array.isArray(item.timelineThumbs) ? item.timelineThumbs : [];
+                                    const hasLive = (item?.stats?.recent1hCount || 0) > 0;
 
                                     return (
                                         <div
@@ -1343,22 +1346,58 @@ const MainScreen = () => {
                                                 background: 'transparent'
                                             }}
                                         >
-                                            <div style={{ width: '100%', height: '160px', overflow: 'hidden', borderRadius: '14px', background: '#e5e7eb' }}>
+                                            <div style={{ width: '100%', height: '160px', overflow: 'hidden', borderRadius: '14px', background: '#e5e7eb', position: 'relative' }}>
                                                 <img
                                                     src={mainSrc}
                                                     alt={item.title}
                                                     style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
                                                     onError={(e) => { e.target.onerror = null; e.target.src = 'https://images.unsplash.com/photo-1548115184-bc65ae4986cf?w=800&q=80'; }}
                                                 />
+                                                {hasLive && (
+                                                    <div style={{ position: 'absolute', left: 10, top: 10, padding: '4px 8px', borderRadius: 999, background: 'rgba(15,23,42,0.72)', color: '#fff', fontSize: 11, fontWeight: 800, letterSpacing: '0.02em' }}>
+                                                        LIVE
+                                                    </div>
+                                                )}
                                             </div>
                                             <div style={{ padding: '6px 2px 10px' }}>
-                                                <div style={{ fontSize: '11px', fontWeight: 700, color: '#06b6d4', marginBottom: '3px' }}>추천</div>
+                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
+                                                    <div style={{ fontSize: '11px', fontWeight: 800, color: '#06b6d4' }}>추천</div>
+                                                    {item?.trustText && (
+                                                        <div style={{ fontSize: 11, fontWeight: 800, color: '#0f172a', background: 'rgba(15,23,42,0.06)', padding: '3px 8px', borderRadius: 999, whiteSpace: 'nowrap' }}>
+                                                            {item.trustText}
+                                                        </div>
+                                                    )}
+                                                </div>
                                                 <div style={{ color: '#111827', fontSize: '14px', fontWeight: 800, marginBottom: '3px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                                     {item.title}
                                                 </div>
-                                                <div style={{ color: '#4b5563', fontSize: '12px', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                    {item.description}
-                                                </div>
+                                                {statusBadges.length > 0 && (
+                                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, margin: '6px 0 6px' }}>
+                                                        {statusBadges.map((b, i) => (
+                                                            <span key={`${idx}-b-${i}`} style={{ fontSize: 11, fontWeight: 800, color: '#0f172a', background: 'rgba(2,132,199,0.08)', border: '1px solid rgba(2,132,199,0.12)', padding: '3px 8px', borderRadius: 999, whiteSpace: 'nowrap' }}>
+                                                                {b}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                                {item?.proofSummary && (
+                                                    <div style={{ color: '#334155', fontSize: 12, fontWeight: 700, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                        {item.proofSummary}
+                                                    </div>
+                                                )}
+                                                {timelineThumbs.length > 0 && (
+                                                    <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                                                        {timelineThumbs.slice(0, 4).map((u, i) => {
+                                                            const src = getDisplayImageUrl(u);
+                                                            if (!src) return null;
+                                                            return (
+                                                                <div key={`${idx}-t-${i}`} style={{ width: 34, height: 34, borderRadius: 10, overflow: 'hidden', background: '#e5e7eb', flexShrink: 0 }}>
+                                                                    <img src={src} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                     );

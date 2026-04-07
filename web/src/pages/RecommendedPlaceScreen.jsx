@@ -94,10 +94,13 @@ const RecommendedPlaceScreen = () => {
                 (p.placeName && String(p.placeName).includes(item.regionName))
               );
               const rawImages = [
-                item.image,
+                item.liveImage || item.image,
                 ...regionPosts.flatMap(p => (p.images && p.images.length ? p.images : [p.thumbnail || p.image].filter(Boolean)))
               ].filter(Boolean);
               const mainImageUrl = getDisplayImageUrl(rawImages[0]) || PLACEHOLDER_IMAGE;
+              const statusBadges = Array.isArray(item.statusBadges) ? item.statusBadges : [];
+              const timelineThumbs = Array.isArray(item.timelineThumbs) ? item.timelineThumbs : [];
+              const proofSummary = item.proofSummary || '';
 
               return (
                 <div
@@ -163,6 +166,38 @@ const RecommendedPlaceScreen = () => {
                     <div style={{ fontSize: '13px', fontWeight: 700, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {item.regionName}
                     </div>
+                    {statusBadges.length > 0 && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                        {statusBadges.map((b, i) => (
+                          <span key={`${idx}-sb-${i}`} style={{ fontSize: 10, fontWeight: 800, color: '#0f172a', background: 'rgba(2,132,199,0.08)', border: '1px solid rgba(2,132,199,0.12)', padding: '3px 7px', borderRadius: 999, whiteSpace: 'nowrap' }}>
+                            {b}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    {item?.trustText && (
+                      <div style={{ marginTop: 8, fontSize: 11, fontWeight: 800, color: '#0f172a' }}>
+                        {item.trustText}
+                      </div>
+                    )}
+                    {proofSummary && (
+                      <div style={{ marginTop: 6, fontSize: 11, fontWeight: 700, color: '#334155', lineHeight: 1.35 }}>
+                        {proofSummary}
+                      </div>
+                    )}
+                    {timelineThumbs.length > 0 && (
+                      <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                        {timelineThumbs.slice(0, 4).map((u, i) => {
+                          const src = getDisplayImageUrl(u);
+                          if (!src) return null;
+                          return (
+                            <div key={`${idx}-tt-${i}`} style={{ width: 28, height: 28, borderRadius: 9, overflow: 'hidden', background: '#e5e7eb', flexShrink: 0 }}>
+                              <img src={src} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 </div>
               );
