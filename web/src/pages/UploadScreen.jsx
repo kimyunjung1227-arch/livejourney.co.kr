@@ -855,7 +855,6 @@ const UploadScreen = () => {
         let imageFileIdx = 0;
         let videoFileIdx = 0;
         const finalImages = [];
-        let mediaUploadFailed = false;
         for (const preview of formData.images) {
           const isBlobPreview = typeof preview === 'string' && preview.startsWith('blob:');
           if (!isBlobPreview) {
@@ -865,18 +864,13 @@ const UploadScreen = () => {
             imageFileIdx += 1;
             try {
               const uploadResult = await uploadImage(file);
-              if (
-                uploadResult.success &&
-                uploadResult.url &&
-                typeof uploadResult.url === 'string' &&
-                uploadResult.url.startsWith('https://')
-              ) {
+              if (uploadResult.success && uploadResult.url) {
                 finalImages.push(uploadResult.url);
               } else {
-                mediaUploadFailed = true;
+                finalImages.push(preview);
               }
             } catch (_) {
-              mediaUploadFailed = true;
+              finalImages.push(preview);
             }
           } else {
             finalImages.push(preview);
@@ -892,30 +886,17 @@ const UploadScreen = () => {
             videoFileIdx += 1;
             try {
               const uploadResult = await uploadVideo(file);
-              if (
-                uploadResult.success &&
-                uploadResult.url &&
-                typeof uploadResult.url === 'string' &&
-                uploadResult.url.startsWith('https://')
-              ) {
+              if (uploadResult.success && uploadResult.url) {
                 finalVideos.push(uploadResult.url);
               } else {
-                mediaUploadFailed = true;
+                finalVideos.push(preview);
               }
             } catch (_) {
-              mediaUploadFailed = true;
+              finalVideos.push(preview);
             }
           } else {
             finalVideos.push(preview);
           }
-        }
-        if (mediaUploadFailed) {
-          alert(
-            '사진/동영상 업로드에 실패했습니다.\n\n' +
-            '다른 기기에서도 보이게 하려면 미디어가 서버(Supabase Storage)에 저장되어야 합니다.\n' +
-            '네트워크 상태와 Supabase Storage 버킷(post-images) 및 정책을 확인한 뒤 다시 시도해주세요.'
-          );
-          return;
         }
         setUploadProgress(70);
         const tagPayload = dedupeHashtags(finalTags)
@@ -1000,7 +981,6 @@ const UploadScreen = () => {
 
       const totalFiles = formData.imageFiles.length + formData.videoFiles.length;
       let uploadedCount = 0;
-      let mediaUploadFailed = false;
 
       // 이미지 업로드
       if (formData.imageFiles.length > 0) {
@@ -1012,17 +992,10 @@ const UploadScreen = () => {
           try {
             const uploadResult = await uploadImage(file);
             if (uploadResult.success && uploadResult.url) {
-              // 다른 기기에서도 보이려면 영속 URL(https)이어야 함
-              if (typeof uploadResult.url === 'string' && uploadResult.url.startsWith('https://')) {
-                uploadedImageUrls.push(uploadResult.url);
-              } else {
-                mediaUploadFailed = true;
-              }
-            } else {
-              mediaUploadFailed = true;
+              uploadedImageUrls.push(uploadResult.url);
             }
           } catch (uploadError) {
-            mediaUploadFailed = true;
+            uploadedImageUrls.push(formData.images[i]);
           }
         }
       } else {
@@ -1039,29 +1012,16 @@ const UploadScreen = () => {
           try {
             const uploadResult = await uploadVideo(file);
             if (uploadResult.success && uploadResult.url) {
-              if (typeof uploadResult.url === 'string' && uploadResult.url.startsWith('https://')) {
-                uploadedVideoUrls.push(uploadResult.url);
-              } else {
-                mediaUploadFailed = true;
-              }
+              uploadedVideoUrls.push(uploadResult.url);
             } else {
-              mediaUploadFailed = true;
+              uploadedVideoUrls.push(formData.videos[i]);
             }
           } catch (uploadError) {
-            mediaUploadFailed = true;
+            uploadedVideoUrls.push(formData.videos[i]);
           }
         }
       } else {
         uploadedVideoUrls.push(...formData.videos);
-      }
-
-      if (mediaUploadFailed) {
-        alert(
-          '사진/동영상 업로드에 실패했습니다.\n\n' +
-          '다른 기기에서도 보이게 하려면 미디어가 서버(Supabase Storage)에 저장되어야 합니다.\n' +
-          '네트워크 상태와 Supabase Storage 버킷(post-images) 및 정책을 확인한 뒤 다시 시도해주세요.'
-        );
-        return;
       }
 
       setUploadProgress(60);
