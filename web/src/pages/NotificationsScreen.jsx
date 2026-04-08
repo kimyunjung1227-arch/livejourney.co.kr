@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import BottomNavigation from '../components/BottomNavigation';
 import {
   getNotificationsForCurrentUser,
+  getNotificationStoredUserId,
   syncNotificationsFromSupabase,
   markAllNotificationsAsRead,
   markNotificationAsRead,
@@ -45,9 +46,10 @@ const NotificationsScreen = () => {
   const [, setTick] = useState(0);
 
   useEffect(() => {
-    // 멀티계정 알림 동기화(Supabase → localStorage 캐시) 후 렌더
-    if (user?.id) {
-      syncNotificationsFromSupabase(user.id).finally(() => loadNotifications());
+    // Supabase 동기화 — AuthContext가 늦게 올 때도 localStorage user id로 수행
+    const uid = user?.id || getNotificationStoredUserId();
+    if (uid) {
+      syncNotificationsFromSupabase(String(uid)).finally(() => loadNotifications());
     } else {
       loadNotifications();
     }

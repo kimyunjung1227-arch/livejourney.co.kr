@@ -71,6 +71,9 @@ const getCurrentUserIdFromStorage = () => {
   }
 };
 
+/** 알림 수신자 식별용 — AuthContext보다 먼저 쓸 때 동일 규칙으로 id 조회 */
+export const getNotificationStoredUserId = () => getCurrentUserIdFromStorage();
+
 /**
  * 현재 로그인 사용자에게 보여야 할 알림만 (recipientUserId가 있으면 해당 유저만)
  */
@@ -85,6 +88,7 @@ export const getNotificationsForCurrentUser = () => {
 export const syncNotificationsFromSupabase = async (userId) => {
   const uid = String(userId || '').trim();
   if (!uid) return [];
+  const existing = getNotifications();
   const rows = await fetchNotificationsSupabase(uid, { limit: 100 });
   const mapped = (rows || []).map((r) => {
     const typ = r.type || 'system';
@@ -92,6 +96,7 @@ export const syncNotificationsFromSupabase = async (userId) => {
     let link = '/main';
     if (r.post_id) link = `/post/${r.post_id}`;
     else if (typ === 'follow' && actorId) link = `/user/${actorId}`;
+    const typeConfig = NOTIFICATION_TYPES[typ] || NOTIFICATION_TYPES.system;
     return {
       id: String(r.id),
       read: !!r.read,
@@ -108,16 +113,31 @@ export const syncNotificationsFromSupabase = async (userId) => {
       recipientUserId: r.recipient_user_id ? String(r.recipient_user_id) : null,
       kind: typ === 'follow' ? 'follow_received' : undefined,
       link,
+      icon: typeConfig.icon,
+      iconBg: typeConfig.iconBg,
+      iconColor: typeConfig.iconColor,
     };
   });
+
+  // 서버에 행이 없거나 조회 실패 시에도 관심지역·로컬 전용 알림이 사라지지 않도록 병합
+  const serverIds = new Set(mapped.map((m) => String(m.id)));
+  const keptLocal = existing.filter((n) => !serverIds.has(String(n.id || '')));
+  const merged = [...mapped, ...keptLocal];
+  merged.sort((a, b) => {
+    const ta = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+    const tb = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+    return tb - ta;
+  });
+  const capped = merged.slice(0, 100);
+
   try {
-    localStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(mapped));
+    localStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(capped));
   } catch {
     // ignore
   }
   window.dispatchEvent(new Event('notificationUpdate'));
   window.dispatchEvent(new Event('notificationCountChanged'));
-  return mapped;
+  return capped;
 };
 
 // 다른 사용자에게 보내는 알림은 Supabase로 전송(수신자 계정에서 보이도록)
