@@ -230,6 +230,32 @@ export const updatePostLikesSupabase = async (postId, delta) => {
   }
 };
 
+/** post_likes 트리거 반영 후 DB의 likes_count만 조회 (피드 좋아요 숫자 동기화) */
+export const fetchPostLikesCountSupabase = async (postId) => {
+  const trimmed = String(postId || '').trim();
+  if (!isValidUuid(trimmed)) return null;
+  try {
+    const { data, error } = await supabase.from('posts').select('likes_count').eq('id', trimmed).maybeSingle();
+    if (error || data == null) return null;
+    return Math.max(0, Number(data.likes_count) || 0);
+  } catch (e) {
+    logger.warn('fetchPostLikesCountSupabase:', e?.message);
+    return null;
+  }
+};
+
+/** 서버 숫자를 로컬 override + postLikeUpdated로 반영 (목록·상세 동기화) */
+export const applyPostLikesCountFromServer = (postId, likesCount) => {
+  if (!postId) return;
+  const n = Math.max(0, Number(likesCount) || 0);
+  setLikesOverride(String(postId), n);
+  try {
+    window.dispatchEvent(new CustomEvent('postLikeUpdated', { detail: { postId: String(postId), likesCount: n } }));
+  } catch {
+    /* ignore */
+  }
+};
+
 // Supabase에서 단일 게시물 조회 (상세 화면 진입 시 최신 좋아요·미디어 반영용)
 const mapRowToPost = (row) => {
   if (!row) return null;

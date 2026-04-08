@@ -16,7 +16,7 @@ import { getDisplayImageUrl } from '../api/upload';
 import { getMapThumbnailUri } from '../utils/postMedia';
 import { getPostAccuracyCount, toggleLike, isPostLiked, mergeLikedPostsFromServer } from '../utils/socialInteractions';
 import { rankHotspotPosts } from '../utils/hotnessEngine';
-import { updatePostLikesSupabase } from '../api/postsSupabase';
+import { updatePostLikesSupabase, fetchPostLikesCountSupabase, applyPostLikesCountFromServer } from '../api/postsSupabase';
 import { getWeatherByRegion } from '../api/weather';
 import { listPublishedMagazines } from '../utils/magazinesStore';
 import HotFeedCard from '../components/HotFeedCard';
@@ -647,9 +647,8 @@ const MainScreen = () => {
     const handleHotFeedLike = useCallback(async (e, post) => {
         e.stopPropagation();
         const wasLiked = isPostLiked(post.id);
-        const baseLikes = typeof post.likes === 'number'
-            ? post.likes
-            : (typeof post.likeCount === 'number' ? post.likeCount : 0);
+        const raw = Number(post.likes ?? post.likeCount ?? 0);
+        const baseLikes = Number.isFinite(raw) ? Math.max(0, raw) : 0;
         const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(post.id || '').trim());
         const canUseSupabase = isUuid && !!user?.id;
         const result = canUseSupabase ? { existsInStorage: false, newCount: Math.max(0, baseLikes + (wasLiked ? -1 : 1)) } : toggleLike(post.id, baseLikes);
@@ -658,21 +657,20 @@ const MainScreen = () => {
                 prev.map((p) => (p && p.id === post.id ? { ...p, likes: result.newCount, likeCount: result.newCount } : p))
             );
         } else {
-            // 멀티계정: post_likes 토글 → 트리거로 posts.likes_count 갱신 (성공 시 setLikedPostLocalCache로 likedPosts 동기화)
+            // 멀티계정: post_likes 토글 → 트리거로 posts.likes_count 갱신
             if (canUseSupabase) {
                 const sup = await togglePostLikeSupabase(String(user.id), String(post.id), {
                     username: user.username,
                     avatarUrl: user.profileImage || null,
                 });
-                const nextCount = sup.success
-                    ? Math.max(0, baseLikes + (sup.isLiked ? 1 : -1))
-                    : baseLikes;
-                setCrowdedData((prev) =>
-                    prev.map((p) =>
-                        (p && p.id === post.id ? { ...p, likes: nextCount, likeCount: nextCount } : p)
-                    )
-                );
-                if (sup.success) window.dispatchEvent(new Event('postsUpdated'));
+                if (sup.success) {
+                    const fromDb = await fetchPostLikesCountSupabase(post.id);
+                    const delta = (sup.isLiked ? 1 : 0) - (wasLiked ? 1 : 0);
+                    const fallback = Math.max(0, baseLikes + delta);
+                    const nextCount = fromDb != null ? fromDb : fallback;
+                    applyPostLikesCountFromServer(post.id, nextCount);
+                    window.dispatchEvent(new Event('postsUpdated'));
+                }
             } else {
                 const delta = wasLiked ? -1 : 1;
                 await updatePostLikesSupabase(post.id, delta);

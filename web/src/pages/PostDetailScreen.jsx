@@ -4,7 +4,16 @@ import { Swiper, SwiperSlide } from 'swiper/react';
 import BottomNavigation from '../components/BottomNavigation';
 import { getPost } from '../api/posts';
 import { getDisplayImageUrl } from '../api/upload';
-import { updatePostLikesSupabase, fetchPostByIdSupabase, addCommentToPostSupabase, updateCommentsInPostSupabase, deletePostSupabase, getMergedMyPostsForStats } from '../api/postsSupabase';
+import {
+  updatePostLikesSupabase,
+  fetchPostByIdSupabase,
+  fetchPostLikesCountSupabase,
+  applyPostLikesCountFromServer,
+  addCommentToPostSupabase,
+  updateCommentsInPostSupabase,
+  deletePostSupabase,
+  getMergedMyPostsForStats,
+} from '../api/postsSupabase';
 import { useAuth } from '../contexts/AuthContext';
 import { getWeatherByRegion } from '../api/weather';
 import { getTimeAgo } from '../utils/dateUtils';
@@ -380,8 +389,9 @@ const PostDetailScreen = () => {
     // 먼저 UI를 낙관적으로 업데이트
     setLiked(optimisticLiked);
     setLikeCount((prev) => {
-      const base = typeof prev === 'number' ? prev : 0;
-      return Math.max(0, base + (optimisticLiked ? 1 : -1));
+      const base = Number(prev);
+      const safe = Number.isFinite(base) ? base : 0;
+      return Math.max(0, safe + (optimisticLiked ? 1 : -1));
     });
 
     const isSupabasePost = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(post.id || '').trim());
@@ -399,11 +409,25 @@ const PostDetailScreen = () => {
         togglePostLikeSupabase(user.id, post.id, {
           username: user.username,
           avatarUrl: user.profileImage || null,
-        }).then(() => {
-          // 트리거가 posts.likes_count를 갱신하므로 최신값을 다시 조회
-          refreshPostFromSupabase();
+        }).then(async (sup) => {
+          if (!sup?.success) {
+            setLiked(wasLiked);
+            setLikeCount((prev) => {
+              const b = Number(prev);
+              const safe = Number.isFinite(b) ? b : 0;
+              return Math.max(0, safe + (optimisticLiked ? -1 : 1));
+            });
+            return;
+          }
+          const n = await fetchPostLikesCountSupabase(post.id);
+          if (n != null) {
+            setLikeCount(n);
+            setPost((p) => (p ? { ...p, likes: n, likeCount: n } : p));
+            applyPostLikesCountFromServer(post.id, n);
+          } else {
+            refreshPostFromSupabase();
+          }
         });
-        setLiked(optimisticLiked);
       } else {
         // Supabase 게시물(레거시): DB에 좋아요 수 반영
         const delta = optimisticLiked ? 1 : -1;
