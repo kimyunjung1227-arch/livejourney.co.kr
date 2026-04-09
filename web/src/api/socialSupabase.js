@@ -6,6 +6,30 @@ import { setLikedPostLocalCache } from '../utils/socialInteractions';
 const isValidUuid = (v) =>
   typeof v === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v.trim());
 
+/** PostgREST insert 시 (post_id,user_id) 등 unique 충돌 */
+function isUniqueConflictError(err, depth = 0) {
+  if (!err || depth > 2) return false;
+  const status = Number(err.status ?? err.statusCode ?? err?.context?.response?.status ?? 0);
+  if (status === 409) return true;
+  const code = String(err.code || '');
+  if (code === '23505' || code === '409') return true;
+  const msg = String(err.message || err.msg || '').toLowerCase();
+  if (
+    msg.includes('duplicate') ||
+    msg.includes('unique constraint') ||
+    msg.includes('already exists') ||
+    msg.includes('violates unique') ||
+    msg.includes('conflict')
+  ) {
+    return true;
+  }
+  const det = String(err.details || err.hint || '').toLowerCase();
+  if (det.includes('duplicate') || det.includes('unique')) return true;
+  if (isUniqueConflictError(err.error, depth + 1)) return true;
+  if (isUniqueConflictError(err.cause, depth + 1)) return true;
+  return false;
+}
+
 /** @returns {string[]|null} 실패 시 null(로컬 likedPosts 캐시를 잘못 덮어쓰지 않음) */
 export const fetchLikedPostIdsSupabase = async (userId, postIds) => {
   const uid = String(userId || '').trim();
@@ -67,8 +91,9 @@ async function resolveActorDisplayForLike(uid, hint) {
 }
 
 /**
- * 좋아요 토글. `likedBeforeClick`은 클릭 직전 UI/캐시 상태(필수) — DB 선조회와 어긋나 409가 나지 않도록 함.
- * 좋아요 추가는 upsert + ignoreDuplicates 로 (post_id,user_id) 중복 시 409 대신 멱등 성공.
+ * 좋아요 토글. `likedBeforeClick`은 클릭 직전 UI/캐시 상태(필수).
+ * 좋아요 추가는 insert만 사용 — 일부 호스트에서 upsert+ignoreDuplicates도 409를 반환하므로,
+ * 409/23505/duplicate 메시지는 "이미 좋아요됨"으로 멱등 성공 처리.
  */
 export const togglePostLikeSupabase = async (userId, postId, actorHint = null, opts = {}) => {
   const uid = String(userId || '').trim();
@@ -87,14 +112,36 @@ export const togglePostLikeSupabase = async (userId, postId, actorHint = null, o
       return { success: true, isLiked: false };
     }
 
+    // 409(중복) 자체가 안 나게: 이미 좋아요면 insert를 호출하지 않음
+    // (UI가 stale 해도 서버 상태를 우선)
+    const { data: existsRow, error: existsErr } = await supabase
+      .from('post_likes')
+      .select('post_id')
+      .eq('user_id', uid)
+      .eq('post_id', pid)
+      .maybeSingle();
+    if (existsErr) throw existsErr;
+    if (existsRow) {
+      setLikedPostLocalCache(pid, true);
+      return { success: true, isLiked: true };
+    }
+
     const { data: insData, error: insErr } = await supabase
       .from('post_likes')
-      .upsert({ user_id: uid, post_id: pid }, { onConflict: 'post_id,user_id', ignoreDuplicates: true })
-      .select('post_id');
-    if (insErr) throw insErr;
+      .insert({ user_id: uid, post_id: pid })
+      .select('post_id')
+      .maybeSingle();
+
+    if (insErr) {
+      if (isUniqueConflictError(insErr)) {
+        setLikedPostLocalCache(pid, true);
+        return { success: true, isLiked: true };
+      }
+      throw insErr;
+    }
 
     setLikedPostLocalCache(pid, true);
-    const insertedFresh = Array.isArray(insData) ? insData.length > 0 : !!insData;
+    const insertedFresh = !!insData;
 
     const { data: postRow } = await supabase
       .from('posts')
@@ -255,10 +302,11 @@ export const followSupabase = async (followerId, followingId) => {
   const tid = String(followingId || '').trim();
   if (!isValidUuid(fid) || !isValidUuid(tid) || fid === tid) return { success: false };
   try {
-    const { error } = await supabase
-      .from('follows')
-      .upsert({ follower_id: fid, following_id: tid }, { onConflict: 'follower_id,following_id', ignoreDuplicates: true });
-    if (error) throw error;
+    const { error } = await supabase.from('follows').insert({ follower_id: fid, following_id: tid });
+    if (error) {
+      if (isUniqueConflictError(error)) return { success: true };
+      throw error;
+    }
     return { success: true };
   } catch (e) {
     logger.warn('followSupabase 실패:', e?.message);
