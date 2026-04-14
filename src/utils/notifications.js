@@ -84,6 +84,13 @@ export const addNotification = (notification) => {
   }
 };
 
+// 서버/DB 기반 알림 전송용 인터페이스(웹 단독 실행에서도 빌드되도록 로컬 폴백)
+export const sendNotificationToUser = async (_userId, notification) => {
+  // 현재 MVP에서는 로컬 알림으로만 저장합니다.
+  addNotification(notification);
+  return { success: true };
+};
+
 // 알림 읽음 처리
 export const markNotificationAsRead = (notificationId) => {
   try {

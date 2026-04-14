@@ -163,6 +163,9 @@ export const filterRecentPosts = (posts, maxDays = 2, maxHours = null) => {
     });
 };
 
+// 기존 호출부 호환: 48시간 이내 "활성" 게시물 필터
+export const filterActivePosts48 = (posts) => filterRecentPosts(posts, 2, 48);
+
 // 게시물 나이(시간) 계산 (시간 단위)
 export const getPostAgeInHours = (timestamp) => {
   if (!timestamp) return 0;
@@ -170,6 +173,13 @@ export const getPostAgeInHours = (timestamp) => {
   const now = new Date();
   const postDate = new Date(timestamp);
   return (now - postDate) / (1000 * 60 * 60);
+};
+
+// "실시간" 여부: 지정 시간(기본 48h) 이내인지 판단
+export const isPostLive = (timestamp, liveHours = 48) => {
+  if (!timestamp) return true;
+  const age = getPostAgeInHours(timestamp);
+  return Number.isFinite(age) ? age < Number(liveHours || 48) : true;
 };
 
 export default {
@@ -180,6 +190,8 @@ export default {
   sortByTime,
   isOlderThanTwoDays,
   filterRecentPosts,
-  getPostAgeInHours
+  filterActivePosts48,
+  getPostAgeInHours,
+  isPostLive
 };
 

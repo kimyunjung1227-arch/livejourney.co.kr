@@ -82,6 +82,17 @@ export const uploadProfileImage = async (file) => {
   }
 };
 
+// 업로드된 이미지/동영상 경로를 브라우저에서 표시 가능한 URL로 정규화
+// - 기존 코드에서 이 유틸을 기대하고 있어, 최소 동작을 보장합니다.
+export const getDisplayImageUrl = (raw) => {
+  if (!raw) return '';
+  const s = String(raw);
+  if (/^(https?:)?\/\//i.test(s)) return s;
+  if (/^(data:|blob:)/i.test(s)) return s;
+  // 상대경로는 그대로 반환 (서빙 환경에 따라 base가 붙음)
+  return s;
+};
+
 
 
 

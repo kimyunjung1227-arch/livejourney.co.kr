@@ -216,4 +216,27 @@ export const getBookmarkedPosts = () => {
   return JSON.parse(localStorage.getItem('bookmarkedPosts') || '[]');
 };
 
+// Supabase 연동 모듈에서 참조하는 로컬 캐시 갱신(없어도 동작하도록 안전 구현)
+export const setLikedPostLocalCache = (postId, isLiked) => {
+  try {
+    const likes = JSON.parse(localStorage.getItem('likedPosts') || '{}');
+    likes[String(postId)] = Boolean(isLiked);
+    localStorage.setItem('likedPosts', JSON.stringify(likes));
+  } catch {
+    // ignore
+  }
+};
+
+// 핫스팟 검증 모듈에서 참조하는 "정확도" 카운트(미구현 시 0으로 폴백)
+export const getPostAccuracyCount = (postId) => {
+  try {
+    const raw = JSON.parse(localStorage.getItem('postAccuracyCounts') || '{}');
+    const v = raw ? raw[String(postId)] : 0;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+  } catch {
+    return 0;
+  }
+};
+
 
