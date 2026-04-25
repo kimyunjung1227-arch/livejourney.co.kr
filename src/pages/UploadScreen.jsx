@@ -15,6 +15,8 @@ import { getBadgeCongratulationMessage, getBadgeDifficultyEffects } from '../uti
 import { logger } from '../utils/logger';
 import { useExifConsent } from '../contexts/ExifConsentContext';
 import { convertGpsToAddress, extractExifData, isExifCaptureTooOldForUpload } from '../utils/exifExtractor';
+import { getLiveSyncPercentRounded } from '../utils/trustIndex';
+import { setLiveSyncPctSupabase } from '../api/liveSyncSupabase';
 
 const UploadScreen = () => {
   const navigate = useNavigate();
@@ -720,6 +722,19 @@ const UploadScreen = () => {
               이미지수: sanitizedPost.imageCount,
               비디오수: sanitizedPost.videoCount
             });
+          }
+
+          // LiveSync: 업로드 직후 즉시 재계산 → Supabase profiles에 반영 (화면 간 동기화)
+          try {
+            const uid = currentUser?.id || savedUser?.id || null;
+            const isUuid = typeof uid === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(uid.trim());
+            if (isUuid) {
+              const pct = getLiveSyncPercentRounded(uid.trim(), updatedPosts);
+              await setLiveSyncPctSupabase(uid.trim(), pct);
+              window.dispatchEvent(new Event('trustIndexUpdated'));
+            }
+          } catch {
+            // ignore
           }
           
           setUploadProgress(100);

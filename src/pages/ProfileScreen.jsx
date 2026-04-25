@@ -136,27 +136,14 @@ const ProfileScreen = () => {
   const [selectedSavedRoute, setSelectedSavedRoute] = useState(null);
   const [liveSync, setLiveSync] = useState(35);
 
-  // 라이브싱크는 Supabase profiles 값만 사용(로컬 계산/캐시 제거)
-  useEffect(() => {
-    const uid = (authUser || user)?.id;
-    if (!uid) return;
-    let cancelled = false;
-    (async () => {
-      const pct = await fetchLiveSyncPctSupabase(uid, { bypassCache: true });
-      if (!cancelled) setLiveSync(pct);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [authUser?.id, user?.id]);
-
   const refreshLiveSync = useCallback(() => {
     const uid = (authUser || user)?.id;
     if (!uid) return;
-    void (async () => {
-      const pct = await fetchLiveSyncPctSupabase(uid, { bypassCache: true });
-      setLiveSync(pct);
-    })();
+    const postsArg = myPostsRef.current?.length ? myPostsRef.current : null;
+    const pct = getLiveSyncPercentRounded(String(uid), postsArg);
+    setLiveSync(pct);
+    // 단일 소스: 계산 결과를 Supabase profiles에 저장해 모든 화면에서 동일하게 노출
+    void setLiveSyncPctSupabase(String(uid), pct);
   }, [authUser?.id, user?.id]);
 
   useEffect(() => {
