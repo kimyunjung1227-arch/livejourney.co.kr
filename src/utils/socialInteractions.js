@@ -239,4 +239,71 @@ export const getPostAccuracyCount = (postId) => {
   }
 };
 
+// PostDetailScreen에서 참조하는 정확도 피드백 API (미구현이면 안전 폴백)
+export const hasUserMarkedAccurate = (postId) => {
+  try {
+    const raw = JSON.parse(localStorage.getItem('postAccuracyMarked') || '{}');
+    return Boolean(raw && raw[String(postId)]);
+  } catch {
+    return false;
+  }
+};
+
+export const toggleAccuracyFeedback = async (postId) => {
+  try {
+    const id = String(postId || '').trim();
+    if (!id) return { marked: false, newCount: getPostAccuracyCount(id) };
+    const markedRaw = JSON.parse(localStorage.getItem('postAccuracyMarked') || '{}') || {};
+    const countsRaw = JSON.parse(localStorage.getItem('postAccuracyCounts') || '{}') || {};
+    const was = Boolean(markedRaw[id]);
+    const prev = Number(countsRaw[id]) || 0;
+    const nextCount = Math.max(0, prev + (was ? -1 : 1));
+    markedRaw[id] = !was;
+    countsRaw[id] = nextCount;
+    localStorage.setItem('postAccuracyMarked', JSON.stringify(markedRaw));
+    localStorage.setItem('postAccuracyCounts', JSON.stringify(countsRaw));
+    return { marked: !was, newCount: nextCount };
+  } catch {
+    return { marked: false, newCount: getPostAccuracyCount(postId) };
+  }
+};
+
+// PostDetailScreen에서 참조하는 댓글 로컬 편집 API (미구현이면 안전 폴백)
+export const deleteCommentFromPost = (postId, commentId) => {
+  try {
+    const posts = JSON.parse(localStorage.getItem('uploadedPosts') || '[]');
+    const next = posts.map((p) => {
+      if (!p || String(p.id) !== String(postId)) return p;
+      const comments = Array.isArray(p.comments) ? p.comments : [];
+      return { ...p, comments: comments.filter((c) => String(c?.id) !== String(commentId)) };
+    });
+    localStorage.setItem('uploadedPosts', JSON.stringify(next));
+    const updated = next.find((p) => p && String(p.id) === String(postId));
+    return updated?.comments || [];
+  } catch {
+    return [];
+  }
+};
+
+export const updateCommentInPost = (postId, commentId, newContent) => {
+  try {
+    const posts = JSON.parse(localStorage.getItem('uploadedPosts') || '[]');
+    const next = posts.map((p) => {
+      if (!p || String(p.id) !== String(postId)) return p;
+      const comments = Array.isArray(p.comments) ? p.comments : [];
+      return {
+        ...p,
+        comments: comments.map((c) =>
+          c && String(c?.id) === String(commentId) ? { ...c, content: String(newContent ?? '') } : c
+        ),
+      };
+    });
+    localStorage.setItem('uploadedPosts', JSON.stringify(next));
+    const updated = next.find((p) => p && String(p.id) === String(postId));
+    return updated?.comments || [];
+  } catch {
+    return [];
+  }
+};
+
 

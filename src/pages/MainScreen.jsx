@@ -16,7 +16,7 @@ import { getDisplayImageUrl } from '../api/upload';
 import { getMapThumbnailUri } from '../utils/postMedia';
 import { getPostAccuracyCount, toggleLike, isPostLiked } from '../utils/socialInteractions';
 import { rankHotspotPosts } from '../utils/hotnessEngine';
-import { updatePostLikesSupabase } from '../api/postsSupabase';
+// updatePostLikesSupabase는 현재 api/postsSupabase.js에 존재하지 않음(빌드 에러 방지)
 import { getWeatherByRegion } from '../api/weather';
 import { listPublishedMagazines } from '../utils/magazinesStore';
 import {
@@ -688,7 +688,7 @@ const MainScreen = () => {
             );
         } else {
             const delta = wasLiked ? -1 : 1;
-            updatePostLikesSupabase(post.id, delta);
+            // 서버 좋아요 반영은 toggleLikeForPost/postsSupabase 로직으로 처리(메인 화면에서 직접 호출 제거)
             setCrowdedData((prev) =>
                 prev.map((p) =>
                     (p && p.id === post.id ? { ...p, likes: result.newCount, likeCount: result.newCount } : p)

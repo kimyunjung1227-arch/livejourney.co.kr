@@ -238,6 +238,17 @@ export const notifyFollow = (username) => {
   });
 };
 
+// 코드 호환용(다른 화면에서 참조): 팔로잉 시작 알림
+export const notifyFollowingStarted = (targetUsername) => {
+  // 기존 UI/로컬 알림 구조에서는 follow 타입으로 통일
+  notifyFollow(targetUsername);
+};
+
+// 코드 호환용: 팔로우를 "받은" 사용자에게 알림 (로컬 폴백)
+export const notifyFollowReceived = (actorUsername) => {
+  notifyFollow(actorUsername);
+};
+
 // 시스템 알림
 export const notifySystem = (title, message, link = null) => {
   addNotification({

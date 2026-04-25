@@ -684,6 +684,36 @@ export const checkNewBadges = (stats) => {
   }
 };
 
+// 업로드 화면 등에서 참조하는 "뱃지 안내 노출" 상태(로컬 폴백)
+const SEEN_BADGES_KEY = 'lj_seenBadges';
+
+export const hasSeenBadge = (badgeName) => {
+  try {
+    const key = String(badgeName || '').trim();
+    if (!key) return false;
+    const raw = localStorage.getItem(SEEN_BADGES_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    return Boolean(parsed && parsed[key]);
+  } catch {
+    return false;
+  }
+};
+
+export const markBadgeAsSeen = (badgeName) => {
+  try {
+    const key = String(badgeName || '').trim();
+    if (!key) return false;
+    const raw = localStorage.getItem(SEEN_BADGES_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    const next = parsed && typeof parsed === 'object' ? { ...parsed } : {};
+    next[key] = true;
+    localStorage.setItem(SEEN_BADGES_KEY, JSON.stringify(next));
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 /**
  * 뱃지 획득 처리 (Supabase + localStorage 둘 다 저장 → 로그아웃 후에도 유지)
  * @param {object} opts - { region, userId } 지역 뱃지일 때 region, Supabase 저장용 userId

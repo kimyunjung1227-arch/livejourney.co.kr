@@ -6,6 +6,11 @@ import './utils/clearStorage'
 import { requestNotificationPermission } from './utils/browserNotifications'
 import { logger } from './utils/logger'
 
+// 배포 반영 여부를 콘솔에서 즉시 확인
+try {
+  logger.log('🧩 build-id:', import.meta.env.VITE_BUILD_ID || '(none)')
+} catch {}
+
 // Kakao Map API 동적 로드
 const loadKakaoMapAPI = () => {
   return new Promise((resolve, reject) => {

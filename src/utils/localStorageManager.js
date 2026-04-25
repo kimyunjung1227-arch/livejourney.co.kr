@@ -230,6 +230,30 @@ export const logLocalStorageStatus = () => {
   }
 };
 
+// 다른 화면 코드 호환: 안전하게 업로드 게시물 읽기
+export const getUploadedPostsSafe = () => {
+  try {
+    const raw = localStorage.getItem('uploadedPosts');
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
+// 다른 화면 코드 호환: 레거시 형태의 uploadedPosts 정리(없으면 no-op)
+export const cleanLegacyUploadedPosts = () => {
+  try {
+    const posts = getUploadedPostsSafe();
+    // 기본 정규화: id 필드 없는 경우 보존하되 stringify 가능한 형태로만 유지
+    const normalized = posts.filter((p) => p && typeof p === 'object');
+    localStorage.setItem('uploadedPosts', JSON.stringify(normalized));
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 
 
 
