@@ -16,7 +16,8 @@ const POST_ACCURACY_COUNT_KEY = 'postAccuracyCount';
 const TRUST_PENALTY_KEY = 'trustPenalty'; // legacy key (세션 메모리)
 const TRUST_LAST_ACTIVE_KEY = 'trustLastActive'; // legacy key (세션 메모리)
 const COMPASS_SCORE_CACHE_KEY = 'compassScoreCache'; // legacy key (세션 메모리)
-const LIVE_SYNC_PCT_CACHE_KEY = 'lj_liveSyncPctCache_v1';
+// 서버에서 live_sync_pct를 초기화/리셋할 수 있어, 로컬 캐시를 강제로 무효화하기 위해 버전 키를 올린다.
+const LIVE_SYNC_PCT_CACHE_KEY = 'lj_liveSyncPctCache_v2';
 
 // 서버 운영 전환: localStorage 제거 → 세션 메모리 캐시
 const memory = {
@@ -26,7 +27,7 @@ const memory = {
   trustLastActive: {}, // userId -> ts
   compassScoreCache: {}, // userId -> { score, ts }
   // 화면 간 라이브 싱크(%) 일관성을 위한 캐시
-  liveSyncCache: {}, // userId -> { pct, ts }
+  liveSyncCache: {}, // userId -> { pct, ts, sampleCount }
 };
 
 const safeReadLiveSyncStore = () => {
@@ -51,7 +52,7 @@ const safeWriteLiveSyncStore = (obj) => {
 
 /** 라이브 싱크 산정 파라미터 */
 const LIVE_SYNC = {
-  base: 50,
+  base: 35,
   // "현장성"은 최신/실시간성에 강하게 반응하도록
   maxUpRealtime: 25,
   maxUpHelpful: 15,
@@ -443,32 +444,61 @@ export const getLiveSyncPercentRounded = (userId = null, postsOverride = null) =
  * - ProfileScreen/UserProfileScreen 등에서 계산한 값을 캐시에 저장해두면
  *   피드/상세/핫플 등 다른 화면에서 postsOverride가 부분 집합이어도 동일한 값으로 표시 가능.
  */
-export const setLiveSyncPercentCache = (userId, pct) => {
+export const setLiveSyncPercentCache = (userId, pct, sampleCount = null, options = {}) => {
   const uid = userId != null ? String(userId) : '';
   if (!uid) return;
   const n = Math.round(Number(pct));
   if (!Number.isFinite(n)) return;
   const clamped = Math.max(0, Math.min(100, n));
   const ts = Date.now();
-  memory.liveSyncCache[uid] = { pct: clamped, ts };
+  const sc = sampleCount != null ? Math.max(0, Number(sampleCount) || 0) : (memory.liveSyncCache?.[uid]?.sampleCount ?? 0);
+  const prev = memory.liveSyncCache?.[uid];
+  const authoritative = options && typeof options === 'object' ? options.authoritative === true : false;
+  // 점수가 갑자기 튀지 않도록 완만하게 누적(스무딩) — 단, 프로필처럼 "게시물 전체"가 들어온 값은 즉시 스냅
+  const prevPct = typeof prev?.pct === 'number' ? prev.pct : null;
+  const maxStep = 2; // 한 번 갱신에서 최대 2%만 변동
+  const nextPct =
+    authoritative || prevPct == null
+      ? clamped
+      : Math.max(0, Math.min(100, prevPct + Math.max(-maxStep, Math.min(maxStep, clamped - prevPct))));
+  memory.liveSyncCache[uid] = { pct: nextPct, ts, sampleCount: sc };
 
   // 프로필 화면에서 계산한 값을 다른 화면에서도 동일하게 쓰기 위해 로컬에도 보관
   const store = safeReadLiveSyncStore();
-  store[uid] = { pct: clamped, ts };
+  store[uid] = { pct: nextPct, ts, sampleCount: sc };
   safeWriteLiveSyncStore(store);
 };
 
 export const getLiveSyncPercentRoundedFromCache = (userId = null, postsOverride = null) => {
   const uid = userId != null ? String(userId) : null;
+  const sampleCount = Array.isArray(postsOverride) ? postsOverride.length : 0;
   if (uid) {
     const mem = memory.liveSyncCache?.[uid];
+    // 캐시가 없거나, 더 큰 샘플(게시물 수)로 들어왔으면 재계산해서 캐시를 갱신
+    if (
+      (!mem || typeof mem.pct !== 'number') ||
+      (sampleCount > Number(mem?.sampleCount || 0) && sampleCount > 0)
+    ) {
+      const computed = getLiveSyncPercentRounded(uid, postsOverride);
+      const ts = Date.now();
+      // "더 큰 샘플"로 재계산된 값은 authoritative로 보고 즉시 스냅 (프로필 첫 진입 통일용)
+      memory.liveSyncCache[uid] = { pct: computed, ts, sampleCount };
+      const store = safeReadLiveSyncStore();
+      store[uid] = { pct: computed, ts, sampleCount };
+      safeWriteLiveSyncStore(store);
+      return computed;
+    }
     if (mem && typeof mem.pct === 'number') return mem.pct;
 
     const store = safeReadLiveSyncStore();
     const saved = store?.[uid];
     if (saved && typeof saved.pct === 'number') {
       // 메모리도 워밍업
-      memory.liveSyncCache[uid] = { pct: saved.pct, ts: saved.ts || Date.now() };
+      memory.liveSyncCache[uid] = {
+        pct: saved.pct,
+        ts: saved.ts || Date.now(),
+        sampleCount: Number(saved?.sampleCount || 0),
+      };
       return saved.pct;
     }
   }

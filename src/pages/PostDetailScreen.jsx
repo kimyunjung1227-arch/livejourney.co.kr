@@ -16,7 +16,7 @@ import { getWeatherByRegion } from '../api/weather';
 import { getTimeAgo } from '../utils/dateUtils';
 import { addComment, deleteCommentFromPost, updateCommentInPost, getPostAccuracyCount, hasUserMarkedAccurate, toggleAccuracyFeedback } from '../utils/socialInteractions';
 import { getBadgeDisplayName, getEarnedBadgesForUser } from '../utils/badgeSystem';
-import { getLiveSyncPercentRoundedFromCache } from '../utils/trustIndex';
+import { fetchLiveSyncPctSupabase } from '../api/liveSyncSupabase';
 import { follow, unfollow, isFollowing } from '../utils/followSystem';
 import { notifyFollowingStarted, notifyLike, notifyComment } from '../utils/notifications';
 import { mergeCommentsWithCache, setCommentsCacheForPost } from '../utils/postCommentsCache';
@@ -855,7 +855,8 @@ const PostDetailScreen = () => {
         setRepresentativeBadge(repBadge);
       }
 
-      setAuthorLiveSync(getLiveSyncPercentRoundedFromCache(authorId || null, postsForAuthor.length ? postsForAuthor : null));
+      const pct = await fetchLiveSyncPctSupabase(authorId || null);
+      setAuthorLiveSync(pct);
       setAuthorTrustGrade(null);
     })();
   }, [post]);

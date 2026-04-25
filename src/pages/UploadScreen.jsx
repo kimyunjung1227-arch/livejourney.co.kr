@@ -13,11 +13,14 @@ import { getCurrentTimestamp, getTimeAgo } from '../utils/timeUtils';
 import { gainExp } from '../utils/levelSystem';
 import { getBadgeCongratulationMessage, getBadgeDifficultyEffects } from '../utils/badgeMessages';
 import { logger } from '../utils/logger';
+import { useExifConsent } from '../contexts/ExifConsentContext';
+import { convertGpsToAddress, extractExifData, isExifCaptureTooOldForUpload } from '../utils/exifExtractor';
 
 const UploadScreen = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
+  const { exifAllowed } = useExifConsent();
   const [showPhotoOptions, setShowPhotoOptions] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [formData, setFormData] = useState({
@@ -39,6 +42,7 @@ const UploadScreen = () => {
   const [autoTags, setAutoTags] = useState([]);
   const [loadingLocation, setLoadingLocation] = useState(false);
   const [loadingAITags, setLoadingAITags] = useState(false);
+  const [exifExtracting, setExifExtracting] = useState(false);
   const [showBadgeModal, setShowBadgeModal] = useState(false);
   const [earnedBadge, setEarnedBadge] = useState(null);
   const reanalysisTimerRef = useRef(null);
@@ -262,6 +266,35 @@ const UploadScreen = () => {
       }
     });
 
+    // EXIF: 첫 사진 업로드 시 메타데이터(촬영 시각/위치) 즉시 반영 + 48시간 초과 차단
+    let exifFirst = null;
+    let exifFileKey = '';
+    if (imageFiles.length > 0 && exifAllowed) {
+      setExifExtracting(true);
+      try {
+        // 첫 유효 이미지 찾기 (48h 초과면 제외)
+        for (let i = 0; i < imageFiles.length; i += 1) {
+          const f = imageFiles[i];
+          const ex = await extractExifData(f, { allowed: true });
+          if (ex?.photoDate && isExifCaptureTooOldForUpload(ex.photoDate, { isInAppCamera: false, hasOnlyVideo: false })) {
+            alert('촬영 후 48시간이 지난 사진은 업로드할 수 없습니다.');
+            imageFiles.splice(i, 1);
+            i -= 1;
+            continue;
+          }
+          if (ex) {
+            exifFirst = ex;
+            exifFileKey = `${f.name}:${f.size}:${f.lastModified}`;
+          }
+          break;
+        }
+      } catch (err) {
+        logger.warn('EXIF 추출 실패(무시):', err);
+      } finally {
+        setExifExtracting(false);
+      }
+    }
+
     const imageUrls = imageFiles.map(file => URL.createObjectURL(file));
     const videoUrls = videoFiles.map(file => URL.createObjectURL(file));
     const isFirstMedia = formData.images.length === 0 && formData.videos.length === 0;
@@ -271,18 +304,42 @@ const UploadScreen = () => {
       images: [...prev.images, ...imageUrls],
       imageFiles: [...prev.imageFiles, ...imageFiles],
       videos: [...prev.videos, ...videoUrls],
-      videoFiles: [...prev.videoFiles, ...videoFiles]
+      videoFiles: [...prev.videoFiles, ...videoFiles],
+      photoDate: exifFirst?.photoDate || prev.photoDate,
+      exifData: exifFirst ? { ...exifFirst } : prev.exifData,
+      prefetchedExif: exifFirst
+        ? { fileKey: exifFileKey, exif: { photoDate: exifFirst.photoDate, dateTimeOriginalRaw: exifFirst.dateTimeOriginalRaw } }
+        : prev.prefetchedExif,
     }));
 
     if (isFirstMedia && (imageFiles.length > 0 || videoFiles.length > 0)) {
-      getCurrentLocation();
+      // EXIF GPS가 있으면 그 위치를 우선 사용하고, 없으면 현재 위치로 폴백
+      if (exifFirst?.gpsCoordinates?.lat != null && exifFirst?.gpsCoordinates?.lng != null) {
+        const lat = Number(exifFirst.gpsCoordinates.lat);
+        const lng = Number(exifFirst.gpsCoordinates.lng);
+        if (Number.isFinite(lat) && Number.isFinite(lng)) {
+          void (async () => {
+            const exifLoc = await convertGpsToAddress(lat, lng);
+            setFormData((prev) => ({
+              ...prev,
+              location: exifLoc || prev.location,
+              coordinates: { lat, lng },
+              verifiedLocation: exifLoc || prev.verifiedLocation || null,
+            }));
+          })();
+        } else {
+          getCurrentLocation();
+        }
+      } else {
+        getCurrentLocation();
+      }
       // 사진 파일만 분석 (동영상은 제외)
       const firstImageFile = imageFiles[0];
       if (firstImageFile && !firstImageFile.type.startsWith('video/')) {
         analyzeImageAndGenerateTags(firstImageFile, formData.location, formData.note);
       }
     }
-  }, [formData.images.length, formData.videos.length, formData.location, formData.note, getCurrentLocation, analyzeImageAndGenerateTags]);
+  }, [formData.images.length, formData.videos.length, formData.location, formData.note, exifAllowed, getCurrentLocation, analyzeImageAndGenerateTags]);
 
 
   useEffect(() => {
@@ -468,6 +525,18 @@ const UploadScreen = () => {
       return;
     }
 
+    // 촬영시간(EXIF) 기준 48시간 초과면 업로드 차단
+    if (
+      formData?.exifData?.photoDate &&
+      isExifCaptureTooOldForUpload(formData.exifData.photoDate, {
+        isInAppCamera: false,
+        hasOnlyVideo: formData.imageFiles.length === 0,
+      })
+    ) {
+      alert('촬영 후 48시간이 지난 사진은 업로드할 수 없습니다.');
+      return;
+    }
+
     logger.log('Validation passed - proceeding with upload');
 
     try {
@@ -604,7 +673,11 @@ const UploadScreen = () => {
             coordinates: formData.coordinates,
             detailedLocation: formData.location,
             placeName: formData.location,
-            region: region // 지역 정보 추가
+            region: region, // 지역 정보 추가
+            // EXIF 기반 촬영 정보/위치 인증(현장LIVE/최근인증 태그 계산에 사용)
+            photoDate: formData?.exifData?.photoDate || null,
+            exifData: formData?.exifData || null,
+            verifiedLocation: formData?.verifiedLocation || null,
           };
           
           // localStorage에는 이미지를 저장하지 않음 (용량 문제)

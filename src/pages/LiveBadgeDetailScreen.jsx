@@ -155,17 +155,40 @@ const LiveBadgeDetailScreen = () => {
             </div>
           </section>
 
-          {/* 다음 등급: 아이콘 우측 → 달성조건/현재상태 */}
+          {/* 다음 뱃지: (좌) 달성조건/진행사항 → (우) 아이콘 */}
           <section className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
-            {sectionTitle('다음 등급')}
+            {sectionTitle('다음 뱃지')}
 
             <div className="mt-4 flex items-center justify-between gap-3">
               <div className="min-w-0 flex-1">
                 <div className="text-sm font-extrabold text-gray-900 dark:text-gray-100 truncate">
-                  {hasNextStage ? (nextLabel || '다음 등급') : isDynMaxTier ? '최고 등급' : '다음 등급'}
+                  {hasNextStage ? (nextLabel || '다음 뱃지') : isDynMaxTier ? '최고 단계' : '다음 뱃지'}
                 </div>
-                <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                  {nextConditionText}
+
+                <div className="mt-3 space-y-3">
+                  <div>
+                    {sectionTitle('달성 조건')}
+                    <p className="mt-2 text-sm leading-relaxed text-gray-800 dark:text-gray-200 break-keep">
+                      {nextConditionText}
+                    </p>
+                  </div>
+
+                  <div>
+                    {sectionTitle('진행 사항')}
+                    {hasNextStage ? (
+                      <>
+                        <div className="mt-2 h-2.5 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-gray-800">
+                          <div
+                            className="h-full rounded-full bg-primary transition-all"
+                            style={{ width: `${Math.round(pct * 100)}%` }}
+                          />
+                        </div>
+                        <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">{statusLine}</p>
+                      </>
+                    ) : (
+                      <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">{statusLine}</p>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -177,25 +200,6 @@ const LiveBadgeDetailScreen = () => {
                 size={72}
                 className="shrink-0"
               />
-            </div>
-
-            <div className="mt-4 border-t border-gray-100 dark:border-gray-800 pt-4 space-y-3">
-              <div>
-                {sectionTitle('현재 상태')}
-                {hasNextStage ? (
-                  <>
-                    <div className="mt-2 h-2.5 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-gray-800">
-                      <div
-                        className="h-full rounded-full bg-primary transition-all"
-                        style={{ width: `${Math.round(pct * 100)}%` }}
-                      />
-                    </div>
-                    <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">{statusLine}</p>
-                  </>
-                ) : (
-                  <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">{statusLine}</p>
-                )}
-              </div>
             </div>
           </section>
         </div>

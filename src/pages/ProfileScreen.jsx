@@ -8,7 +8,7 @@ import BottomNavigation from '../components/BottomNavigation';
 import { getUnreadCount, notifyFollowingStarted } from '../utils/notifications';
 import { getEarnedBadgesForUser, getBadgeDisplayName } from '../utils/badgeSystem';
 import ProfileInjangSection from '../components/ProfileInjangSection';
-import { getLiveSyncPercentRounded, getLiveSyncPercent, TRUST_GRADES, setLiveSyncPercentCache } from '../utils/trustIndex';
+import { getLiveSyncPercentRounded, getLiveSyncPercent, TRUST_GRADES } from '../utils/trustIndex';
 import { getCoordinatesByLocation } from '../utils/regionLocationMapping';
 import {
   follow,
@@ -27,6 +27,8 @@ import { getDisplayImageUrl } from '../api/upload';
 import api from '../api/axios';
 import { cleanLegacyUploadedPosts, getUploadedPostsSafe } from '../utils/localStorageManager';
 import { deletePostSupabase, fetchPostsByUserIdSupabase, fetchPostsSupabase } from '../api/postsSupabase';
+import { fetchProfilesByIdsSupabase } from '../api/profilesSupabase';
+import { fetchLiveSyncPctSupabase, setLiveSyncPctSupabase } from '../api/liveSyncSupabase';
 import {
   resolveUserDisplayFromPosts,
   getCachedFollowProfile,
@@ -132,14 +134,29 @@ const ProfileScreen = () => {
   const [activeTab, setActiveTab] = useState('my'); // 'my' | 'map' | 'savedRoutes'
   const [savedRoutes, setSavedRoutes] = useState([]);
   const [selectedSavedRoute, setSelectedSavedRoute] = useState(null);
-  const [liveSync, setLiveSync] = useState(50);
+  const [liveSync, setLiveSync] = useState(35);
+
+  // 라이브싱크는 Supabase profiles 값만 사용(로컬 계산/캐시 제거)
+  useEffect(() => {
+    const uid = (authUser || user)?.id;
+    if (!uid) return;
+    let cancelled = false;
+    (async () => {
+      const pct = await fetchLiveSyncPctSupabase(uid, { bypassCache: true });
+      if (!cancelled) setLiveSync(pct);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [authUser?.id, user?.id]);
 
   const refreshLiveSync = useCallback(() => {
     const uid = (authUser || user)?.id;
-    const postsArg = myPostsRef.current?.length ? myPostsRef.current : null;
-    const pct = getLiveSyncPercentRounded(uid ? String(uid) : null, postsArg);
-    setLiveSync(pct);
-    if (uid) setLiveSyncPercentCache(String(uid), pct);
+    if (!uid) return;
+    void (async () => {
+      const pct = await fetchLiveSyncPctSupabase(uid, { bypassCache: true });
+      setLiveSync(pct);
+    })();
   }, [authUser?.id, user?.id]);
 
   useEffect(() => {
@@ -160,6 +177,13 @@ const ProfileScreen = () => {
   useEffect(() => {
     myPostsRef.current = myPosts;
   }, [myPosts]);
+
+  // 프로필 진입 직후에는 posts가 늦게 로딩되어 50%로 잠깐 보일 수 있어,
+  // 게시물 목록이 갱신되는 타이밍에도 라이브 싱크를 즉시 재계산한다.
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    refreshLiveSync();
+  }, [isAuthenticated, myPosts.length, refreshLiveSync]);
 
   // 게시물·저장소 기준 획득 인장 목록 (라이브 싱크 등급 제외)
   useEffect(() => {
@@ -276,6 +300,8 @@ const ProfileScreen = () => {
   const [followListIds, setFollowListIds] = useState([]);
   /** 팔로우 목록 모달: 로컬+Supabase 게시물 풀 (이름·아바타 추론용) */
   const [followListPostPool, setFollowListPostPool] = useState([]);
+  /** 팔로우 목록 모달: profiles 테이블 조회 결과(닉네임/아바타/bio) */
+  const [followListProfiles, setFollowListProfiles] = useState({});
   const [showTrustGradesModal, setShowTrustGradesModal] = useState(false);
   const [trustExplainOpen, setTrustExplainOpen] = useState(false);
   // 내 사진 탭 보기 방식: 'date' | 'custom'
@@ -373,10 +399,31 @@ const ProfileScreen = () => {
     if (!showFollowListModal) return;
     const local = getUploadedPostsSafe();
     setFollowListPostPool(local);
+    setFollowListProfiles({});
     let cancelled = false;
     const ids = Array.isArray(followListIds) ? followListIds : [];
     (async () => {
       try {
+        // profiles 우선 조회: 게시물이 없어도 닉네임/아바타가 "여행자"로 떨어지지 않게
+        try {
+          const rows = await fetchProfilesByIdsSupabase(ids);
+          if (!cancelled) {
+            const map = {};
+            (Array.isArray(rows) ? rows : []).forEach((r) => {
+              if (r?.id) {
+                map[String(r.id)] = {
+                  username: r?.username ? String(r.username) : '',
+                  profileImage: r?.avatar_url ? String(r.avatar_url) : null,
+                  bio: r?.bio ? String(r.bio) : null,
+                };
+              }
+            });
+            setFollowListProfiles(map);
+          }
+        } catch {
+          if (!cancelled) setFollowListProfiles({});
+        }
+
         const remote = await fetchPostsSupabase(authUser?.id || null);
         if (cancelled) return;
         const byId = new Map();
@@ -1671,7 +1718,7 @@ const ProfileScreen = () => {
             {/* 라이브 싱크 구역 - 현장 일치도를 %로 표시 */}
             <div className="px-6 py-4">
               {(() => {
-                const pct = typeof liveSync === 'number' ? liveSync : 50;
+                const pct = typeof liveSync === 'number' ? liveSync : 35;
                 const msg =
                   pct >= 90 ? '실시간 동기화 완료' :
                   pct >= 70 ? '높은 현장감' :
@@ -1692,10 +1739,12 @@ const ProfileScreen = () => {
                         <button
                           type="button"
                           onClick={() => { setShowTrustGradesModal(false); setTrustExplainOpen((v) => !v); }}
-                          className="px-2 py-0.5 rounded-full text-[11px] font-semibold border border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-900/60 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                          className="w-7 h-7 inline-flex items-center justify-center rounded-full border border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-900/60 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                           aria-label="라이브 싱크 설명 보기"
                         >
-                          설명
+                          <span className="material-symbols-outlined text-[18px]" aria-hidden>
+                            info
+                          </span>
                         </button>
                       </div>
                       <div className="flex items-center gap-1.5 shrink-0">
@@ -2433,6 +2482,13 @@ const ProfileScreen = () => {
                         return {
                           username: currentUserData.username || '여행자',
                           profileImage: currentUserData.profileImage || null,
+                        };
+                      }
+                      const fromProfiles = followListProfiles?.[String(uid)];
+                      if (fromProfiles?.username) {
+                        return {
+                          username: fromProfiles.username,
+                          profileImage: fromProfiles.profileImage || null,
                         };
                       }
                       const cached = getCachedFollowProfile(uid);

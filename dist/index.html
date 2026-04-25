@@ -3,27 +3,30 @@
 
 <head>
   <meta charset="UTF-8" />
-  <!-- 파비콘 없음: <link rel="icon"> 미사용 + /favicon.* 미배포 시 구글 검색 결과는 보통 회색 지구본(기본). 캐시 갱신까지 시간 소요 -->
+  <!-- 캐시 강제 무효화(반영 확인용) + 빌드 버전 -->
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  <meta name="lj-build-id" content="1777121140711" />
+  <!-- 임시 로고 제거: favicon 미사용 -->
   <link rel="manifest" href="/manifest.json" />
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <meta name="viewport"
     content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>라이브저니 - 여행지의 '지금'을 연결하는 실시간 커뮤니티</title>
-  <meta name="description" content="여행지의 지금 날씨·현장·인파를 실시간 제보로 확인하세요. 시차 없는 정보로 실패 없는 일정을 돕는 라이브저니 커뮤니티." />
-  <meta name="keywords" content="라이브저니, Live Journey, 실시간 여행, 여행 커뮤니티, 실시간 제보, 여행 정보, 혼잡도, 날씨, 지도" />
-  <meta name="robots" content="index, follow" />
+  <meta name="description" content="내가 가려는 그곳, 지금 날씨는? 인파는? 라이브저니에서 실시간 제보를 확인하고 실패 없는 여행을 계획하세요. 정보의 시차 없는 가장 빠른 여행 정보 공유 플랫폼, 라이브저니와 함께하세요." />
+  <meta name="keywords" content="라이브저니, 라이브 저니, Live Journey, 실시간 여행, 여행 앱, 여행 커뮤니티, 여행 정보, 여행 필수 앱, 실시간 여행 정보" />
   <meta name="naver-site-verification" content="62a65e485ca25f64d6c26d91044b2ffc5e8a2f50" />
   <meta property="og:type" content="website" />
   <meta property="og:locale" content="ko_KR" />
   <meta property="og:site_name" content="라이브저니" />
   <meta property="og:title" content="라이브저니 - 여행지의 '지금'을 연결하는 실시간 커뮤니티" />
-  <meta property="og:description" content="여행지의 지금 날씨·현장·인파를 실시간 제보로 확인하세요. 시차 없는 정보로 실패 없는 일정을 돕는 라이브저니 커뮤니티." />
-  <meta property="og:url" content="https://livejourney.co.kr/" />
-  <meta property="og:image" content="https://livejourney.co.kr/logo.svg" />
-  <meta property="og:image:alt" content="라이브저니" />
+  <meta property="og:description" content="내가 가려는 그곳, 지금 날씨는? 인파는? 라이브저니에서 실시간 제보를 확인하고 실패 없는 여행을 계획하세요. 정보의 시차 없는 가장 빠른 여행 정보 공유 플랫폼, 라이브저니와 함께하세요." />
+  <meta property="og:image" content="https://livejourney.co.kr/og-image.png" />
+  <meta property="og:url" content="https://livejourney.co.kr" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="라이브저니 - 여행지의 '지금'을 연결하는 실시간 커뮤니티" />
-  <meta name="twitter:description" content="여행지의 지금 날씨·현장·인파를 실시간 제보로 확인하세요. 시차 없는 정보로 실패 없는 일정을 돕는 라이브저니 커뮤니티." />
-  <meta name="twitter:image" content="https://livejourney.co.kr/logo.svg" />
+  <meta name="twitter:description" content="내가 가려는 그곳, 지금 날씨는? 인파는? 라이브저니에서 실시간 제보를 확인하고 실패 없는 여행을 계획하세요. 정보의 시차 없는 가장 빠른 여행 정보 공유 플랫폼, 라이브저니와 함께하세요." />
   <link rel="canonical" href="https://livejourney.co.kr/" />
   <link rel="sitemap" type="application/xml" title="Sitemap" href="https://livejourney.co.kr/sitemap.xml" />
   <link rel="alternate" type="application/rss+xml" title="라이브저니 RSS" href="https://livejourney.co.kr/feed.xml" />
@@ -41,7 +44,7 @@
         "name": "라이브저니",
         "alternateName": ["Live Journey", "LiveJourney"],
         "url": "https://livejourney.co.kr",
-        "description": "여행지의 지금 날씨·현장·인파를 실시간 제보로 확인하세요. 시차 없는 정보로 실패 없는 일정을 돕는 라이브저니 커뮤니티.",
+        "description": "실시간 현장 정보 커뮤니티. 내가 가려는 그곳, 지금 날씨는? 인파는? 라이브저니에서 실시간 제보를 확인하고 실패 없는 여행을 계획하세요.",
         "inLanguage": "ko",
         "potentialAction": {
           "@type": "SearchAction",
@@ -54,7 +57,7 @@
         "name": "라이브저니",
         "alternateName": ["Live Journey", "LiveJourney"],
         "url": "https://livejourney.co.kr",
-        "description": "여행지의 지금 날씨·현장·인파를 실시간 제보로 확인하세요. 시차 없는 정보로 실패 없는 일정을 돕는 라이브저니 커뮤니티."
+        "description": "실시간 현장 정보 커뮤니티"
       }
     ]
   }
@@ -64,14 +67,9 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&family=Noto+Sans+KR:wght@700&display=swap"
     rel="stylesheet" />
-  <link
-    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Manrope:wght@400;700;800&display=swap"
-    rel="stylesheet" />
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <link rel="dns-prefetch" href="https://dapi.kakao.com" />
-  <link rel="preconnect" href="https://dapi.kakao.com" />
-  
+  <!-- KAKAO_MAP_SCRIPT -->
   <style>
     .material-symbols-outlined {
       font-variation-settings: 'FILL' 1, 'wght' 700, 'GRAD' 0, 'opsz' 48
@@ -81,8 +79,8 @@
       min-height: max(884px, 100dvh);
     }
   </style>
-  <script type="module" crossorigin src="/assets/index-DD3iEmoh.js"></script>
-  <link rel="stylesheet" crossorigin href="/assets/index-LJfJ7vzo.css">
+  <script type="module" crossorigin src="/assets/index-CvdQMRV3.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-DSxqm9X7.css">
 </head>
 
 <body>

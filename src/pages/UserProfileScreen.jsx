@@ -25,8 +25,9 @@ import { getDisplayImageUrl } from '../api/upload';
 import { getPosts } from '../api/posts';
 import { fetchPostsByUserIdSupabase, fetchPostsSupabase } from '../api/postsSupabase';
 import { fetchProfilesByIdsSupabase } from '../api/profilesSupabase';
-import { getLiveSyncPercentRounded, setLiveSyncPercentCache } from '../utils/trustIndex';
 import api from '../api/axios';
+import { fetchLiveSyncPctSupabase } from '../api/liveSyncSupabase';
+// supabase 직접 조회 대신 liveSyncSupabase 유틸을 사용합니다.
 import {
   resolveUserDisplayFromPosts,
   getCachedFollowProfile,
@@ -54,7 +55,7 @@ const UserProfileScreen = () => {
   const [followingCount, setFollowingCount] = useState(0);
   const [followLoading, setFollowLoading] = useState(false);
   /** 라이브 싱크(%) */
-  const [liveSync, setLiveSync] = useState(50);
+  const [liveSync, setLiveSync] = useState(35);
   const [activeTab, setActiveTab] = useState('my'); // 'my' | 'map' — 내 프로필과 동일 탭 구조
   const [photoViewMode, setPhotoViewMode] = useState('custom'); // 'custom' | 'date'
   const [showFollowListModal, setShowFollowListModal] = useState(false);
@@ -105,7 +106,7 @@ const UserProfileScreen = () => {
     setUserPosts([]);
     setEarnedBadges([]);
     setRepresentativeBadge(null);
-    setLiveSync(50);
+    setLiveSync(35);
 
     // 해당 사용자의 정보 찾기 (게시물에서)
     const uploadedPosts = getUploadedPostsSafe();
@@ -185,9 +186,7 @@ const UserProfileScreen = () => {
       const applyMerged = (mergedList) => {
         const merged = [...mergedList].sort((a, b) => (b.timestamp || b.createdAt || 0) - (a.timestamp || a.createdAt || 0));
         setUserPosts(merged);
-        const pct = getLiveSyncPercentRounded(userId || null, merged.length ? merged : null);
-        setLiveSync(pct);
-        if (userId) setLiveSyncPercentCache(String(userId), pct);
+        void fetchLiveSyncPctSupabase(userId || null, { bypassCache: true }).then((pct) => setLiveSync(pct));
         const badges = getEarnedBadgesForUser(userId, merged) || [];
         setEarnedBadges(badges);
         if (!repBadgeJson) {
@@ -290,6 +289,23 @@ const UserProfileScreen = () => {
     };
   }, [userId, navigate, currentUser, location.key]);
 
+  // 다른 사용자 프로필도 profiles.live_sync_pct를 우선 노출 (게시물 로딩 전 기본값으로 보이는 현상 완화)
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const pct = await fetchLiveSyncPctSupabase(userId, { bypassCache: true });
+        if (!cancelled) setLiveSync(pct);
+      } catch {
+        // ignore
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
   // 팔로우 / 팔로워·팔로잉 수 로드 및 followsUpdated 구독
   useEffect(() => {
     if (!userId) return;
@@ -369,9 +385,7 @@ const UserProfileScreen = () => {
   // 라이브 싱크: 유저 게시물이 바뀌면 즉시 % 갱신
   useEffect(() => {
     if (!userId) return;
-    const pct = getLiveSyncPercentRounded(userId, userPosts.length ? userPosts : null);
-    setLiveSync(pct);
-    setLiveSyncPercentCache(String(userId), pct);
+    void fetchLiveSyncPctSupabase(userId, { bypassCache: true }).then((pct) => setLiveSync(pct));
   }, [userId, userPosts]);
 
   // 서버에서 유저 정보 가져오기 (점수는 클라이언트 기준으로 통일)
@@ -810,7 +824,7 @@ const UserProfileScreen = () => {
 
             <div className="px-6 py-4">
               {(() => {
-                const pct = typeof liveSync === 'number' ? liveSync : 50;
+                const pct = typeof liveSync === 'number' ? liveSync : 35;
                 const msg =
                   pct >= 90 ? '실시간 동기화 완료' :
                   pct >= 70 ? '높은 현장감' :
@@ -831,10 +845,12 @@ const UserProfileScreen = () => {
                         <button
                           type="button"
                           onClick={() => { setTrustExplainOpen(false); setShowTrustGradesModal(true); }}
-                          className="px-2 py-0.5 rounded-full text-[11px] font-semibold border border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-900/60 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                          className="w-7 h-7 inline-flex items-center justify-center rounded-full border border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-900/60 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                           aria-label="라이브 싱크 설명 보기"
                         >
-                          설명
+                          <span className="material-symbols-outlined text-[18px]" aria-hidden>
+                            info
+                          </span>
                         </button>
                       </div>
                       <div className="flex items-center gap-1.5 shrink-0">
