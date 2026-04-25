@@ -684,34 +684,27 @@ export const checkNewBadges = (stats) => {
   }
 };
 
-// 업로드 화면 등에서 참조하는 "뱃지 안내 노출" 상태(로컬 폴백)
-const SEEN_BADGES_KEY = 'lj_seenBadges';
+// "뱃지 안내 노출" 상태: localStorage 제거 → 세션 메모리만 사용
+// (요청사항) 라이브 뱃지/뱃지 시스템에서 로컬스토리지 의존 제거
+const seenBadgesByUserId = new Map(); // userId -> Set(badgeName)
 
-export const hasSeenBadge = (badgeName) => {
-  try {
-    const key = String(badgeName || '').trim();
-    if (!key) return false;
-    const raw = localStorage.getItem(SEEN_BADGES_KEY);
-    const parsed = raw ? JSON.parse(raw) : {};
-    return Boolean(parsed && parsed[key]);
-  } catch {
-    return false;
-  }
+export const hasSeenBadge = (badgeName, userId = null) => {
+  const key = String(badgeName || '').trim();
+  if (!key) return false;
+  const uid = userId != null ? String(userId).trim() : (currentEarnedBadgesUserId || '');
+  const set = seenBadgesByUserId.get(uid || '__anon__');
+  return !!(set && set.has(key));
 };
 
-export const markBadgeAsSeen = (badgeName) => {
-  try {
-    const key = String(badgeName || '').trim();
-    if (!key) return false;
-    const raw = localStorage.getItem(SEEN_BADGES_KEY);
-    const parsed = raw ? JSON.parse(raw) : {};
-    const next = parsed && typeof parsed === 'object' ? { ...parsed } : {};
-    next[key] = true;
-    localStorage.setItem(SEEN_BADGES_KEY, JSON.stringify(next));
-    return true;
-  } catch {
-    return false;
-  }
+export const markBadgeAsSeen = (badgeName, userId = null) => {
+  const key = String(badgeName || '').trim();
+  if (!key) return false;
+  const uid = userId != null ? String(userId).trim() : (currentEarnedBadgesUserId || '');
+  const mapKey = uid || '__anon__';
+  const prev = seenBadgesByUserId.get(mapKey);
+  if (prev) prev.add(key);
+  else seenBadgesByUserId.set(mapKey, new Set([key]));
+  return true;
 };
 
 /**
