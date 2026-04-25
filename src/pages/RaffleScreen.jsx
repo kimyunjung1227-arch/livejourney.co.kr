@@ -167,26 +167,26 @@ const RaffleScreen = () => {
           </section>
           <div className="px-3 pt-4 sm:px-4">
             <h2 className="text-[34px] font-extrabold tracking-tight text-gray-900 dark:text-gray-100">
-              LiveJourney raffle
+              여행 래플
             </h2>
             <p className="mt-2 text-sm leading-relaxed text-gray-500 dark:text-gray-400 sm:text-[15px]">
-              현장의 실시간 기록이 쌓일수록 여행은 더 쉬워지고, 그 가치가 작은 행운으로 돌아옵니다.
+              현장에서 기록한 실시간 정보가 쌓일수록 여행은 더 쉬워지고, 그 가치가 래플 리워드로 돌아옵니다.
             </p>
           </div>
 
           <div className="px-3 pt-4 space-y-5 text-[15px] sm:px-4 sm:text-base">
             <section>
-              <div className="text-sm font-extrabold text-gray-900 dark:text-gray-100">연관 위키</div>
+              <div className="text-sm font-extrabold text-gray-900 dark:text-gray-100">래플 가이드</div>
               <button
                 type="button"
                 onClick={() => setGuideOpen(true)}
                 className="mt-2 inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-900 shadow-sm transition hover:bg-gray-50 active:scale-[0.99] dark:border-gray-700 dark:bg-gray-900/80 dark:text-gray-100 dark:hover:bg-gray-900"
               >
-                <span className="material-symbols-outlined text-[18px] text-rose-500" aria-hidden>
+                <span className="material-symbols-outlined text-[18px] text-sky-500" aria-hidden>
                   description
                 </span>
                 <span>래플 가이드 (참여 방법)</span>
-                <span className="material-symbols-outlined ml-0.5 text-[18px] text-gray-400" aria-hidden>
+                <span className="material-symbols-outlined ml-0.5 text-[18px] text-sky-400" aria-hidden>
                   chevron_right
                 </span>
               </button>
