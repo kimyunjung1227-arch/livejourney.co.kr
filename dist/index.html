@@ -1,37 +1,92 @@
 <!DOCTYPE html>
 <html lang="ko">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="manifest" href="/manifest.json" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <meta name="description" content="실시간으로 공유하는 여행 이야기 - LiveJourney" />
-    <meta name="theme-color" content="#ff6b35" />
-    <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <meta name="apple-mobile-web-app-title" content="LiveJourney" />
-    <link rel="apple-touch-icon" href="/logo.svg" />
-    <title>📸 LiveJourney - 실시간 여행 공유</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&family=Noto+Sans+KR:wght@700&display=swap" rel="stylesheet" />
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet" />
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <!-- Kakao Map API는 동적으로 로드됩니다 (main.jsx에서) -->
-    <style>
-      .material-symbols-outlined {
-        font-variation-settings: 'FILL' 1, 'wght' 700, 'GRAD' 0, 'opsz' 48
-      }
-      body {
-        min-height: max(884px, 100dvh);
-      }
-    </style>
-    <script type="module" crossorigin src="/assets/index-BztJL394.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-fcgNxCpY.css">
-  </head>
-  <body>
-    <div id="root"></div>
-  </body>
-</html>
 
+<head>
+  <meta charset="UTF-8" />
+  <!-- 파비콘 없음: <link rel="icon"> 미사용 + /favicon.* 미배포 시 구글 검색 결과는 보통 회색 지구본(기본). 캐시 갱신까지 시간 소요 -->
+  <link rel="manifest" href="/manifest.json" />
+  <meta name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>라이브저니 - 여행지의 '지금'을 연결하는 실시간 커뮤니티</title>
+  <meta name="description" content="여행지의 지금 날씨·현장·인파를 실시간 제보로 확인하세요. 시차 없는 정보로 실패 없는 일정을 돕는 라이브저니 커뮤니티." />
+  <meta name="keywords" content="라이브저니, Live Journey, 실시간 여행, 여행 커뮤니티, 실시간 제보, 여행 정보, 혼잡도, 날씨, 지도" />
+  <meta name="robots" content="index, follow" />
+  <meta name="naver-site-verification" content="62a65e485ca25f64d6c26d91044b2ffc5e8a2f50" />
+  <meta property="og:type" content="website" />
+  <meta property="og:locale" content="ko_KR" />
+  <meta property="og:site_name" content="라이브저니" />
+  <meta property="og:title" content="라이브저니 - 여행지의 '지금'을 연결하는 실시간 커뮤니티" />
+  <meta property="og:description" content="여행지의 지금 날씨·현장·인파를 실시간 제보로 확인하세요. 시차 없는 정보로 실패 없는 일정을 돕는 라이브저니 커뮤니티." />
+  <meta property="og:url" content="https://livejourney.co.kr/" />
+  <meta property="og:image" content="https://livejourney.co.kr/logo.svg" />
+  <meta property="og:image:alt" content="라이브저니" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="라이브저니 - 여행지의 '지금'을 연결하는 실시간 커뮤니티" />
+  <meta name="twitter:description" content="여행지의 지금 날씨·현장·인파를 실시간 제보로 확인하세요. 시차 없는 정보로 실패 없는 일정을 돕는 라이브저니 커뮤니티." />
+  <meta name="twitter:image" content="https://livejourney.co.kr/logo.svg" />
+  <link rel="canonical" href="https://livejourney.co.kr/" />
+  <link rel="sitemap" type="application/xml" title="Sitemap" href="https://livejourney.co.kr/sitemap.xml" />
+  <link rel="alternate" type="application/rss+xml" title="라이브저니 RSS" href="https://livejourney.co.kr/feed.xml" />
+  <meta name="theme-color" content="#ff6b35" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="라이브저니" />
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebSite",
+        "name": "라이브저니",
+        "alternateName": ["Live Journey", "LiveJourney"],
+        "url": "https://livejourney.co.kr",
+        "description": "여행지의 지금 날씨·현장·인파를 실시간 제보로 확인하세요. 시차 없는 정보로 실패 없는 일정을 돕는 라이브저니 커뮤니티.",
+        "inLanguage": "ko",
+        "potentialAction": {
+          "@type": "SearchAction",
+          "target": "https://livejourney.co.kr/search?q={search_term_string}",
+          "query-input": "required name=search_term_string"
+        }
+      },
+      {
+        "@type": "Organization",
+        "name": "라이브저니",
+        "alternateName": ["Live Journey", "LiveJourney"],
+        "url": "https://livejourney.co.kr",
+        "description": "여행지의 지금 날씨·현장·인파를 실시간 제보로 확인하세요. 시차 없는 정보로 실패 없는 일정을 돕는 라이브저니 커뮤니티."
+      }
+    ]
+  }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@700;800&family=Noto+Sans+KR:wght@700&display=swap"
+    rel="stylesheet" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Manrope:wght@400;700;800&display=swap"
+    rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="dns-prefetch" href="https://dapi.kakao.com" />
+  <link rel="preconnect" href="https://dapi.kakao.com" />
+  
+  <style>
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 1, 'wght' 700, 'GRAD' 0, 'opsz' 48
+    }
+
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  <script type="module" crossorigin src="/assets/index-DD3iEmoh.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/index-LJfJ7vzo.css">
+</head>
+
+<body>
+  <div id="root"></div>
+</body>
+
+</html>
