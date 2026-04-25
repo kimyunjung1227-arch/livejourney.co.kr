@@ -27,7 +27,9 @@ export default defineConfig({
     },
   ],
   publicDir: 'public',
-  base: '/app/', // GitHub Pages를 위한 base 경로 설정
+  // livejourney.co.kr(커스텀 도메인)에서는 루트(/)에서 앱을 서빙해야 캐시/경로 이슈가 줄어듭니다.
+  // (project pages 하위 경로로 배포할 때만 '/app/' 같은 base를 사용)
+  base: '/',
   server: {
     host: '0.0.0.0',
     port: 3000,
