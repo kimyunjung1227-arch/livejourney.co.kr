@@ -121,71 +121,74 @@ const LiveBadgeDetailScreen = () => {
         </header>
 
         <div className="screen-body bg-white dark:bg-gray-900 px-4 py-6 pb-24 space-y-5">
-          {/* 1) 획득 뱃지 → 달성 조건 → 설명 */}
-          <section className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 space-y-4">
-            {sectionTitle('획득한 뱃지')}
-            <div className="flex items-center gap-3">
+          {/* 현재 획득한 뱃지: 아이콘 중앙 → (아이콘 아래) 설명 → 달성 조건 */}
+          <section className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
+            {sectionTitle('현재 획득한 뱃지')}
+
+            <div className="mt-4 flex flex-col items-center text-center">
               <LiveBadgeMedallion
                 badgeName={current?.name}
                 tier={current?.difficulty}
                 icon={current?.icon}
                 gradientCss={current?.gradientCss}
-                size={72}
+                size={92}
+                className="mx-auto"
               />
-              <div className="min-w-0 flex-1">
-                <div className="text-base font-extrabold text-gray-900 dark:text-gray-100 truncate">
-                  {currentLabel}
-                </div>
+              <div className="mt-3 text-base font-extrabold text-gray-900 dark:text-gray-100">
+                {currentLabel}
               </div>
             </div>
 
-            <div className="border-t border-gray-100 dark:border-gray-800 pt-4 space-y-4">
+            <div className="mt-5 space-y-4">
+              <div>
+                {sectionTitle('설명')}
+                <p className="mt-2 text-sm leading-relaxed text-gray-700 dark:text-gray-300 break-keep">
+                  {descriptionText}
+                </p>
+              </div>
               <div>
                 {sectionTitle('달성 조건')}
                 <p className="mt-2 text-sm leading-relaxed text-gray-800 dark:text-gray-200 break-keep">
                   {earnedConditionText}
                 </p>
               </div>
-              <div>
-                {sectionTitle('뱃지 설명')}
-                <p className="mt-2 text-sm leading-relaxed text-gray-700 dark:text-gray-300 break-keep">
-                  {descriptionText}
-                </p>
-              </div>
             </div>
           </section>
 
-          {/* 2) 다음 단계: 아이콘 → 달성 조건 → 현재 상태 */}
-          <section className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 space-y-4">
-            {sectionTitle('다음 단계')}
-            <div className="flex items-center gap-3">
+          {/* 다음 등급: 아이콘 우측 → 달성조건/현재상태 */}
+          <section className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
+            {sectionTitle('다음 등급')}
+
+            <div className="mt-4 flex items-center justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-extrabold text-gray-900 dark:text-gray-100 truncate">
+                  {hasNextStage ? (nextLabel || '다음 등급') : isDynMaxTier ? '최고 등급' : '다음 등급'}
+                </div>
+                <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                  {nextConditionText}
+                </div>
+              </div>
+
               <LiveBadgeMedallion
                 badgeName={next?.name || current?.name}
                 tier={next?.difficulty || Math.min(3, (Number(current?.difficulty || meta?.tier || 1) || 1) + 1)}
                 icon={next?.icon || current?.icon}
                 gradientCss={next?.gradientCss}
                 size={72}
+                className="shrink-0"
               />
-              <div className="min-w-0 flex-1">
-                <div className="text-sm font-extrabold text-gray-900 dark:text-gray-100 truncate">
-                  {hasNextStage ? (nextLabel || '다음 단계') : isDynMaxTier ? '최고 단계' : '다음 단계'}
-                </div>
-              </div>
             </div>
 
-            <div className="border-t border-gray-100 dark:border-gray-800 pt-4 space-y-4">
-              <div>
-                {sectionTitle('달성 조건')}
-                <p className="mt-2 text-sm leading-relaxed text-gray-800 dark:text-gray-200 break-keep">
-                  {nextConditionText}
-                </p>
-              </div>
+            <div className="mt-4 border-t border-gray-100 dark:border-gray-800 pt-4 space-y-3">
               <div>
                 {sectionTitle('현재 상태')}
                 {hasNextStage ? (
                   <>
                     <div className="mt-2 h-2.5 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-gray-800">
-                      <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${Math.round(pct * 100)}%` }} />
+                      <div
+                        className="h-full rounded-full bg-primary transition-all"
+                        style={{ width: `${Math.round(pct * 100)}%` }}
+                      />
                     </div>
                     <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">{statusLine}</p>
                   </>
