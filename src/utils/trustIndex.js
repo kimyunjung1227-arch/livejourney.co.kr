@@ -16,6 +16,7 @@ const POST_ACCURACY_COUNT_KEY = 'postAccuracyCount';
 const TRUST_PENALTY_KEY = 'trustPenalty'; // legacy key (세션 메모리)
 const TRUST_LAST_ACTIVE_KEY = 'trustLastActive'; // legacy key (세션 메모리)
 const COMPASS_SCORE_CACHE_KEY = 'compassScoreCache'; // legacy key (세션 메모리)
+const LIVE_SYNC_PCT_CACHE_KEY = 'lj_liveSyncPctCache_v1';
 
 // 서버 운영 전환: localStorage 제거 → 세션 메모리 캐시
 const memory = {
@@ -26,6 +27,26 @@ const memory = {
   compassScoreCache: {}, // userId -> { score, ts }
   // 화면 간 라이브 싱크(%) 일관성을 위한 캐시
   liveSyncCache: {}, // userId -> { pct, ts }
+};
+
+const safeReadLiveSyncStore = () => {
+  try {
+    if (typeof window === 'undefined' || !window?.localStorage) return {};
+    const raw = window.localStorage.getItem(LIVE_SYNC_PCT_CACHE_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+};
+
+const safeWriteLiveSyncStore = (obj) => {
+  try {
+    if (typeof window === 'undefined' || !window?.localStorage) return;
+    window.localStorage.setItem(LIVE_SYNC_PCT_CACHE_KEY, JSON.stringify(obj || {}));
+  } catch {
+    // ignore
+  }
 };
 
 /** 라이브 싱크 산정 파라미터 */
@@ -427,13 +448,29 @@ export const setLiveSyncPercentCache = (userId, pct) => {
   if (!uid) return;
   const n = Math.round(Number(pct));
   if (!Number.isFinite(n)) return;
-  memory.liveSyncCache[uid] = { pct: Math.max(0, Math.min(100, n)), ts: Date.now() };
+  const clamped = Math.max(0, Math.min(100, n));
+  const ts = Date.now();
+  memory.liveSyncCache[uid] = { pct: clamped, ts };
+
+  // 프로필 화면에서 계산한 값을 다른 화면에서도 동일하게 쓰기 위해 로컬에도 보관
+  const store = safeReadLiveSyncStore();
+  store[uid] = { pct: clamped, ts };
+  safeWriteLiveSyncStore(store);
 };
 
 export const getLiveSyncPercentRoundedFromCache = (userId = null, postsOverride = null) => {
   const uid = userId != null ? String(userId) : null;
-  if (uid && memory.liveSyncCache?.[uid] && typeof memory.liveSyncCache[uid].pct === 'number') {
-    return memory.liveSyncCache[uid].pct;
+  if (uid) {
+    const mem = memory.liveSyncCache?.[uid];
+    if (mem && typeof mem.pct === 'number') return mem.pct;
+
+    const store = safeReadLiveSyncStore();
+    const saved = store?.[uid];
+    if (saved && typeof saved.pct === 'number') {
+      // 메모리도 워밍업
+      memory.liveSyncCache[uid] = { pct: saved.pct, ts: saved.ts || Date.now() };
+      return saved.pct;
+    }
   }
   return getLiveSyncPercentRounded(uid, postsOverride);
 };

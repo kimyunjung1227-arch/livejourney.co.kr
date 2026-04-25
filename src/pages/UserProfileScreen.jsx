@@ -824,13 +824,19 @@ const UserProfileScreen = () => {
                 return (
                   <div>
                     <div className="flex items-center justify-between gap-2 mb-1 flex-nowrap min-w-0">
-                      <button
-                        type="button"
-                        onClick={() => { setTrustExplainOpen(false); setShowTrustGradesModal(true); }}
-                        className="text-sm font-semibold text-text-primary-light dark:text-text-primary-dark shrink-0 hover:text-primary transition-colors"
-                      >
-                        라이브 싱크
-                      </button>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-sm font-semibold text-text-primary-light dark:text-text-primary-dark">
+                          라이브 싱크
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => { setTrustExplainOpen(false); setShowTrustGradesModal(true); }}
+                          className="px-2 py-0.5 rounded-full text-[11px] font-semibold border border-gray-200 dark:border-gray-700 bg-white/80 dark:bg-gray-900/60 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                          aria-label="라이브 싱크 설명 보기"
+                        >
+                          설명
+                        </button>
+                      </div>
                       <div className="flex items-center gap-1.5 shrink-0">
                         <span className={`text-xl font-extrabold ${accent}`}>{pct}%</span>
                         <span className="text-xs font-medium text-text-secondary-light dark:text-text-secondary-dark whitespace-nowrap">{msg}</span>
