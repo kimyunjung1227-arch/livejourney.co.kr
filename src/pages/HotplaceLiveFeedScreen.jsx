@@ -12,7 +12,7 @@ import {
   toMediaStr,
 } from '../utils/postMedia';
 import { getTimeAgo } from '../utils/timeUtils';
-import { getLiveSyncPercentRounded } from '../utils/trustIndex';
+import { getLiveSyncPercentRoundedFromCache } from '../utils/trustIndex';
 import StatusBadge from '../components/StatusBadge';
 import { getPhotoStatusFromPost } from '../utils/photoStatus';
 import {
@@ -153,7 +153,7 @@ export default function HotplaceLiveFeedScreen() {
   const heroLiveSync = useMemo(() => {
     if (!heroAuthorId || !heroPost) return null;
     const authorPosts = allPosts.filter((p) => getUserIdForPost(p) === heroAuthorId);
-    return getLiveSyncPercentRounded(heroAuthorId, authorPosts.length ? authorPosts : null);
+    return getLiveSyncPercentRoundedFromCache(heroAuthorId, authorPosts.length ? authorPosts : null);
   }, [heroAuthorId, heroPost, allPosts]);
 
   const situationPosts = useMemo(() => {

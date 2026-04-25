@@ -24,6 +24,8 @@ const memory = {
   trustPenalty: {}, // userId -> number
   trustLastActive: {}, // userId -> ts
   compassScoreCache: {}, // userId -> { score, ts }
+  // 화면 간 라이브 싱크(%) 일관성을 위한 캐시
+  liveSyncCache: {}, // userId -> { pct, ts }
 };
 
 /** 라이브 싱크 산정 파라미터 */
@@ -414,6 +416,27 @@ export const getLiveSyncPercent = (userId = null, postsOverride = null) => {
 /** UI 편의: 정수 % */
 export const getLiveSyncPercentRounded = (userId = null, postsOverride = null) =>
   Math.round(getLiveSyncPercent(userId, postsOverride));
+
+/**
+ * 화면 간 "동일 계정" 라이브 싱크 값을 일치시키기 위한 캐시 API
+ * - ProfileScreen/UserProfileScreen 등에서 계산한 값을 캐시에 저장해두면
+ *   피드/상세/핫플 등 다른 화면에서 postsOverride가 부분 집합이어도 동일한 값으로 표시 가능.
+ */
+export const setLiveSyncPercentCache = (userId, pct) => {
+  const uid = userId != null ? String(userId) : '';
+  if (!uid) return;
+  const n = Math.round(Number(pct));
+  if (!Number.isFinite(n)) return;
+  memory.liveSyncCache[uid] = { pct: Math.max(0, Math.min(100, n)), ts: Date.now() };
+};
+
+export const getLiveSyncPercentRoundedFromCache = (userId = null, postsOverride = null) => {
+  const uid = userId != null ? String(userId) : null;
+  if (uid && memory.liveSyncCache?.[uid] && typeof memory.liveSyncCache[uid].pct === 'number') {
+    return memory.liveSyncCache[uid].pct;
+  }
+  return getLiveSyncPercentRounded(uid, postsOverride);
+};
 
 /**
  * 현재 점수에 해당하는 등급의 뱃지 ID

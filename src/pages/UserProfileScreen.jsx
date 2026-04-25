@@ -25,7 +25,7 @@ import { getDisplayImageUrl } from '../api/upload';
 import { getPosts } from '../api/posts';
 import { fetchPostsByUserIdSupabase, fetchPostsSupabase } from '../api/postsSupabase';
 import { fetchProfilesByIdsSupabase } from '../api/profilesSupabase';
-import { getLiveSyncPercentRounded } from '../utils/trustIndex';
+import { getLiveSyncPercentRounded, setLiveSyncPercentCache } from '../utils/trustIndex';
 import api from '../api/axios';
 import {
   resolveUserDisplayFromPosts,
@@ -185,7 +185,9 @@ const UserProfileScreen = () => {
       const applyMerged = (mergedList) => {
         const merged = [...mergedList].sort((a, b) => (b.timestamp || b.createdAt || 0) - (a.timestamp || a.createdAt || 0));
         setUserPosts(merged);
-        setLiveSync(getLiveSyncPercentRounded(userId || null, merged.length ? merged : null));
+        const pct = getLiveSyncPercentRounded(userId || null, merged.length ? merged : null);
+        setLiveSync(pct);
+        if (userId) setLiveSyncPercentCache(String(userId), pct);
         const badges = getEarnedBadgesForUser(userId, merged) || [];
         setEarnedBadges(badges);
         if (!repBadgeJson) {
@@ -367,7 +369,9 @@ const UserProfileScreen = () => {
   // 라이브 싱크: 유저 게시물이 바뀌면 즉시 % 갱신
   useEffect(() => {
     if (!userId) return;
-    setLiveSync(getLiveSyncPercentRounded(userId, userPosts.length ? userPosts : null));
+    const pct = getLiveSyncPercentRounded(userId, userPosts.length ? userPosts : null);
+    setLiveSync(pct);
+    setLiveSyncPercentCache(String(userId), pct);
   }, [userId, userPosts]);
 
   // 서버에서 유저 정보 가져오기 (점수는 클라이언트 기준으로 통일)

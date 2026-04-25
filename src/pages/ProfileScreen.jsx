@@ -8,7 +8,7 @@ import BottomNavigation from '../components/BottomNavigation';
 import { getUnreadCount, notifyFollowingStarted } from '../utils/notifications';
 import { getEarnedBadgesForUser, getBadgeDisplayName } from '../utils/badgeSystem';
 import ProfileInjangSection from '../components/ProfileInjangSection';
-import { getLiveSyncPercentRounded, getLiveSyncPercent, TRUST_GRADES } from '../utils/trustIndex';
+import { getLiveSyncPercentRounded, getLiveSyncPercent, TRUST_GRADES, setLiveSyncPercentCache } from '../utils/trustIndex';
 import { getCoordinatesByLocation } from '../utils/regionLocationMapping';
 import {
   follow,
@@ -137,7 +137,9 @@ const ProfileScreen = () => {
   const refreshLiveSync = useCallback(() => {
     const uid = (authUser || user)?.id;
     const postsArg = myPostsRef.current?.length ? myPostsRef.current : null;
-    setLiveSync(getLiveSyncPercentRounded(uid ? String(uid) : null, postsArg));
+    const pct = getLiveSyncPercentRounded(uid ? String(uid) : null, postsArg);
+    setLiveSync(pct);
+    if (uid) setLiveSyncPercentCache(String(uid), pct);
   }, [authUser?.id, user?.id]);
 
   useEffect(() => {
