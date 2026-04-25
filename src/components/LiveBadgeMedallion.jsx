@@ -37,7 +37,7 @@ export default function LiveBadgeMedallion({
   badgeName,
   tier: tierProp,
   icon,
-  gradientCss,
+  gradientCss: _gradientCss,
   size = 64,
   className = '',
 }) {
@@ -46,10 +46,8 @@ export default function LiveBadgeMedallion({
   const inner = size - pad * 2;
   const frameStyle = frameStyleForTier(tier);
 
-  // 뱃지 자체 gradientCss가 있으면 "메달 내부"에 깔고, 테두리는 tier 디테일을 유지
-  const innerStyle = gradientCss
-    ? { backgroundImage: gradientCss }
-    : { backgroundColor: 'rgba(255,255,255,1)' };
+  // 테두리(링) 안쪽 배경은 라이트/다크 모두 흰색으로 통일 (아이콘만으로 톤 표현)
+  const innerStyle = { backgroundColor: '#ffffff' };
 
   return (
     <div
@@ -63,7 +61,7 @@ export default function LiveBadgeMedallion({
       aria-hidden
     >
       <div
-        className="flex h-full w-full items-center justify-center overflow-hidden rounded-full border border-white/60 dark:border-black/20"
+        className="flex h-full w-full items-center justify-center overflow-hidden rounded-full border border-gray-100"
         style={innerStyle}
       >
         <span className="select-none" style={{ fontSize: Math.round(inner * 0.52), lineHeight: 1 }}>

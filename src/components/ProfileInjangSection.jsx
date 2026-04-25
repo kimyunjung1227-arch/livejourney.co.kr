@@ -82,7 +82,7 @@ export default function ProfileInjangSection({ badges, onViewAll, onOpenBadge, c
                 className="flex flex-col items-center shrink-0 w-[84px] text-left"
               >
                 <div
-                  className="w-[56px] h-[56px] rounded-full bg-white dark:bg-gray-950 border-[3px] border-primary flex items-center justify-center shadow-sm overflow-hidden"
+                  className="w-[56px] h-[56px] rounded-full bg-white border-[3px] border-primary flex items-center justify-center shadow-sm overflow-hidden"
                   aria-hidden
                 >
                   {icon ? (
