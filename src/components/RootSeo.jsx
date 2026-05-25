@@ -1,5 +1,5 @@
 import { useEffect } from "react"
-import { SEO_DEFAULT, getDefaultOgImageUrl, getPublicBaseUrl } from "../config/seo"
+import { SEO_DEFAULT, getPublicBaseUrl } from "../config/seo"
 
 function setMetaByProperty(property, content) {
   let el = document.querySelector(`meta[property="${property}"]`)
@@ -25,7 +25,6 @@ function setMetaByName(name, content) {
 export default function RootSeo() {
   useEffect(() => {
     const base = getPublicBaseUrl()
-    const ogImage = getDefaultOgImageUrl()
     const canonical = base.endsWith("/") ? base : `${base}/`
 
     document.title = SEO_DEFAULT.title
@@ -39,13 +38,11 @@ export default function RootSeo() {
     setMetaByProperty("og:title", SEO_DEFAULT.title)
     setMetaByProperty("og:description", SEO_DEFAULT.description)
     setMetaByProperty("og:url", canonical)
-    setMetaByProperty("og:image", ogImage)
-    setMetaByProperty("og:image:alt", SEO_DEFAULT.siteName)
+    // og:image / twitter:image 미주입: 검색·링크 미리보기에 사이트 대표 이미지(아이콘) 노출 안 함
 
-    setMetaByName("twitter:card", "summary_large_image")
+    setMetaByName("twitter:card", "summary")
     setMetaByName("twitter:title", SEO_DEFAULT.title)
     setMetaByName("twitter:description", SEO_DEFAULT.description)
-    setMetaByName("twitter:image", ogImage)
 
     const linkCanonical = document.querySelector('link[rel="canonical"]')
     if (linkCanonical) linkCanonical.setAttribute("href", canonical)
